@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Risultati - CosaGuardo</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="page page-results">
+        <div class="results-header">
+            <div>
+                <div class="hero-badge">Risultati del recommender</div>
+                <h1>I tuoi consigli</h1>
+                <p class="subtitle">
+                    {% if content_type == "tv" %}
+                        Titoli suggeriti a partire dalle serie TV che hai inserito.
+                    {% else %}
+                        Titoli suggeriti a partire dai film che hai inserito.
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="results-actions">
+                <a href="/" class="back-link back-button">← Nuova ricerca</a>
+            </div>
+        </div>
+
+        <div class="results-top-grid">
+            <div class="info-panel">
+                <h2>
+                    {% if content_type == "tv" %}
+                        Serie TV riconosciute
+                    {% else %}
+                        Film riconosciuti
+                    {% endif %}
+                </h2>
+                {% if resolved_seeds %}
+                    <div class="tag-list">
+                        {% for seed in resolved_seeds %}
+                            <span class="seed-tag">{{ seed.title }}</span>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="muted-text">Nessun film riconosciuto.</p>
+                {% endif %}
+            </div>
+
+           
+        </div>
+
+        <div class="results-section-title">
+            <h2>Raccomandazioni</h2>
+            {% if recommendations %}
+                <p>{{ recommendations|length }} risultati trovati</p>
+            {% endif %}
+        </div>
+
+        {% if recommendations %}
+            <div class="results-list">
+                {% for rec in recommendations %}
+                    <article class="rec-card enhanced-card">
+                        <div class="rec-rank">{{ loop.index }}</div>
+
+                        <div class="rec-poster">
+                            {% if rec.poster_url %}
+                                <img src="{{ rec.poster_url }}" alt="{{ rec.title }}">
+                            {% else %}
+                                <div class="poster-fallback">No poster</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="rec-content">
+                            
+                            {% if rec.get("badge") %}
+                                <div class="rec-badge {{ rec.get('badge').type }}">
+                                    {{ rec.get("badge").text }}
+                                </div>
+                            {% endif %}
+
+                            <div class="rec-title-row">
+                                <h3>{{ rec.title }}</h3>
+                            </div>
+
+                            {% if rec.explanation %}
+                                <p class="why">{{ rec.explanation }}</p>
+                            {% else %}
+                                <p class="why">Ti potrebbe piacere per affinità con i titoli inseriti.</p>
+                            {% endif %}
+
+			    {% if rec.overview %}
+   			        <p class="rec-overview result-explanation">{{ rec.overview }}</p>
+			    {% endif %}
+
+                            {% if content_type == "tv" and rec.matched_keywords %}
+                                <p class="matched-keywords">
+                                    Matcha: {{ rec.matched_keywords | join(", ") }}
+                                </p>
+                            {% endif %}
+
+                            <div class="result-signals">
+                                {% for signal in rec.ui_signals %}
+                                    <div class="signal-pill signal-{{ signal.label | lower }}">
+                                        <span class="signal-icon">{{ signal.icon }}</span>
+                                        <span class="signal-text">
+                                            {% if signal.label == "Match" %}
+                                                <strong>Match</strong> {{ rec.match_score }}/10
+                                            {% elif signal.label == "Genere" %}
+                                                <strong>Genere</strong> {{ rec.genre_score_ui }}/10
+                                            {% elif signal.label == "Vibe" %}
+                                                <strong>Vibe</strong> {{ rec.vibe_score_ui }}/10
+                                            {% else %}
+                                                <strong>{{ signal.label }}</strong> {{ signal.value }}
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="empty-panel">
+                <h2>Nessuna raccomandazione trovata</h2>
+                <p>Prova a inserire titoli più conosciuti oppure più coerenti tra loro.</p>
+                <a href="/" class="back-link back-button">← Torna alla home</a>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
