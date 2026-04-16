@@ -21,6 +21,11 @@ print("DB_PATH scelto =", DB_PATH)
 print("DB EXISTS =", os.path.exists(DB_PATH))
 print("CANDIDATES =", CANDIDATE_DB_PATHS)
 
+if not os.path.exists(DB_PATH):
+    raise RuntimeError(
+        f"DB NON TROVATO. BASE_DIR={BASE_DIR} | CWD={os.getcwd()} | DB_PATH={DB_PATH}"
+    )
+
 def simple_similarity(a, b):
     score = 0
 
