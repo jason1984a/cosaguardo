@@ -9,6 +9,7 @@ from core.recommendation_api import (
     search_movies,
     get_movie_tmdb_info,
 )
+
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

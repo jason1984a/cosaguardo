@@ -100,6 +100,25 @@ TV_GENRE_NAMES = {
     37: "Western",
 }
 
+KEYWORD_MAP = {
+    "group of friends": "amicizia",
+    "friends": "amicizia",
+    "friendship": "amicizia",
+    "searching for love": "relazioni",
+    "love": "relazioni",
+    "romance": "relazioni",
+    "sitcom": "vita quotidiana",
+    "roommates": "convivenza",
+    "new york city": "vita urbana",
+    "family": "famiglia",
+    "drama": "dramma",
+    "crime": "crimine",
+    "police": "indagini",
+    "detective": "indagini",
+    "high school": "adolescenza",
+    "teen": "adolescenza"
+}
+
 def genre_ids_to_names(genre_ids):
     if not genre_ids:
         return []
@@ -466,6 +485,20 @@ def generate_explanation(item, resolved_seeds):
 
     return f"Te la consigliamo perché ha diversi elementi in comune con {seed_part}."
 
+def translate_keywords(keywords):
+    seen = set()
+    translated = []
+
+    for kw in keywords:
+        k = kw.lower().strip()
+        value = KEYWORD_MAP.get(k, k)
+
+        if value not in seen:
+            translated.append(value)
+            seen.add(value)
+
+    return translated
+
 def get_similar_tv(tv_id: int, limit: int = 10):
     """
     Recupera serie simili da TMDB
@@ -547,6 +580,80 @@ def get_recommended_tv(tv_id: int, limit: int = 10):
     except Exception:
         return []
 
+def build_tv_ui_signals(rec):
+    kw_score = rec.get("keyword_score", 0)
+    coverage = rec.get("seed_coverage", 0)
+
+    signals = []
+
+    # 🎯 MATCH
+    signals.append({
+        "icon": "🎯",
+        "label": "Match",
+        "value": None
+    })
+
+    # 🎬 GENERE -> qualitativo come nei film
+    if coverage >= 2:
+        genre_value = "coerente"
+    elif coverage == 1:
+        genre_value = "buona"
+    else:
+        genre_value = "discreta"
+
+    signals.append({
+        "icon": "🎬",
+        "label": "Genere",
+        "value": genre_value
+    })
+
+    # ✨ VIBE -> qualitativo come nei film
+    if kw_score >= 0.20:
+        vibe_value = "forte"
+    elif kw_score >= 0.10:
+        vibe_value = "buona"
+    else:
+        vibe_value = "discreta"
+
+    signals.append({
+        "icon": "✨",
+        "label": "Vibe",
+        "value": vibe_value
+    })
+
+    return signals
+
+def build_tv_explanation(rec, index=0):
+    matched_seed_titles = list(rec.get("matched_seed_titles", []))
+    best_seed_title = rec.get("best_seed_title")
+    kw_score = rec.get("keyword_score", 0)
+    coverage = rec.get("seed_coverage", 0)
+
+    if index == 0:
+        return (
+            "È il suggerimento più forte del gruppo: combina al meglio affinità, coerenza "
+            "e potenziale interesse rispetto agli altri titoli proposti."
+        )
+
+    if coverage >= 2 and len(matched_seed_titles) >= 2:
+        return (
+            f"Unisce elementi di {matched_seed_titles[0]} e {matched_seed_titles[1]}, "
+            "restando molto coerente con le serie che hai inserito."
+        )
+
+    if best_seed_title:
+        if kw_score >= 0.20:
+            return (
+                f"Se ti è piaciuto {best_seed_title}, questa serie richiama bene temi, "
+                "atmosfera e tipo di racconto delle tue scelte iniziali."
+            )
+
+        return (
+            f"Se ti è piaciuto {best_seed_title}, questa è una delle proposte più vicine "
+            "ai tuoi gusti tra quelle emerse."
+        )
+
+    return rec.get("explanation") or "Consigliata per affinità con le serie che hai inserito."
 
 def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
     resolved_seeds = []
@@ -787,7 +894,7 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
         item["tmdb_popularity_avg"] = avg_popularity
         item["keyword_score"] = kw_score
         item["seed_coverage"] = seed_coverage
-        item["matched_keywords"] = matched_keywords
+        item["matched_keywords"] = translate_keywords(matched_keywords)
         item["explanation"] = generate_explanation(item, resolved_seeds)
 
         if final_score < 6:
@@ -849,8 +956,12 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
         else:
             rec["badge"] = build_badge(rec)
 
-    print(recommendations[0])
-
+        rec["match_score"] = round(min(9.8, 5.5 + rec["avg_score"] * 0.25), 1)
+        rec["ui_signals"] = build_tv_ui_signals(rec)
+        rec["genre_score_ui"] = rec["ui_signals"][1]["value"]
+        rec["vibe_score_ui"] = rec["ui_signals"][2]["value"]
+        rec["explanation"] = build_tv_explanation(rec, i)
+   
     return {
         "resolved_seeds": resolved_seeds,
         "missing_titles": missing_titles,
@@ -858,21 +969,36 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
     }
 
 def build_badge(rec):
-    matched = rec.get("matched_keywords", [])
+    coverage = rec.get("seed_coverage", 0)
+    kw_score = rec.get("keyword_score", 0)
     seed_title = rec.get("best_seed_title")
 
-    # Se abbiamo una serie di riferimento → top UX
+    # 🔥 super match (multi-seed forte)
+    if coverage >= 3:
+        return {
+            "text": "🔥 Super match",
+            "type": "top"
+        }
+
+    # 🎯 match forte (2 seed)
+    if coverage == 2:
+        return {
+            "text": "🎯 Match forte",
+            "type": "highlight"
+        }
+
+    # 🧠 temi molto forti
+    if kw_score >= 0.25:
+        return {
+            "text": "🧠 Temi molto simili",
+            "type": "mind"
+        }
+
+    # fallback su seed
     if seed_title:
         return {
             "text": f"🎯 Simile a {seed_title}",
             "type": "highlight"
-        }
-
-    # fallback su keyword
-    if matched:
-        return {
-            "text": f"🔗 {matched[0]}",
-            "type": "keyword"
         }
 
     # fallback finale

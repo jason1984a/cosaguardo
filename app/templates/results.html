@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Risultati - CosaGuardo</title>
+    <title>TEST NUOVO TEMPLATE</title>
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
@@ -81,7 +81,7 @@
                             <div class="rec-title-row">
                                 <h3>{{ rec.title }}</h3>
                             </div>
-
+                           
                             {% if rec.explanation %}
                                 <p class="why">{{ rec.explanation }}</p>
                             {% else %}
@@ -94,10 +94,10 @@
 
                             {% if content_type == "tv" and rec.matched_keywords %}
                                 <p class="matched-keywords">
-                                    Matcha: {{ rec.matched_keywords | join(", ") }}
+                                    Temi in comune: {{ rec.matched_keywords[:3] | join(", ") }}
                                 </p>
                             {% endif %}
-
+                            
                             <div class="result-signals">
                                 {% for signal in rec.ui_signals %}
                                     <div class="signal-pill signal-{{ signal.label | lower }}">
@@ -105,12 +105,8 @@
                                         <span class="signal-text">
                                             {% if signal.label == "Match" %}
                                                 <strong>Match</strong> {{ rec.match_score }}/10
-                                            {% elif signal.label == "Genere" %}
-                                                <strong>Genere</strong> {{ rec.genre_score_ui }}/10
-                                            {% elif signal.label == "Vibe" %}
-                                                <strong>Vibe</strong> {{ rec.vibe_score_ui }}/10
                                             {% else %}
-                                                <strong>{{ signal.label }}</strong> {{ signal.value }}
+                                                <strong>{{ signal.label }}</strong> {{ signal.value|capitalize }}
                                             {% endif %}
                                         </span>
                                     </div>
