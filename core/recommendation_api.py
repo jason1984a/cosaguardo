@@ -5,7 +5,21 @@ import requests
 from collections import defaultdict
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, "db", "coseguardo.db")
+
+CANDIDATE_DB_PATHS = [
+    os.path.join(BASE_DIR, "db", "coseguardo.db"),
+    os.path.join(BASE_DIR, "cosaguardo", "db", "coseguardo.db"),
+    os.path.join(os.getcwd(), "db", "coseguardo.db"),
+    os.path.join(os.getcwd(), "cosaguardo", "db", "coseguardo.db"),
+]
+
+DB_PATH = next((p for p in CANDIDATE_DB_PATHS if os.path.exists(p)), CANDIDATE_DB_PATHS[0])
+
+print("BASE_DIR =", BASE_DIR)
+print("CWD =", os.getcwd())
+print("DB_PATH scelto =", DB_PATH)
+print("DB EXISTS =", os.path.exists(DB_PATH))
+print("CANDIDATES =", CANDIDATE_DB_PATHS)
 
 def simple_similarity(a, b):
     score = 0
