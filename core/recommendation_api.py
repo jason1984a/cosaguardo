@@ -7,10 +7,10 @@ from collections import defaultdict
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 CANDIDATE_DB_PATHS = [
-    os.path.join(BASE_DIR, "db", "coseguardo.db"),
-    os.path.join(BASE_DIR, "cosaguardo", "db", "coseguardo.db"),
-    os.path.join(os.getcwd(), "db", "coseguardo.db"),
-    os.path.join(os.getcwd(), "cosaguardo", "db", "coseguardo.db"),
+    os.path.join(BASE_DIR, "db", "cosaguardo.db"),
+    os.path.join(BASE_DIR, "cosaguardo", "db", "cosaguardo.db"),
+    os.path.join(os.getcwd(), "db", "cosaguardo.db"),
+    os.path.join(os.getcwd(), "cosaguardo", "db", "cosaguardo.db"),
 ]
 
 DB_PATH = next((p for p in CANDIDATE_DB_PATHS if os.path.exists(p)), CANDIDATE_DB_PATHS[0])
@@ -305,9 +305,13 @@ def find_movie_by_title(title_query: str):
     if not row:
         return None
 
+    movie_title = row[1]
+    movie_genres = get_movie_genres(movie_title)
+
     return {
         "movie_id": row[0],
-        "title": row[1]
+        "title": movie_title,
+        "genres": movie_genres,
     }
 
 
@@ -805,6 +809,125 @@ def search_movies(query: str, limit: int = 10):
 
 
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
+
+def get_movie_tmdb_match(title: str):
+    if not TMDB_API_KEY or not title:
+        return None
+
+    try:
+        url = "https://api.themoviedb.org/3/search/movie"
+        params = {
+            "api_key": TMDB_API_KEY,
+            "query": title,
+            "language": "it-IT"
+        }
+
+        response = requests.get(url, params=params, timeout=5)
+        data = response.json()
+
+        results = data.get("results", [])
+        if not results:
+            return None
+
+        first = results[0]
+
+        return {
+            "tmdb_id": first.get("id"),
+            "title": first.get("title") or first.get("original_title") or title,
+            "original_title": first.get("original_title") or first.get("title") or title,
+            "overview": first.get("overview"),
+            "genre_ids": first.get("genre_ids", []),
+        }
+
+    except Exception:
+        return None
+
+
+MOVIE_GENRE_NAMES = {
+    28: "Action",
+    12: "Adventure",
+    16: "Animation",
+    35: "Comedy",
+    80: "Crime",
+    99: "Documentary",
+    18: "Drama",
+    10751: "Family",
+    14: "Fantasy",
+    36: "History",
+    27: "Horror",
+    10402: "Music",
+    9648: "Mystery",
+    10749: "Romance",
+    878: "Sci-Fi",
+    10770: "TV Movie",
+    53: "Thriller",
+    10752: "War",
+    37: "Western",
+}
+
+
+def movie_genre_ids_to_names(genre_ids):
+    if not genre_ids:
+        return []
+
+    return [MOVIE_GENRE_NAMES[g] for g in genre_ids if g in MOVIE_GENRE_NAMES]
+
+
+def get_movie_genres(title: str):
+    match = get_movie_tmdb_match(title)
+    if not match:
+        return []
+
+    return movie_genre_ids_to_names(match.get("genre_ids", []))
+
+
+def get_movie_keywords(movie_id: int):
+    if not movie_id or not TMDB_API_KEY:
+        return []
+
+    try:
+        # movie_id qui è il movielens id del DB locale.
+        # Cerchiamo prima il titolo corrispondente nel DB locale.
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+        SELECT title
+        FROM titles
+        WHERE movielens_movie_id = ?
+        LIMIT 1
+        """, (movie_id,))
+
+        row = cursor.fetchone()
+        conn.close()
+
+        if not row:
+            return []
+
+        movie_title = row[0]
+        tmdb_match = get_movie_tmdb_match(movie_title)
+
+        if not tmdb_match or not tmdb_match.get("tmdb_id"):
+            return []
+
+        url = f"https://api.themoviedb.org/3/movie/{tmdb_match['tmdb_id']}/keywords"
+        params = {
+            "api_key": TMDB_API_KEY
+        }
+
+        response = requests.get(url, params=params, timeout=5)
+        data = response.json()
+
+        results = []
+        for item in data.get("keywords", []):
+            name = item.get("name")
+            if name:
+                results.append(name.strip().lower())
+
+        return results
+
+    except Exception:
+        return []
 
 def get_tmdb_localized_title(title: str):
     if not TMDB_API_KEY:

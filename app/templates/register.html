@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Registrati | CosaGuardo{% endblock %}
+
+{% block content %}
+
+<div style="max-width: 460px; margin: 0 auto;">
+    <div class="page-card" style="padding: 32px;">
+
+        <h1 style="font-size: 1.7rem; margin-bottom: 10px;">
+            Crea il tuo account ✨
+        </h1>
+
+        <p style="color: var(--muted); margin-bottom: 26px;">
+            Salva i tuoi gusti, tieni traccia delle ricerche e ricevi consigli sempre più rilevanti.
+        </p>
+
+        {% if error %}
+            <div style="
+                margin-bottom: 18px;
+                padding: 12px 14px;
+                border-radius: 12px;
+                background: rgba(255,107,107,0.12);
+                border: 1px solid rgba(255,107,107,0.25);
+                color: #ffd1d1;
+                font-weight: 600;
+            ">
+                {{ error }}
+            </div>
+        {% endif %}
+
+        <form method="post" action="/register" style="display: grid; gap: 16px;">
+
+            <div>
+                <label style="display:block; margin-bottom:6px; font-weight:600;">
+                    Email
+                </label>
+                <input
+                    type="email"
+                    name="email"
+                    required
+                    placeholder="es. nome@email.com"
+                    value="{{ email if email else '' }}"
+                    style="
+                        width:100%;
+                        padding:12px 14px;
+                        border-radius:12px;
+                        border:1px solid var(--border);
+                        background: rgba(255,255,255,0.04);
+                        color: var(--text);
+                        outline:none;
+                    "
+                >
+            </div>
+
+            <div>
+                <label style="display:block; margin-bottom:6px; font-weight:600;">
+                    Password
+                </label>
+                <input
+                    type="password"
+                    name="password"
+                    required
+                    minlength="6"
+                    placeholder="Almeno 6 caratteri"
+                    style="
+                        width:100%;
+                        padding:12px 14px;
+                        border-radius:12px;
+                        border:1px solid var(--border);
+                        background: rgba(255,255,255,0.04);
+                        color: var(--text);
+                        outline:none;
+                    "
+                >
+            </div>
+
+            <div>
+                <label style="display:block; margin-bottom:6px; font-weight:600;">
+                    Conferma password
+                </label>
+                <input
+                    type="password"
+                    name="confirm_password"
+                    required
+                    minlength="6"
+                    placeholder="Ripeti la password"
+                    style="
+                        width:100%;
+                        padding:12px 14px;
+                        border-radius:12px;
+                        border:1px solid var(--border);
+                        background: rgba(255,255,255,0.04);
+                        color: var(--text);
+                        outline:none;
+                    "
+                >
+            </div>
+
+            <button type="submit" class="btn btn-primary" style="margin-top: 8px;">
+                Crea account
+            </button>
+        </form>
+
+        <div style="margin-top: 20px; text-align: center; color: var(--muted);">
+            Hai già un account?
+            <a href="/login" style="color: var(--primary); font-weight: 600;">
+                Accedi
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}Login | CosaGuardo{% endblock %}
+
+{% block content %}
+
+<div style="max-width: 420px; margin: 0 auto;">
+    
+    <div class="page-card" style="padding: 32px;">
+
+        <h1 style="font-size: 1.6rem; margin-bottom: 10px;">
+            Bentornato 👋
+        </h1>
+
+        <p style="color: var(--muted); margin-bottom: 26px;">
+            Accedi per salvare i tuoi gusti e migliorare i consigli.
+        </p>
+
+        {% if error %}
+            <div style="
+                margin-bottom: 18px;
+                padding: 12px 14px;
+                border-radius: 12px;
+                background: rgba(255,107,107,0.12);
+                border: 1px solid rgba(255,107,107,0.25);
+                color: #ffd1d1;
+                font-weight: 600;
+            ">
+                {{ error }}
+            </div>
+        {% endif %}
+
+        <form method="post" action="/login" style="display: grid; gap: 16px;">
+
+            <!-- EMAIL -->
+            <div>
+                <label style="display:block; margin-bottom:6px; font-weight:600;">
+                    Email
+                </label>
+                <input 
+                    type="email" 
+                    name="email" 
+                    required
+                    placeholder="es. marco@email.com"
+                    style="
+                        width:100%;
+                        padding:12px 14px;
+                        border-radius:12px;
+                        border:1px solid var(--border);
+                        background: rgba(255,255,255,0.04);
+                        color: var(--text);
+                        outline:none;
+                    "
+                >
+            </div>
+
+            <!-- PASSWORD -->
+            <div>
+                <label style="display:block; margin-bottom:6px; font-weight:600;">
+                    Password
+                </label>
+                <input 
+                    type="password" 
+                    name="password" 
+                    required
+                    placeholder="********"
+                    style="
+                        width:100%;
+                        padding:12px 14px;
+                        border-radius:12px;
+                        border:1px solid var(--border);
+                        background: rgba(255,255,255,0.04);
+                        color: var(--text);
+                        outline:none;
+                    "
+                >
+            </div>
+
+            <!-- SUBMIT -->
+            <button type="submit" class="btn btn-primary" style="margin-top: 10px;">
+                Accedi
+            </button>
+
+        </form>
+
+        <!-- REGISTER LINK -->
+        <div style="margin-top: 20px; text-align: center; color: var(--muted);">
+            Non hai un account?
+            <a href="/register" style="color: var(--primary); font-weight: 600;">
+                Registrati
+            </a>
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

@@ -1,98 +1,99 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CosaGuardo</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="page page-home">
-        <div class="hero">
-            <div class="hero-badge">Recommender film ibrido</div>
-            <h1>CosaGuardo</h1>
-            <p class="subtitle">
-                Inserisci fino a 6 film che ti sono piaciuti e trova nuovi titoli consigliati
-                in base a somiglianza, affinità e segnali del motore ibrido.
+{% extends "base.html" %}
+
+{% block title %}CosaGuardo{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="/static/css/style.css">
+{% endblock %}
+
+{% block content %}
+<div class="page page-home">
+    <div class="hero">
+        <div class="hero-badge">Recommender film ibrido</div>
+        <h1>CosaGuardo</h1>
+        <p class="subtitle">
+            Inserisci fino a 6 film che ti sono piaciuti e trova nuovi titoli consigliati
+            in base a somiglianza, affinità e segnali del motore ibrido.
+        </p>
+    </div>
+
+    <div class="search-panel">
+        <div class="panel-header">
+            <h2>Da cosa vuoi partire?</h2>
+            <p>
+                Scrivi almeno 2-3 titoli. Puoi selezionarli dai suggerimenti mentre scrivi.
             </p>
         </div>
 
-        <div class="search-panel">
-            <div class="panel-header">
-                <h2>Da cosa vuoi partire?</h2>
-                <p>
-                    Scrivi almeno 2-3 titoli. Puoi selezionarli dai suggerimenti mentre scrivi.
-                </p>
+        <form method="post" action="/recommend" id="recommend-form">
+            <div class="mode-switch" style="margin-bottom: 20px;">
+                <p style="margin-bottom: 10px; font-weight: 600;">Cosa vuoi cercare?</p>
+
+                <label style="margin-right: 20px;">
+                    <input type="radio" name="content_type" value="movie" checked>
+                    Film
+                </label>
+
+                <label>
+                    <input type="radio" name="content_type" value="tv">
+                    Serie TV
+                </label>
             </div>
 
-            <form method="post" action="/recommend" id="recommend-form">
-		<div class="mode-switch" style="margin-bottom: 20px;">
-  		    <p style="margin-bottom: 10px; font-weight: 600;">Cosa vuoi cercare?</p>
-
-  		    <label style="margin-right: 20px;">
-    		        <input type="radio" name="content_type" value="movie" checked>
-    		        Film
-  		    </label>
-
-  		    <label>
-    			<input type="radio" name="content_type" value="tv">
-    			Serie TV
-  		    </label>
-		</div>
-
-                <div class="form-grid">
-                    <div class="input-group">
-                        <label for="movie1">Film 1</label>
-                        <input id="movie1" type="text" name="movie1" placeholder="Es. Interstellar" onkeyup="searchMovie(this)" autocomplete="off">
-                        <div class="suggestions"></div>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="movie2">Film 2</label>
-                        <input id="movie2" type="text" name="movie2" placeholder="Es. Drive" onkeyup="searchMovie(this)" autocomplete="off">
-                        <div class="suggestions"></div>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="movie3">Film 3</label>
-                        <input id="movie3" type="text" name="movie3" placeholder="Es. Inglourious Basterds" onkeyup="searchMovie(this)" autocomplete="off">
-                        <div class="suggestions"></div>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="movie4">Film 4</label>
-                        <input id="movie4" type="text" name="movie4" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
-                        <div class="suggestions"></div>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="movie5">Film 5</label>
-                        <input id="movie5" type="text" name="movie5" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
-                        <div class="suggestions"></div>
-                    </div>
-
-                    <div class="input-group">
-                        <label for="movie6">Film 6</label>
-                        <input id="movie6" type="text" name="movie6" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
-                        <div class="suggestions"></div>
-                    </div>
+            <div class="form-grid">
+                <div class="input-group">
+                    <label for="movie1">Film 1</label>
+                    <input id="movie1" type="text" name="movie1" placeholder="Es. Interstellar" onkeyup="searchMovie(this)" autocomplete="off">
+                    <div class="suggestions"></div>
                 </div>
 
-                <div class="form-actions">
-    		    <button type="submit" id="submit-btn">
-       		        <span class="btn-text">Trova consigli</span>
-        	        <span class="btn-loading" style="display: none;">Sto cercando...</span>
-    		    </button>
-		</div>
-            </form>
+                <div class="input-group">
+                    <label for="movie2">Film 2</label>
+                    <input id="movie2" type="text" name="movie2" placeholder="Es. Drive" onkeyup="searchMovie(this)" autocomplete="off">
+                    <div class="suggestions"></div>
+                </div>
 
-            <div class="helper-box">
-                <strong>Tip:</strong> di solito i risultati migliorano se inserisci titoli coerenti
-                con i tuoi gusti, invece di film molto casuali tra loro.
+                <div class="input-group">
+                    <label for="movie3">Film 3</label>
+                    <input id="movie3" type="text" name="movie3" placeholder="Es. Inglourious Basterds" onkeyup="searchMovie(this)" autocomplete="off">
+                    <div class="suggestions"></div>
+                </div>
+
+                <div class="input-group">
+                    <label for="movie4">Film 4</label>
+                    <input id="movie4" type="text" name="movie4" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
+                    <div class="suggestions"></div>
+                </div>
+
+                <div class="input-group">
+                    <label for="movie5">Film 5</label>
+                    <input id="movie5" type="text" name="movie5" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
+                    <div class="suggestions"></div>
+                </div>
+
+                <div class="input-group">
+                    <label for="movie6">Film 6</label>
+                    <input id="movie6" type="text" name="movie6" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
+                    <div class="suggestions"></div>
+                </div>
             </div>
+
+            <div class="form-actions">
+                <button type="submit" id="submit-btn">
+                    <span class="btn-text">Trova consigli</span>
+                    <span class="btn-loading" style="display: none;">Sto cercando...</span>
+                </button>
+            </div>
+        </form>
+
+        <div class="helper-box">
+            <strong>Tip:</strong> di solito i risultati migliorano se inserisci titoli coerenti
+            con i tuoi gusti, invece di film molto casuali tra loro.
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script src="/static/app.js"></script>
-</body>
-</html>
+{% block scripts %}
+<script src="/static/app.js"></script>
+{% endblock %}

@@ -3,6 +3,7 @@ import requests
 from collections import Counter
 from core.explainability import enrich_with_explanations
 
+
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
 GENERIC_KEYWORDS = {
@@ -169,7 +170,7 @@ def find_tv_by_title(title_query: str):
             "original_title": first.get("original_name") or first.get("name") or title_query,
             "poster_path": first.get("poster_path"),
             "overview": first.get("overview"),
-            "genres": first.get("genre_ids", []),
+            "genres": genre_ids_to_names(first.get("genre_ids", [])),
         }
 
     except Exception:

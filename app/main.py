@@ -1,9 +1,14 @@
 import os
 import sys
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+from app.taste_profile import build_taste_profile
+from app.dashboard_recommendations import build_dashboard_recommendations
+from app.db import init_db, get_user_by_email, create_user, verify_user, get_user_by_id, create_search, get_searches_by_user, get_daily_recommendations, save_daily_recommendations
+from datetime import datetime
 from core.recommendation_api import (
     recommend_from_seed_titles,
     search_movies,
@@ -16,6 +21,8 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
 app = FastAPI()
+app.add_middleware(SessionMiddleware, secret_key="cosaguardo-secret-key")
+init_db()
 
 app.mount(
     "/static",
@@ -45,9 +52,171 @@ def home(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={},
+        context={
+            "request": request
+        },
     )
 
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    if request.session.get("user_id"):
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={
+            "request": request,
+            "error": None
+        },
+    )
+
+@app.get("/register", response_class=HTMLResponse)
+def register_page(request: Request):
+    if request.session.get("user_id"):
+        return RedirectResponse(url="/dashboard", status_code=303)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="register.html",
+        context={
+            "request": request,
+            "error": None,
+            "email": ""
+        },
+    )
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    user_id = request.session.get("user_id")
+
+    if not user_id:
+        return RedirectResponse(url="/login", status_code=303)
+
+    user = get_user_by_id(user_id)
+    if not user:
+        request.session.clear()
+        return RedirectResponse(url="/login", status_code=303)
+
+    searches = get_searches_by_user(user_id, limit=10)
+    taste_profile = build_taste_profile(searches)
+
+    today_key = datetime.now().strftime("%Y-%m-%d")
+    daily_recs = get_daily_recommendations(user_id, today_key)
+
+    if daily_recs and len(daily_recs) > 0:
+        recommendations = [dict(rec) for rec in daily_recs]
+    else:
+        recommendations = build_dashboard_recommendations(
+            user_id=user_id,
+            searches=searches,
+            taste_profile=taste_profile,
+        )
+
+        if recommendations:
+            save_daily_recommendations(user_id, today_key, recommendations)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dashboard.html",
+        context={
+            "request": request,
+            "user_email": user["email"],
+            "searches": searches,
+            "taste_profile": taste_profile,
+            "recommendations": recommendations,
+        },
+    )
+
+@app.post("/register", response_class=HTMLResponse)
+def register_submit(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    confirm_password: str = Form(...)
+):
+    email = email.strip().lower()
+
+    if not email:
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={
+                "request": request,
+                "error": "Inserisci una email valida.",
+                "email": email
+            },
+        )
+
+    if len(password) < 6:
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={
+                "request": request,
+                "error": "La password deve avere almeno 6 caratteri.",
+                "email": email
+            },
+        )
+
+    if password != confirm_password:
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={
+                "request": request,
+                "error": "Le password non coincidono.",
+                "email": email
+            },
+        )
+
+    existing_user = get_user_by_email(email)
+    if existing_user:
+        return templates.TemplateResponse(
+            request=request,
+            name="register.html",
+            context={
+                "request": request,
+                "error": "Esiste già un account con questa email.",
+                "email": email
+            },
+        )
+
+    user_id = create_user(email, password)
+
+    request.session["user_id"] = user_id
+    request.session["user_email"] = email
+
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+@app.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/", status_code=303)
+
+@app.post("/login")
+def login_submit(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...)
+):
+    email = email.strip().lower()
+    user = verify_user(email, password)
+
+    if not user:
+        return templates.TemplateResponse(
+            request=request,
+            name="login.html",
+            context={
+                "request": request,
+                "error": "Email o password non corrette."
+            },
+        )
+
+    request.session["user_id"] = user["id"]
+    request.session["user_email"] = user["email"]
+
+    return RedirectResponse(url="/dashboard", status_code=303)
 
 @app.post("/recommend")
 def recommend(
@@ -65,6 +234,14 @@ def recommend(
         for m in [movie1, movie2, movie3, movie4, movie5, movie6]
         if m.strip()
     ]
+
+    user_id = request.session.get("user_id")
+    if user_id and seed_titles:
+        create_search(
+            user_id=user_id,
+            seed_titles=", ".join(seed_titles),
+            content_type=content_type,
+        )
 
     if content_type == "movie":
         result = recommend_from_seed_titles(seed_titles, top_k=10, per_seed_limit=30)
