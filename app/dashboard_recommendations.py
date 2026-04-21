@@ -95,8 +95,34 @@ def normalize_tv_rec(rec):
     }
 
 
-def build_dashboard_recommendations(user_id, searches, taste_profile=None, per_type_pool=12, final_count=3):
+def build_dashboard_recommendations(
+    user_id,
+    searches,
+    liked_titles=None,
+    taste_profile=None,
+    per_type_pool=12,
+    final_count=3
+):
     movie_titles, tv_titles = collect_recent_seeds(searches)
+
+    # ---- NEW: integra liked_titles ----
+    if liked_titles:
+        for item in liked_titles:
+            title = item.get("title", "").strip()
+            ctype = (item.get("content_type") or "").strip().lower()
+
+            if not title:
+                continue
+
+            if ctype == "movie" and title not in movie_titles:
+                movie_titles.insert(0, title)
+
+            elif ctype == "tv" and title not in tv_titles:
+                tv_titles.insert(0, title)
+
+    # limitiamo per sicurezza
+    movie_titles = movie_titles[:12]
+    tv_titles = tv_titles[:12]
 
     pool = []
 

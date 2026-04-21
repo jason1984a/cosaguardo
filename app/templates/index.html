@@ -7,93 +7,293 @@
 {% endblock %}
 
 {% block content %}
-<div class="page page-home">
-    <div class="hero">
-        <div class="hero-badge">Recommender film ibrido</div>
-        <h1>CosaGuardo</h1>
-        <p class="subtitle">
-            Inserisci fino a 6 film che ti sono piaciuti e trova nuovi titoli consigliati
-            in base a somiglianza, affinità e segnali del motore ibrido.
-        </p>
-    </div>
+<div class="page page-home home-v2">
+    <section class="home-hero">
+        <div class="hero-copy">
+            <h1>Trova cosa guardare</h1>
+        </div>
+    </section>
 
-    <div class="search-panel">
-        <div class="panel-header">
-            <h2>Da cosa vuoi partire?</h2>
-            <p>
-                Scrivi almeno 2-3 titoli. Puoi selezionarli dai suggerimenti mentre scrivi.
-            </p>
+    <section class="hero-trending-strip">
+        <div class="section-heading section-heading-compact">
+            <div>
+                <span class="section-kicker">Trend del momento</span>
+            </div>
+        </div>
+        <div class="hero-trending-wrap">
+            <button class="trend-nav trend-nav-left" type="button" aria-label="Scorri a sinistra">
+                ‹
+            </button>
+            <div class="hero-trending-row" id="hero-trending-row">
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg" alt="Interstellar" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Film</span>
+                        <strong>Interstellar</strong>
+                    </div>
+                </article>
+
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg" alt="The Dark Knight" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Film</span>
+                        <strong>The Dark Knight</strong>
+                    </div>
+                </article>
+
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/d5NXSklXo0qyIYkgV94XAgMIckC.jpg" alt="Dune" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Film</span>
+                        <strong>Dune</strong>
+                    </div>
+                </article>
+
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/9Gtg2DzBhmYamXBS1hKAhiwbBKS.jpg" alt="Doctor Strange" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Trend</span>
+                        <strong>Doctor Strange</strong>
+                    </div>
+                </article>
+
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/7WsyChQLEftFiDOVTGkv3hFpyyt.jpg" alt="Avengers Infinity War" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Blockbuster</span>
+                        <strong>Infinity War</strong>
+                    </div>
+                </article>
+
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/udDclJoHjfjb8Ekgsd4FDteOkCU.jpg" alt="Joker" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Da recuperare</span>
+                        <strong>Joker</strong>
+                    </div>
+                </article>
+
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/ptpr0kGAckfQkJeJIt8st5dglvd.jpg" alt="Oppenheimer" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Film</span>
+                        <strong>Oppenheimer</strong>
+                    </div>
+                </article>
+
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/6agKYU5IQFpuDyUYPu39w7UCRrJ.jpg" alt="The Batman" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Dark</span>
+                        <strong>The Batman</strong>
+                    </div>
+                </article>
+
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/reEMJA1uzscCbkpeRJeTT2bjqUp.jpg" alt="The Bear" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Serie TV</span>
+                        <strong>The Bear</strong>
+                    </div>
+                </article>
+
+                <article class="trend-mini-card">
+                    <img src="https://image.tmdb.org/t/p/w500/34OGjFEbHj0E3lE2w0iTUVq0CBz.jpg" alt="Shogun" onerror="this.style.display='none'">
+                    <div class="trend-mini-overlay">
+                        <span>Serie TV</span>
+                        <strong>Shōgun</strong>
+                    </div>
+                </article>
+            </div>
+
+                <button class="trend-nav trend-nav-right" type="button" aria-label="Scorri a destra">
+                    ›
+                </button>
+            </div>
+    </section>
+
+    <section class="search-panel search-panel-v2" id="search-panel">
+        <div class="panel-header panel-header-v2">
+            <div>
+                <span class="panel-kicker">Motore di raccomandazione</span>
+                <h2>Parti dai tuoi preferiti</h2>
+                <p>
+                    Inserisci almeno 2-3 titoli che ti sono piaciuti. Più sono coerenti tra loro,
+                    più i consigli diventano precisi.
+                </p>
+            </div>
         </div>
 
         <form method="post" action="/recommend" id="recommend-form">
-            <div class="mode-switch" style="margin-bottom: 20px;">
-                <p style="margin-bottom: 10px; font-weight: 600;">Cosa vuoi cercare?</p>
+            <div class="mode-switch mode-switch-v2">
+                <span class="mode-label">Cosa vuoi cercare?</span>
 
-                <label style="margin-right: 20px;">
+                <label class="mode-option">
                     <input type="radio" name="content_type" value="movie" checked>
-                    Film
+                    <span>Film</span>
                 </label>
 
-                <label>
+                <label class="mode-option">
                     <input type="radio" name="content_type" value="tv">
-                    Serie TV
+                    <span>Serie TV</span>
                 </label>
             </div>
 
             <div class="form-grid">
                 <div class="input-group">
-                    <label for="movie1">Film 1</label>
+                    <label for="movie1">Titolo 1</label>
                     <input id="movie1" type="text" name="movie1" placeholder="Es. Interstellar" onkeyup="searchMovie(this)" autocomplete="off">
                     <div class="suggestions"></div>
                 </div>
 
                 <div class="input-group">
-                    <label for="movie2">Film 2</label>
+                    <label for="movie2">Titolo 2</label>
                     <input id="movie2" type="text" name="movie2" placeholder="Es. Drive" onkeyup="searchMovie(this)" autocomplete="off">
                     <div class="suggestions"></div>
                 </div>
 
                 <div class="input-group">
-                    <label for="movie3">Film 3</label>
+                    <label for="movie3">Titolo 3</label>
                     <input id="movie3" type="text" name="movie3" placeholder="Es. Inglourious Basterds" onkeyup="searchMovie(this)" autocomplete="off">
                     <div class="suggestions"></div>
                 </div>
 
                 <div class="input-group">
-                    <label for="movie4">Film 4</label>
+                    <label for="movie4">Titolo 4</label>
                     <input id="movie4" type="text" name="movie4" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
                     <div class="suggestions"></div>
                 </div>
 
                 <div class="input-group">
-                    <label for="movie5">Film 5</label>
+                    <label for="movie5">Titolo 5</label>
                     <input id="movie5" type="text" name="movie5" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
                     <div class="suggestions"></div>
                 </div>
 
                 <div class="input-group">
-                    <label for="movie6">Film 6</label>
+                    <label for="movie6">Titolo 6</label>
                     <input id="movie6" type="text" name="movie6" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
                     <div class="suggestions"></div>
                 </div>
             </div>
 
             <div class="form-actions">
-                <button type="submit" id="submit-btn">
+                <button type="submit" id="submit-btn" class="primary-submit-btn">
                     <span class="btn-text">Trova consigli</span>
                     <span class="btn-loading" style="display: none;">Sto cercando...</span>
                 </button>
             </div>
         </form>
 
-        <div class="helper-box">
-            <strong>Tip:</strong> di solito i risultati migliorano se inserisci titoli coerenti
-            con i tuoi gusti, invece di film molto casuali tra loro.
+        <div class="helper-box helper-box-v2">
+            <strong>Tip:</strong> evita titoli troppo casuali tra loro. Se parti da gusti chiari,
+            il motore lavora molto meglio.
         </div>
-    </div>
+    </section>
+
+    <section class="home-highlights">
+        <div class="highlight-card">
+            <div class="highlight-icon">✨</div>
+            <div>
+                <h3>Consigli personalizzati</h3>
+                <p>Parti dai titoli che ami.</p>
+            </div>
+        </div>
+
+        <div class="highlight-card">
+            <div class="highlight-icon">🎬</div>
+            <div>
+                <h3>Film e Serie TV</h3>
+                <p>Scopri nuovi titoli in un unico posto.</p>
+            </div>
+        </div>
+
+        <div class="highlight-card">
+            <div class="highlight-icon">📺</div>
+            <div>
+                <h3>Dove guardarlo</h3>
+                <p>Presto anche le piattaforme streaming.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="home-picks" id="home-picks">
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">Scelti oggi</span>
+                <h2>Qualche spunto per iniziare</h2>
+            </div>
+            <a href="#" class="section-link">Vedi di più</a>
+        </div>
+
+        <div class="home-picks-grid">
+            <article class="pick-card">
+                <div class="pick-poster">
+                  <img src="https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg" onerror="this.style.display='none'">
+                </div>
+                <div class="pick-body">
+                    <span class="pick-tag">Trending</span>
+                    <h3>Film di cui si parla oggi</h3>
+                    <p>Una selezione veloce dei titoli più interessanti del momento.</p>
+                </div>
+            </article>
+
+            <article class="pick-card">
+                <div class="pick-poster">
+                  <img src="https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg" onerror="this.style.display='none'">
+                </div>
+                <div class="pick-body">
+                    <span class="pick-tag">Da recuperare</span>
+                    <h3>Se ti piacciono i grandi cult</h3>
+                    <p>Perfetti per chi vuole andare sul sicuro con titoli forti.</p>
+                </div>
+            </article>
+
+            <article class="pick-card">
+                <div class="pick-poster">
+                  <img src="https://image.tmdb.org/t/p/w500/d5NXSklXo0qyIYkgV94XAgMIckC.jpg" onerror="this.style.display='none'">
+                </div>
+                <div class="pick-body">
+                    <span class="pick-tag">Serie</span>
+                    <h3>Nuove serie da iniziare</h3>
+                    <p>Per chi cerca qualcosa che prenda subito e faccia restare dentro.</p>
+                </div>
+            </article>
+
+            <article class="pick-card">
+                <div class="pick-poster">
+                  <img src="https://image.tmdb.org/t/p/w500/9Gtg2DzBhmYamXBS1hKAhiwbBKS.jpg" onerror="this.style.display='none'">
+                </div>
+                <div class="pick-body">
+                    <span class="pick-tag">Mood</span>
+                    <h3>Thriller, tensione, atmosfera</h3>
+                    <p>Una corsia rapida per chi cerca qualcosa di intenso.</p>
+                </div>
+            </article>
+        </div>
+    </section>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script src="/static/app.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const row = document.getElementById("hero-trending-row");
+    const leftBtn = document.querySelector(".trend-nav-left");
+    const rightBtn = document.querySelector(".trend-nav-right");
+
+    if (!row || !leftBtn || !rightBtn) return;
+
+    const scrollAmount = 480;
+
+    leftBtn.addEventListener("click", function () {
+        row.scrollBy({ left: -scrollAmount, behavior: "smooth" });
+    });
+
+    rightBtn.addEventListener("click", function () {
+        row.scrollBy({ left: scrollAmount, behavior: "smooth" });
+    });
+});
+</script>
 {% endblock %}

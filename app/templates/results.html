@@ -1,13 +1,13 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TEST NUOVO TEMPLATE</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="page page-results">
+{% extends "base.html" %}
+
+{% block title %}Risultati | CosaGuardo{% endblock %}
+
+{% block head_extra %}
+<link rel="stylesheet" href="/static/css/style.css">
+{% endblock %}
+
+{% block content %}
+<div class="page page-results">
         <div class="results-header">
             <div>
                 <div class="hero-badge">Risultati del recommender</div>
@@ -112,6 +112,28 @@
                                     </div>
                                 {% endfor %}
                             </div>
+                            <div class="feedback-actions">
+                                <button 
+                                    class="feedback-btn {% if rec.is_liked %}active{% endif %}" 
+                                    data-type="liked"
+                                    onclick="sendFeedback('{{ rec.title }}', '{{ content_type }}', 'liked', this)">
+                                    👍
+                                </button>
+
+                                <button 
+                                    class="feedback-btn {% if rec.is_disliked %}active{% endif %}" 
+                                    data-type="disliked"
+                                    onclick="sendFeedback('{{ rec.title }}', '{{ content_type }}', 'disliked', this)">
+                                    👎
+                                </button>
+
+                                <button 
+                                    class="feedback-btn {% if rec.is_seen %}active{% endif %}" 
+                                    data-type="seen"
+                                    onclick="sendFeedback('{{ rec.title }}', '{{ content_type }}', 'seen', this)">
+                                    👁️‍🗨️ Visto
+                                </button>
+                            </div>
                         </div>
                     </article>
                 {% endfor %}
@@ -124,5 +146,52 @@
             </div>
         {% endif %}
     </div>
-</body>
-</html>
+    {% endblock %}
+
+    {% block scripts %}
+    <script>
+    function sendFeedback(title, contentType, feedbackType, el) {
+        fetch("/feedback", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                title: title,
+                content_type: contentType,
+                feedback_type: feedbackType
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "ok") {
+                const parent = el.parentElement
+
+                if (feedbackType === "liked") {
+                    const likedBtn = parent.querySelector('[data-type="liked"]')
+                    const dislikedBtn = parent.querySelector('[data-type="disliked"]')
+
+                    if (likedBtn) likedBtn.classList.add("active")
+                    if (dislikedBtn) dislikedBtn.classList.remove("active")
+                }
+
+                if (feedbackType === "disliked") {
+                    const likedBtn = parent.querySelector('[data-type="liked"]')
+                    const dislikedBtn = parent.querySelector('[data-type="disliked"]')
+
+                    if (dislikedBtn) dislikedBtn.classList.add("active")
+                    if (likedBtn) likedBtn.classList.remove("active")
+                }
+
+                if (feedbackType === "seen") {
+                    if (data.seen === 1) {
+                        el.classList.add("active")
+                    } else {
+                        el.classList.remove("active")
+                    }
+                }
+            }
+        })
+    }
+    </script>
+    {% endblock %}

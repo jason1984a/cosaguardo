@@ -4,10 +4,26 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi import Body
 from starlette.middleware.sessions import SessionMiddleware
 from app.taste_profile import build_taste_profile
 from app.dashboard_recommendations import build_dashboard_recommendations
-from app.db import init_db, get_user_by_email, create_user, verify_user, get_user_by_id, create_search, get_searches_by_user, get_daily_recommendations, save_daily_recommendations
+from app.db import (
+    init_db,
+    get_user_by_email,
+    create_user,
+    verify_user,
+    get_user_by_id,
+    create_search,
+    get_searches_by_user,
+    get_daily_recommendations,
+    save_daily_recommendations,
+    get_liked_states_by_user,
+    get_seen_titles_by_user,
+    get_disliked_titles_by_user,
+    get_title_states_map,
+    upsert_title_state,
+)
 from datetime import datetime
 from core.recommendation_api import (
     recommend_from_seed_titles,
@@ -99,6 +115,7 @@ def dashboard(request: Request):
         return RedirectResponse(url="/login", status_code=303)
 
     searches = get_searches_by_user(user_id, limit=10)
+    liked_titles = get_liked_states_by_user(user_id)
     taste_profile = build_taste_profile(searches)
 
     today_key = datetime.now().strftime("%Y-%m-%d")
@@ -107,9 +124,12 @@ def dashboard(request: Request):
     if daily_recs and len(daily_recs) > 0:
         recommendations = [dict(rec) for rec in daily_recs]
     else:
+        liked_titles = get_liked_states_by_user(user_id)
+
         recommendations = build_dashboard_recommendations(
             user_id=user_id,
             searches=searches,
+            liked_titles=liked_titles,
             taste_profile=taste_profile,
         )
 
@@ -123,6 +143,7 @@ def dashboard(request: Request):
             "request": request,
             "user_email": user["email"],
             "searches": searches,
+            "liked_titles": liked_titles,
             "taste_profile": taste_profile,
             "recommendations": recommendations,
         },
@@ -188,6 +209,61 @@ def register_submit(
     request.session["user_email"] = email
 
     return RedirectResponse(url="/dashboard", status_code=303)
+
+@app.post("/feedback")
+def save_feedback(request: Request, data: dict = Body(...)):
+    user_id = request.session.get("user_id")
+
+    if not user_id:
+        return {"status": "error", "message": "not logged"}
+
+    title = (data.get("title") or "").strip()
+    content_type = (data.get("content_type") or "").strip().lower()
+    feedback_type = (data.get("feedback_type") or "").strip().lower()
+
+    if not title or not content_type or not feedback_type:
+        return {"status": "error", "message": "missing data"}
+
+    if feedback_type == "liked":
+        upsert_title_state(
+            user_id=user_id,
+            title=title,
+            content_type=content_type,
+            preference="liked"
+        )
+
+    elif feedback_type == "disliked":
+        upsert_title_state(
+            user_id=user_id,
+            title=title,
+            content_type=content_type,
+            preference="disliked"
+        )
+
+    elif feedback_type == "seen":
+        current_state = None
+        try:
+            from app.db import get_title_state
+            current_state = get_title_state(user_id, title, content_type)
+        except Exception:
+            current_state = None
+
+        current_seen = current_state["seen"] if current_state else 0
+        new_seen = 0 if current_seen == 1 else 1
+
+        upsert_title_state(
+            user_id=user_id,
+            title=title,
+            content_type=content_type,
+            seen=new_seen
+        )
+
+        return {"status": "ok", "seen": new_seen}
+
+    else:
+        return {"status": "error", "message": "invalid feedback type"}
+
+    return {"status": "ok"}
 
 @app.post("/logout")
 def logout(request: Request):
@@ -261,6 +337,22 @@ def recommend(
     missing_titles = result["missing_titles"]
     recommendations = result["recommendations"]
 
+    user_id = request.session.get("user_id")
+    excluded_titles = []
+    title_states = {}
+
+    if user_id:
+        seen_titles = get_seen_titles_by_user(user_id, content_type)
+        disliked_titles = get_disliked_titles_by_user(user_id, content_type)
+        excluded_titles = list(set(seen_titles + disliked_titles))
+        title_states = get_title_states_map(user_id, content_type)
+
+    if excluded_titles:
+        recommendations = [
+            rec for rec in recommendations
+            if rec.get("title", "").strip().lower() not in excluded_titles
+        ]
+
     pretty_resolved_seeds = []
     for seed in resolved_seeds:
         pretty_resolved_seeds.append({
@@ -282,6 +374,11 @@ def recommend(
                 ),
                 "overview": rec.get("overview", ""),
             }
+
+        state_key = rec.get("title", "").strip().lower()
+        rec_state = title_states.get(state_key, {})
+        is_seen = rec_state.get("seen", 0) == 1
+        preference = rec_state.get("preference")
 
         why_titles = [prettify_title(t) for t in rec.get("why_titles", [])]
 
@@ -319,6 +416,9 @@ def recommend(
                 "collab_score": round(rec.get("components", {}).get("collab_score", 0), 3),
                 "keyword_score": 0,
                 "matched_keywords": [],
+                "is_seen": is_seen,
+                "is_liked": preference == "liked",
+                "is_disliked": preference == "disliked",
             })
         else:
             enriched_recommendations.append({

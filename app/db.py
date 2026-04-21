@@ -178,6 +178,32 @@ def init_db():
         )
     """)
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            feedback_type TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, title, content_type)
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_title_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            seen INTEGER NOT NULL DEFAULT 0,
+            preference TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, title, content_type)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -213,3 +239,238 @@ def get_searches_by_user(user_id: int, limit: int = 10):
     rows = cur.fetchall()
     conn.close()
     return rows
+
+def save_feedback(user_id: int, title: str, content_type: str, feedback_type: str):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO user_feedback (user_id, title, content_type, feedback_type)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, title, content_type)
+        DO UPDATE SET feedback_type = excluded.feedback_type
+        """,
+        (user_id, title, content_type, feedback_type)
+    )
+
+    conn.commit()
+    conn.close()
+
+def get_feedback_by_user(user_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT title, content_type, feedback_type
+        FROM user_feedback
+        WHERE user_id = ?
+        """,
+        (user_id,)
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def get_excluded_titles_by_user(user_id: int, content_type: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT title
+        FROM user_feedback
+        WHERE user_id = ?
+          AND content_type = ?
+          AND feedback_type IN ('seen', 'disliked')
+        """,
+        (user_id, content_type)
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return [row["title"].strip().lower() for row in rows]
+
+def get_liked_titles_by_user(user_id: int, content_type: str | None = None):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    if content_type:
+        cur.execute(
+            """
+            SELECT DISTINCT title, content_type, created_at
+            FROM user_feedback
+            WHERE user_id = ?
+              AND feedback_type = 'liked'
+              AND content_type = ?
+            ORDER BY created_at DESC, title ASC
+            """,
+            (user_id, content_type)
+        )
+    else:
+        cur.execute(
+            """
+            SELECT DISTINCT title, content_type, created_at
+            FROM user_feedback
+            WHERE user_id = ?
+              AND feedback_type = 'liked'
+            ORDER BY created_at DESC, title ASC
+            """,
+            (user_id,)
+        )
+
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+def upsert_title_state(user_id: int, title: str, content_type: str, seen=None, preference=None):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT id, seen, preference
+        FROM user_title_state
+        WHERE user_id = ? AND title = ? AND content_type = ?
+        """,
+        (user_id, title, content_type)
+    )
+    existing = cur.fetchone()
+
+    if existing:
+        new_seen = existing["seen"] if seen is None else seen
+        new_preference = existing["preference"] if preference is None else preference
+
+        cur.execute(
+            """
+            UPDATE user_title_state
+            SET seen = ?, preference = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ? AND title = ? AND content_type = ?
+            """,
+            (new_seen, new_preference, user_id, title, content_type)
+        )
+    else:
+        cur.execute(
+            """
+            INSERT INTO user_title_state (user_id, title, content_type, seen, preference)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                title,
+                content_type,
+                0 if seen is None else seen,
+                preference
+            )
+        )
+
+    conn.commit()
+    conn.close()
+
+
+def get_title_state(user_id: int, title: str, content_type: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT seen, preference
+        FROM user_title_state
+        WHERE user_id = ? AND title = ? AND content_type = ?
+        """,
+        (user_id, title, content_type)
+    )
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+
+def get_seen_titles_by_user(user_id: int, content_type: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT title
+        FROM user_title_state
+        WHERE user_id = ?
+          AND content_type = ?
+          AND seen = 1
+        """,
+        (user_id, content_type)
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return [row["title"].strip().lower() for row in rows]
+
+
+def get_disliked_titles_by_user(user_id: int, content_type: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT title
+        FROM user_title_state
+        WHERE user_id = ?
+          AND content_type = ?
+          AND preference = 'disliked'
+        """,
+        (user_id, content_type)
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return [row["title"].strip().lower() for row in rows]
+
+
+def get_liked_states_by_user(user_id: int, content_type: str | None = None):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    if content_type:
+        cur.execute(
+            """
+            SELECT title, content_type, seen, preference, updated_at
+            FROM user_title_state
+            WHERE user_id = ?
+              AND content_type = ?
+              AND preference = 'liked'
+            ORDER BY updated_at DESC, title ASC
+            """,
+            (user_id, content_type)
+        )
+    else:
+        cur.execute(
+            """
+            SELECT title, content_type, seen, preference, updated_at
+            FROM user_title_state
+            WHERE user_id = ?
+              AND preference = 'liked'
+            ORDER BY updated_at DESC, title ASC
+            """,
+            (user_id,)
+        )
+
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+def get_title_states_map(user_id: int, content_type: str):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT title, seen, preference
+        FROM user_title_state
+        WHERE user_id = ? AND content_type = ?
+        """,
+        (user_id, content_type)
+    )
+    rows = cur.fetchall()
+    conn.close()
+
+    result = {}
+    for row in rows:
+        key = row["title"].strip().lower()
+        result[key] = {
+            "seen": row["seen"],
+            "preference": row["preference"],
+        }
+
+    return result
