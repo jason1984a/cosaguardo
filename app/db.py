@@ -426,23 +426,33 @@ def get_liked_states_by_user(user_id: int, content_type: str | None = None):
     if content_type:
         cur.execute(
             """
-            SELECT title, content_type, seen, preference, updated_at
-            FROM user_title_state
-            WHERE user_id = ?
-              AND content_type = ?
-              AND preference = 'liked'
-            ORDER BY updated_at DESC, title ASC
+            SELECT uts.title, uts.content_type, uts.seen, uts.preference, uts.updated_at,
+                   dr.poster_url
+            FROM user_title_state uts
+            LEFT JOIN daily_recommendations dr
+                ON uts.title = dr.title
+                AND uts.content_type = dr.content_type
+                AND dr.user_id = uts.user_id
+            WHERE uts.user_id = ?
+              AND uts.content_type = ?
+              AND uts.preference = 'liked'
+            ORDER BY uts.updated_at DESC, uts.title ASC
             """,
             (user_id, content_type)
         )
     else:
         cur.execute(
             """
-            SELECT title, content_type, seen, preference, updated_at
-            FROM user_title_state
-            WHERE user_id = ?
-              AND preference = 'liked'
-            ORDER BY updated_at DESC, title ASC
+            SELECT uts.title, uts.content_type, uts.seen, uts.preference, uts.updated_at,
+                   dr.poster_url
+            FROM user_title_state uts
+            LEFT JOIN daily_recommendations dr
+                ON uts.title = dr.title
+                AND uts.content_type = dr.content_type
+                AND dr.user_id = uts.user_id
+            WHERE uts.user_id = ?
+              AND uts.preference = 'liked'
+            ORDER BY uts.updated_at DESC, uts.title ASC
             """,
             (user_id,)
         )

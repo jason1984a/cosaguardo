@@ -61,11 +61,11 @@
         }
 
         .header-inner {
-            min-height: 58px;
+            min-height: 52px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 16px;
+            gap: 14px;
         }
 
         .brand {
@@ -199,23 +199,27 @@
 
         @media (max-width: 760px) {
             .header-inner {
-                min-height: 46px;
-                padding: 8px 0;
+                min-height: 40px;
+                padding: 4px 0;
                 flex-direction: row;
                 align-items: center;
-                gap: 10px;
+                gap: 8px;
             }
 
             .brand {
-                gap: 8px;
-                font-size: 0.92rem;
+                gap: 7px;
+                font-size: 0.88rem;
             }
 
             .brand-logo {
-                width: 28px;
-                height: 28px;
-                border-radius: 9px;
-                font-size: 0.82rem;
+                width: 26px;
+                height: 26px;
+                border-radius: 8px;
+                font-size: 0.76rem;
+            }
+
+            .brand-text {
+                display: none;
             }
 
             .nav {
@@ -254,10 +258,12 @@
             }
 
             .main-content {
-                padding-top: 2px;
+                padding-top: 0;
             }
         }
     </style>
+
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=3">
 
     {% block head_extra %}{% endblock %}
 </head>
@@ -267,7 +273,7 @@
             <div class="container header-inner">
                 <a href="/" class="brand">
                     <div class="brand-logo">CG</div>
-                    <span>CosaGuardo</span>
+                    <span class="brand-text">CosaGuardo</span>
                 </a>
 
                 <nav class="nav">

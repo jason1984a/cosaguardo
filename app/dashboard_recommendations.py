@@ -49,7 +49,7 @@ def stable_daily_pick(items, user_id, day_key, count=3):
     scored = []
 
     for item in items:
-        title = item.get("title", "")
+        title = (item["title"] or "") if "title" in item.keys() else ""
         seed = f"{user_id}-{day_key}-{title}".encode("utf-8")
         score = hashlib.md5(seed).hexdigest()
         scored.append((score, item))
@@ -108,8 +108,8 @@ def build_dashboard_recommendations(
     # ---- NEW: integra liked_titles ----
     if liked_titles:
         for item in liked_titles:
-            title = item.get("title", "").strip()
-            ctype = (item.get("content_type") or "").strip().lower()
+            title = (item["title"] or "").strip() if "title" in item.keys() else ""
+            ctype = (item["content_type"] or "").strip().lower() if "content_type" in item.keys() else ""
 
             if not title:
                 continue

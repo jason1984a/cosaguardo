@@ -115,7 +115,15 @@ def dashboard(request: Request):
         return RedirectResponse(url="/login", status_code=303)
 
     searches = get_searches_by_user(user_id, limit=10)
-    liked_titles = get_liked_states_by_user(user_id)
+    liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
+
+    for item in liked_titles:
+        item["poster_url"] = item.get("poster_url") or ""
+
+        if item["content_type"] == "movie" and not item["poster_url"]:
+            tmdb_info = get_movie_tmdb_info(item["title"])
+            item["poster_url"] = tmdb_info.get("poster_url", "") if tmdb_info else ""
+
     taste_profile = build_taste_profile(searches)
 
     today_key = datetime.now().strftime("%Y-%m-%d")

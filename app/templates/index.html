@@ -158,29 +158,34 @@
                     <div class="suggestions"></div>
                 </div>
 
-                <div class="input-group">
-                    <label for="movie4">Titolo 4</label>
-                    <input id="movie4" type="text" name="movie4" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
-                    <div class="suggestions"></div>
-                </div>
+                <div class="extra-titles" id="extra-titles">
+                    <div class="input-group">
+                        <label for="movie4">Titolo 4</label>
+                        <input id="movie4" type="text" name="movie4" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
+                        <div class="suggestions"></div>
+                    </div>
 
-                <div class="input-group">
-                    <label for="movie5">Titolo 5</label>
-                    <input id="movie5" type="text" name="movie5" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
-                    <div class="suggestions"></div>
-                </div>
+                    <div class="input-group">
+                        <label for="movie5">Titolo 5</label>
+                        <input id="movie5" type="text" name="movie5" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
+                        <div class="suggestions"></div>
+                    </div>
 
-                <div class="input-group">
-                    <label for="movie6">Titolo 6</label>
-                    <input id="movie6" type="text" name="movie6" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
-                    <div class="suggestions"></div>
+                    <div class="input-group">
+                        <label for="movie6">Titolo 6</label>
+                        <input id="movie6" type="text" name="movie6" placeholder="Opzionale" onkeyup="searchMovie(this)" autocomplete="off">
+                        <div class="suggestions"></div>
+                    </div>
                 </div>
             </div>
 
-            <div class="form-actions">
-                <button type="submit" id="submit-btn" class="primary-submit-btn">
-                    <span class="btn-text">Trova consigli</span>
-                    <span class="btn-loading" style="display: none;">Sto cercando...</span>
+            <div class="form-actions-v2">
+                <button type="submit" class="primary-submit-btn">
+                    Trova consigli
+                </button>
+
+                <button type="button" class="add-title-btn" title="Aggiungi altri titoli">
+                    +
                 </button>
             </div>
         </form>
@@ -191,36 +196,11 @@
         </div>
     </section>
 
-    <section class="home-highlights">
-        <div class="highlight-card">
-            <div class="highlight-icon">✨</div>
-            <div>
-                <h3>Consigli personalizzati</h3>
-                <p>Parti dai titoli che ami.</p>
-            </div>
-        </div>
-
-        <div class="highlight-card">
-            <div class="highlight-icon">🎬</div>
-            <div>
-                <h3>Film e Serie TV</h3>
-                <p>Scopri nuovi titoli in un unico posto.</p>
-            </div>
-        </div>
-
-        <div class="highlight-card">
-            <div class="highlight-icon">📺</div>
-            <div>
-                <h3>Dove guardarlo</h3>
-                <p>Presto anche le piattaforme streaming.</p>
-            </div>
-        </div>
-    </section>
-
+    
     <section class="home-picks" id="home-picks">
         <div class="section-heading">
             <div>
-                <span class="section-kicker">Scelti oggi</span>
+                <span class="section-kicker">Da iniziare subito</span>
                 <h2>Qualche spunto per iniziare</h2>
             </div>
             <a href="#" class="section-link">Vedi di più</a>
@@ -234,7 +214,7 @@
                 <div class="pick-body">
                     <span class="pick-tag">Trending</span>
                     <h3>Film di cui si parla oggi</h3>
-                    <p>Una selezione veloce dei titoli più interessanti del momento.</p>
+                    <p>Tra i più visti oggi</p>
                 </div>
             </article>
 
@@ -272,6 +252,7 @@
             </article>
         </div>
     </section>
+
 </div>
 {% endblock %}
 
@@ -283,17 +264,27 @@ document.addEventListener("DOMContentLoaded", function () {
     const leftBtn = document.querySelector(".trend-nav-left");
     const rightBtn = document.querySelector(".trend-nav-right");
 
-    if (!row || !leftBtn || !rightBtn) return;
+    if (row && leftBtn && rightBtn) {
+        const scrollAmount = 480;
 
-    const scrollAmount = 480;
+        leftBtn.addEventListener("click", function () {
+            row.scrollBy({ left: -scrollAmount, behavior: "smooth" });
+        });
 
-    leftBtn.addEventListener("click", function () {
-        row.scrollBy({ left: -scrollAmount, behavior: "smooth" });
-    });
+        rightBtn.addEventListener("click", function () {
+            row.scrollBy({ left: scrollAmount, behavior: "smooth" });
+        });
+    }
 
-    rightBtn.addEventListener("click", function () {
-        row.scrollBy({ left: scrollAmount, behavior: "smooth" });
-    });
+    const extraTitles = document.getElementById("extra-titles");
+    const addTitleBtn = document.querySelector(".add-title-btn");
+
+    if (extraTitles && addTitleBtn) {
+        addTitleBtn.addEventListener("click", function () {
+            const isOpen = extraTitles.classList.toggle("is-open");
+            addTitleBtn.textContent = isOpen ? "−" : "+";
+        });
+    }
 });
 </script>
 {% endblock %}
