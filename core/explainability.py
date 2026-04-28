@@ -1,129 +1,209 @@
 import random
 
-REASON_TEMPLATES = {
-    "dark_tone": [
-        "ha un tono più cupo e intenso",
-        "punta su un’atmosfera più oscura e tesa"
-    ],
-    "character": [
-        "funziona molto per come costruisce i personaggi",
-        "mette al centro i conflitti tra i personaggi"
-    ],
-    "tension": [
-        "tiene alta la tensione per tutta la durata",
-        "è costruito per tenerti sempre sul filo"
-    ],
-    "fast_paced": [
-        "ha un ritmo veloce e scorrevole",
-        "va dritto al punto senza rallentare troppo"
-    ],
-    "smart_plot": [
-        "ha una trama costruita in modo intelligente",
-        "gioca molto su intrecci e sviluppo narrativo"
-    ],
-    "similar_audience": [
-        "piace spesso a chi ha gusti simili ai tuoi",
-        "è molto in linea con le tue scelte iniziali"
-    ],
-    "original": [
-        "è una scelta un po’ più originale rispetto agli altri",
-        "si discosta un po’ ma resta coerente con i tuoi gusti"
-    ]
+# ---------------------------------------------------------------------------
+# KEYWORD → etichetta leggibile in italiano
+# ---------------------------------------------------------------------------
+
+KEYWORD_LABELS = {
+    "space": "spazio",
+    "space travel": "viaggi spaziali",
+    "spacecraft": "astronavi",
+    "astronaut": "astronauti",
+    "time travel": "viaggi nel tempo",
+    "artificial intelligence": "intelligenza artificiale",
+    "robot": "robot",
+    "dystopia": "distopia",
+    "post-apocalyptic": "post-apocalisse",
+    "post apocalypse": "post-apocalisse",
+    "survival": "sopravvivenza",
+    "zombie": "zombie",
+    "vampire": "vampiri",
+    "witch": "stregoneria",
+    "magic": "magia",
+    "fantasy world": "mondi fantasy",
+    "dragon": "draghi",
+    "kingdom": "regni medievali",
+    "sword": "combattimenti",
+    "political intrigue": "intrighi politici",
+    "conspiracy": "complotti",
+    "heist": "colpi grossi",
+    "mafia": "mafia",
+    "cartel": "cartelli",
+    "drug trafficking": "narcotraffico",
+    "undercover": "infiltrati",
+    "serial killer": "serial killer",
+    "psychological thriller": "thriller psicologico",
+    "mind control": "controllo mentale",
+    "parallel world": "mondi paralleli",
+    "alien": "alieni",
+    "alien invasion": "invasione aliena",
+    "superhero": "supereroi",
+    "prison": "prigione",
+    "war": "guerra",
+    "based on true story": "storia vera",
+    "biography": "biografia",
+    "based on novel": "romanzo",
+    "coming of age": "crescita personale",
+    "redemption": "redenzione",
+    "revenge": "vendetta",
+    "betrayal": "tradimento",
+    "corruption": "corruzione",
+}
+
+VIBE_BY_GENRE = {
+    "Thriller": "atmosfera tesa",
+    "Crime": "lato oscuro e criminale",
+    "Drama": "profondità nei personaggi",
+    "Comedy": "tono leggero e ironico",
+    "Sci-Fi": "visione fantascientifica",
+    "Science Fiction": "visione fantascientifica",
+    "Sci-Fi & Fantasy": "mix di sci-fi e fantasy",
+    "Horror": "tensione e paura",
+    "Action": "ritmo d'azione",
+    "Action & Adventure": "avventura e azione",
+    "Mystery": "mistero e suspense",
+    "Romance": "storie d'amore",
+    "Fantasy": "magia e mondi fantastici",
+    "War": "contesto bellico",
+    "History": "sfondo storico",
+    "Animation": "stile animato",
+    "Documentary": "sguardo documentaristico",
+    "Western": "atmosfera western",
 }
 
 
-def build_reason_candidates(rec):
-    reasons = []
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    score = rec.get("score", 0)
-
-    if score > 0.8:
-        reasons.append(("similar_audience", 0.9))
-
-    if rec.get("genres"):
-        if "Crime" in rec["genres"] or "Thriller" in rec["genres"]:
-            reasons.append(("tension", 0.8))
-
-        if "Drama" in rec["genres"]:
-            reasons.append(("character", 0.7))
-
-    if rec.get("popularity", 0) < 50:
-        reasons.append(("original", 0.6))
-
-    if not reasons:
-        reasons.append(("smart_plot", 0.5))
-
-    return sorted(reasons, key=lambda x: x[1], reverse=True)
+def _prettify_title(title: str) -> str:
+    """Rimuove articoli in coda tipo ', The' → 'The ...'"""
+    if not title:
+        return title
+    suffixes = [", The", ", A", ", An", ", La", ", Le", ", Les", ", Il", ", Lo", ", L'"]
+    for suffix in suffixes:
+        if title.endswith(suffix):
+            base = title[: -len(suffix)].strip()
+            article = suffix[2:].strip()
+            return f"{article} {base}"
+    return title
 
 
-def pick_main_reason(candidates, used_types):
-    for reason_type, score in candidates:
-        if reason_type not in used_types:
-            return reason_type
+def _keywords_to_labels(keywords: list, max_kw: int = 2) -> list:
+    """Converte keyword tecniche in etichette leggibili, max max_kw."""
+    labels = []
+    for kw in keywords:
+        kw_lower = (kw or "").strip().lower()
+        label = KEYWORD_LABELS.get(kw_lower)
+        if label and label not in labels:
+            labels.append(label)
+        if len(labels) >= max_kw:
+            break
+    return labels
 
-    return candidates[0][0]
+
+def _vibe_from_genres(genres: list) -> str | None:
+    """Restituisce la prima vibe riconosciuta dai generi."""
+    for genre in (genres or []):
+        vibe = VIBE_BY_GENRE.get(genre)
+        if vibe:
+            return vibe
+    return None
 
 
-def build_unique_reason(rec, all_recs):
-    genres = set(rec.get("genres", []))
+def _seed_titles_text(rec) -> str:
+    """
+    Costruisce la parte 'Simile a X' o 'Simile a X e Y'
+    usando matched_seed_titles se disponibile, altrimenti best_seed_title.
+    """
+    matched = rec.get("matched_seed_titles")
 
-    # flag principali
-    is_comedy = "Comedy" in genres
-    is_drama = "Drama" in genres
-    is_crime = "Crime" in genres
-    is_thriller = "Thriller" in genres
+    if matched:
+        if isinstance(matched, set):
+            matched = list(matched)
+        matched = [_prettify_title(t) for t in matched if t][:2]
 
-    # 👇 logica più "umana"
-    if is_comedy:
-        return "Rispetto agli altri suggerimenti, ha un tono più leggero e ironico"
+    if not matched:
+        best = rec.get("best_seed_title")
+        if best:
+            matched = [_prettify_title(best)]
 
-    if is_crime and is_thriller:
-        return "Rispetto agli altri suggerimenti, è più teso e orientato al lato criminale"
+    if not matched:
+        return ""
 
-    if is_drama and not is_comedy:
-        return "Rispetto agli altri suggerimenti, punta di più sui personaggi e sulle relazioni"
+    if len(matched) == 1:
+        return f"Simile a {matched[0]}"
+    else:
+        return f"Simile a {matched[0]} e {matched[1]}"
 
-    # fallback intelligente
-    return "Rispetto agli altri suggerimenti, ha uno stile diverso dagli altri titoli proposti"
 
-def enrich_with_explanations(recommendations, seeds=None):
-    used_types = set()
+# ---------------------------------------------------------------------------
+# Builder principale
+# ---------------------------------------------------------------------------
 
-    for i, rec in enumerate(recommendations):
-        candidates = build_reason_candidates(rec)
+def _build_explanation(rec, index: int, all_recs: list) -> str:
+    """
+    Genera una spiegazione personalizzata in linguaggio naturale.
+    Non rivela i seed — usa solo keyword e vibe per sembrare intelligente.
+    """
 
-        main_type = pick_main_reason(candidates, used_types)
-        used_types.add(main_type)
+    kw_labels = _keywords_to_labels(rec.get("matched_keywords", []))
+    vibe = _vibe_from_genres(rec.get("genres", []))
 
-        main_text = random.choice(REASON_TEMPLATES[main_type])
-        unique_text = build_unique_reason(rec, recommendations)
+    # --- PRIMO posto ---
+    if index == 0:
+        if kw_labels:
+            kw_str = " e ".join(kw_labels)
+            return f"Il consiglio più forte — temi di {kw_str}."
+        if vibe:
+            return f"Il consiglio più forte — {vibe}."
+        return "Il suggerimento più in linea con i tuoi gusti."
 
-        seed_text = ""
+    # --- ALTRI posti ---
+    if kw_labels and vibe:
+        kw_str = " e ".join(kw_labels)
+        return f"Temi di {kw_str} — {vibe}."
 
-        if rec.get("best_seed_title"):
-            seed_text = f"Se ti è piaciuto {rec['best_seed_title']}, "
+    if kw_labels:
+        kw_str = " e ".join(kw_labels)
+        return f"Temi di {kw_str}."
 
-        if i == 0:
-            rec["explanation"] = (
-                "È il suggerimento più forte del gruppo: combina al meglio affinità, coerenza e potenziale interesse. "
-                f"{unique_text}."
-            )
-        else:
-            rec["explanation"] = f"{seed_text}{main_text}. {unique_text}."
-        rec["badge"] = build_badge(rec)
+    if vibe:
+        return f"Coerente con i tuoi gusti — {vibe}."
 
-    return recommendations
+    return "Coerente con i titoli che ti piacciono di più."
+
+
+# ---------------------------------------------------------------------------
+# Badge builder
+# ---------------------------------------------------------------------------
 
 def build_badge(rec):
     genres = set(rec.get("genres", []))
 
     if "Comedy" in genres:
         return "🎭 Più leggero"
-
     if "Crime" in genres and "Thriller" in genres:
         return "🔥 Più intenso"
-
     if "Drama" in genres:
         return "🧠 Più psicologico"
+    if "Sci-Fi" in genres or "Science Fiction" in genres or "Sci-Fi & Fantasy" in genres:
+        return "🚀 Sci-fi"
+    if "Horror" in genres:
+        return "😱 Più oscuro"
+    if "Action" in genres or "Action & Adventure" in genres:
+        return "💥 Più action"
 
     return "✨ Consiglio"
+
+
+# ---------------------------------------------------------------------------
+# Entry point pubblico
+# ---------------------------------------------------------------------------
+
+def enrich_with_explanations(recommendations, seeds=None):
+    for i, rec in enumerate(recommendations):
+        rec["explanation"] = _build_explanation(rec, i, recommendations)
+        rec["badge"] = build_badge(rec)
+
+    return recommendations

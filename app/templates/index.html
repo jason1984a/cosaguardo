@@ -25,91 +25,24 @@
                 ‹
             </button>
             <div class="hero-trending-row" id="hero-trending-row">
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg" alt="Interstellar" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Film</span>
-                        <strong>Interstellar</strong>
-                    </div>
-                </article>
-
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg" alt="The Dark Knight" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Film</span>
-                        <strong>The Dark Knight</strong>
-                    </div>
-                </article>
-
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/d5NXSklXo0qyIYkgV94XAgMIckC.jpg" alt="Dune" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Film</span>
-                        <strong>Dune</strong>
-                    </div>
-                </article>
-
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/9Gtg2DzBhmYamXBS1hKAhiwbBKS.jpg" alt="Doctor Strange" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Trend</span>
-                        <strong>Doctor Strange</strong>
-                    </div>
-                </article>
-
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/7WsyChQLEftFiDOVTGkv3hFpyyt.jpg" alt="Avengers Infinity War" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Blockbuster</span>
-                        <strong>Infinity War</strong>
-                    </div>
-                </article>
-
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/udDclJoHjfjb8Ekgsd4FDteOkCU.jpg" alt="Joker" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Da recuperare</span>
-                        <strong>Joker</strong>
-                    </div>
-                </article>
-
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/ptpr0kGAckfQkJeJIt8st5dglvd.jpg" alt="Oppenheimer" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Film</span>
-                        <strong>Oppenheimer</strong>
-                    </div>
-                </article>
-
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/6agKYU5IQFpuDyUYPu39w7UCRrJ.jpg" alt="The Batman" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Dark</span>
-                        <strong>The Batman</strong>
-                    </div>
-                </article>
-
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/reEMJA1uzscCbkpeRJeTT2bjqUp.jpg" alt="The Bear" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Serie TV</span>
-                        <strong>The Bear</strong>
-                    </div>
-                </article>
-
-                <article class="trend-mini-card">
-                    <img src="https://image.tmdb.org/t/p/w500/34OGjFEbHj0E3lE2w0iTUVq0CBz.jpg" alt="Shogun" onerror="this.style.display='none'">
-                    <div class="trend-mini-overlay">
-                        <span>Serie TV</span>
-                        <strong>Shōgun</strong>
-                    </div>
-                </article>
+                {% if trending %}
+                    {% for item in trending %}
+                        <article class="trend-mini-card">
+                            <img src="{{ item.poster_url }}" alt="{{ item.title }}" onerror="this.style.display='none'">
+                            <div class="trend-mini-overlay">
+                                <span>{{ item.label }}</span>
+                                <strong>{{ item.title }}</strong>
+                            </div>
+                        </article>
+                    {% endfor %}
+                {% else %}
+                    <p style="color: var(--muted); padding: 16px;">Nessun trend disponibile al momento.</p>
+                {% endif %}
             </div>
-
-                <button class="trend-nav trend-nav-right" type="button" aria-label="Scorri a destra">
-                    ›
-                </button>
-            </div>
+            <button class="trend-nav trend-nav-right" type="button" aria-label="Scorri a destra">
+                ›
+            </button>
+        </div>
     </section>
 
     <section class="search-panel search-panel-v2" id="search-panel">
@@ -196,60 +129,29 @@
         </div>
     </section>
 
-    
     <section class="home-picks" id="home-picks">
         <div class="section-heading">
             <div>
-                <span class="section-kicker">Da iniziare subito</span>
-                <h2>Qualche spunto per iniziare</h2>
+                <span class="section-kicker">Di tendenza oggi</span>
+                <h2>Da non perdere adesso</h2>
             </div>
-            <a href="#" class="section-link">Vedi di più</a>
         </div>
 
         <div class="home-picks-grid">
-            <article class="pick-card">
-                <div class="pick-poster">
-                  <img src="https://image.tmdb.org/t/p/w500/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg" onerror="this.style.display='none'">
-                </div>
-                <div class="pick-body">
-                    <span class="pick-tag">Trending</span>
-                    <h3>Film di cui si parla oggi</h3>
-                    <p>Tra i più visti oggi</p>
-                </div>
-            </article>
-
-            <article class="pick-card">
-                <div class="pick-poster">
-                  <img src="https://image.tmdb.org/t/p/w500/qJ2tW6WMUDux911r6m7haRef0WH.jpg" onerror="this.style.display='none'">
-                </div>
-                <div class="pick-body">
-                    <span class="pick-tag">Da recuperare</span>
-                    <h3>Se ti piacciono i grandi cult</h3>
-                    <p>Perfetti per chi vuole andare sul sicuro con titoli forti.</p>
-                </div>
-            </article>
-
-            <article class="pick-card">
-                <div class="pick-poster">
-                  <img src="https://image.tmdb.org/t/p/w500/d5NXSklXo0qyIYkgV94XAgMIckC.jpg" onerror="this.style.display='none'">
-                </div>
-                <div class="pick-body">
-                    <span class="pick-tag">Serie</span>
-                    <h3>Nuove serie da iniziare</h3>
-                    <p>Per chi cerca qualcosa che prenda subito e faccia restare dentro.</p>
-                </div>
-            </article>
-
-            <article class="pick-card">
-                <div class="pick-poster">
-                  <img src="https://image.tmdb.org/t/p/w500/9Gtg2DzBhmYamXBS1hKAhiwbBKS.jpg" onerror="this.style.display='none'">
-                </div>
-                <div class="pick-body">
-                    <span class="pick-tag">Mood</span>
-                    <h3>Thriller, tensione, atmosfera</h3>
-                    <p>Una corsia rapida per chi cerca qualcosa di intenso.</p>
-                </div>
-            </article>
+            {% for item in trending[:4] %}
+                <article class="pick-card">
+                    <div class="pick-poster">
+                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" onerror="this.style.display='none'">
+                    </div>
+                    <div class="pick-body">
+                        <span class="pick-tag">{{ item.label }}</span>
+                        <h3>{{ item.title }}</h3>
+                        {% if item.overview %}
+                            <p>{{ item.overview }}{% if item.overview|length == 120 %}…{% endif %}</p>
+                        {% endif %}
+                    </div>
+                </article>
+            {% endfor %}
         </div>
     </section>
 

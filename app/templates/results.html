@@ -8,190 +8,365 @@
 
 {% block content %}
 <div class="page page-results">
-        <div class="results-header">
-            <div>
-                <div class="hero-badge">Risultati del recommender</div>
-                <h1>I tuoi consigli</h1>
-                <p class="subtitle">
-                    {% if content_type == "tv" %}
-                        Titoli suggeriti a partire dalle serie TV che hai inserito.
-                    {% else %}
-                        Titoli suggeriti a partire dai film che hai inserito.
-                    {% endif %}
-                </p>
-            </div>
 
-            <div class="results-actions">
-                <a href="/" class="back-link back-button">← Nuova ricerca</a>
-            </div>
-        </div>
-
-        <div class="results-top-grid">
-            <div class="info-panel">
-                <h2>
-                    {% if content_type == "tv" %}
-                        Serie TV riconosciute
-                    {% else %}
-                        Film riconosciuti
-                    {% endif %}
-                </h2>
-                {% if resolved_seeds %}
-                    <div class="tag-list">
-                        {% for seed in resolved_seeds %}
-                            <span class="seed-tag">{{ seed.title }}</span>
-                        {% endfor %}
-                    </div>
+    <!-- HEADER -->
+    <div class="results-header">
+        <div>
+            <div class="hero-badge">Risultati del recommender</div>
+            <h1>I tuoi consigli</h1>
+            <p class="subtitle">
+                {% if content_type == "tv" %}
+                    Titoli suggeriti a partire dalle serie TV che hai inserito.
                 {% else %}
-                    <p class="muted-text">Nessun film riconosciuto.</p>
+                    Titoli suggeriti a partire dai film che hai inserito.
                 {% endif %}
-            </div>
+            </p>
+        </div>
+        <div class="results-actions">
+            <a href="/" class="back-link back-button">← Nuova ricerca</a>
+        </div>
+    </div>
 
-           
+    <!-- SEED RICONOSCIUTI -->
+    {% if resolved_seeds %}
+    <div class="info-panel" style="margin-bottom: 24px;">
+        <h2 style="font-size: 1rem; margin-bottom: 10px; color: var(--muted, #94a3b8);">
+            {% if content_type == "tv" %}Serie TV riconosciute{% else %}Film riconosciuti{% endif %}
+        </h2>
+        <div class="tag-list">
+            {% for seed in resolved_seeds %}
+                <span class="seed-tag">{{ seed.title }}</span>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- RISULTATI -->
+    {% if recommendations %}
+
+        <div style="display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px;">
+            <h2 style="margin: 0; font-size: 1.3rem;">Raccomandazioni</h2>
+            <span style="color: var(--muted, #94a3b8); font-size: 0.9rem;">{{ recommendations|length }} trovati</span>
         </div>
 
-        <div class="results-section-title">
-            <h2>Raccomandazioni</h2>
-            {% if recommendations %}
-                <p>{{ recommendations|length }} risultati trovati</p>
-            {% endif %}
-        </div>
-
-        {% if recommendations %}
-            <div class="results-list">
+        <div class="results-scroll-wrap">
+            <div class="results-scroll-row" id="results-scroll-row">
                 {% for rec in recommendations %}
-                    <article class="rec-card enhanced-card">
-                        <div class="rec-rank">{{ loop.index }}</div>
-
-                        <div class="rec-poster">
+                    <article
+                        class="result-scroll-card"
+                        data-title="{{ rec.title }}"
+                        data-type="{{ content_type }}"
+                        data-poster="{{ rec.poster_url or '' }}"
+                        data-explanation="{{ (rec.explanation or '') | e }}"
+                        data-overview="{{ (rec.overview or '') | e }}"
+                        data-match="{{ rec.match_score or '' }}"
+                        data-badge="{% if rec.badge is mapping %}{{ rec.badge.text }}{% elif rec.badge %}{{ rec.badge }}{% endif %}"
+                        data-is-liked="{{ 1 if rec.is_liked else 0 }}"
+                        data-is-seen="{{ 1 if rec.is_seen else 0 }}"
+                        data-is-disliked="{{ 1 if rec.is_disliked else 0 }}"
+                    >
+                        <div class="result-scroll-poster">
+                            <div class="result-scroll-rank">{{ loop.index }}</div>
                             {% if rec.poster_url %}
-                                <img src="{{ rec.poster_url }}" alt="{{ rec.title }}">
+                                <img src="{{ rec.poster_url }}" alt="{{ rec.title }}" loading="lazy">
                             {% else %}
                                 <div class="poster-fallback">No poster</div>
                             {% endif %}
+                            <div class="result-scroll-badge">
+                                {% if rec.badge is mapping %}{{ rec.badge.text }}
+                                {% elif rec.badge %}{{ rec.badge }}
+                                {% else %}✨ Consiglio{% endif %}
+                            </div>
                         </div>
 
-                        <div class="rec-content">
-                            
-                            {% if rec.get("badge") %}
-                                <div class="rec-badge {{ rec.get('badge').type }}">
-                                    {{ rec.get("badge").text }}
-                                </div>
-                            {% endif %}
+                        <div class="result-scroll-body">
+                            <div class="result-scroll-title">{{ rec.title }}</div>
 
-                            <div class="rec-title-row">
-                                <h3>{{ rec.title }}</h3>
-                            </div>
-                           
                             {% if rec.explanation %}
-                                <p class="why">{{ rec.explanation }}</p>
-                            {% else %}
-                                <p class="why">Ti potrebbe piacere per affinità con i titoli inseriti.</p>
+                                <p class="result-scroll-why">{{ rec.explanation }}</p>
                             {% endif %}
 
-			    {% if rec.overview %}
-   			        <p class="rec-overview result-explanation">{{ rec.overview }}</p>
-			    {% endif %}
-
-                            {% if content_type == "tv" and rec.matched_keywords %}
-                                <p class="matched-keywords">
-                                    Temi in comune: {{ rec.matched_keywords[:3] | join(", ") }}
-                                </p>
-                            {% endif %}
-                            
-                            <div class="result-signals">
-                                {% for signal in rec.ui_signals %}
-                                    <div class="signal-pill signal-{{ signal.label | lower }}">
-                                        <span class="signal-icon">{{ signal.icon }}</span>
-                                        <span class="signal-text">
-                                            {% if signal.label == "Match" %}
-                                                <strong>Match</strong> {{ rec.match_score }}/10
-                                            {% else %}
-                                                <strong>{{ signal.label }}</strong> {{ signal.value|capitalize }}
-                                            {% endif %}
-                                        </span>
-                                    </div>
-                                {% endfor %}
+                            <div class="feedback-actions result-scroll-feedback"
+                                 data-title="{{ rec.title }}"
+                                 data-type="{{ content_type }}">
+                                <button class="feedback-btn {% if rec.is_liked %}active{% endif %}" data-feedback="liked">👍</button>
+                                <button class="feedback-btn {% if rec.is_disliked %}active{% endif %}" data-feedback="disliked">👎</button>
+                                <button class="feedback-btn {% if rec.is_seen %}active{% endif %}" data-feedback="seen">👁</button>
                             </div>
-                            <div class="feedback-actions">
-                                <button 
-                                    class="feedback-btn {% if rec.is_liked %}active{% endif %}" 
-                                    data-type="liked"
-                                    onclick="sendFeedback('{{ rec.title }}', '{{ content_type }}', 'liked', this)">
-                                    👍
-                                </button>
 
-                                <button 
-                                    class="feedback-btn {% if rec.is_disliked %}active{% endif %}" 
-                                    data-type="disliked"
-                                    onclick="sendFeedback('{{ rec.title }}', '{{ content_type }}', 'disliked', this)">
-                                    👎
-                                </button>
-
-                                <button 
-                                    class="feedback-btn {% if rec.is_seen %}active{% endif %}" 
-                                    data-type="seen"
-                                    onclick="sendFeedback('{{ rec.title }}', '{{ content_type }}', 'seen', this)">
-                                    👁️‍🗨️ Visto
-                                </button>
-                            </div>
+                            <div class="result-scroll-more">Tocca per dettagli</div>
                         </div>
                     </article>
                 {% endfor %}
             </div>
-        {% else %}
-            <div class="empty-panel">
-                <h2>Nessuna raccomandazione trovata</h2>
-                <p>Prova a inserire titoli più conosciuti oppure più coerenti tra loro.</p>
-                <a href="/" class="back-link back-button">← Torna alla home</a>
+        </div>
+
+    {% else %}
+        <div class="empty-panel">
+            <h2>Nessuna raccomandazione trovata</h2>
+            <p>Prova a inserire titoli più conosciuti oppure più coerenti tra loro.</p>
+            <a href="/" class="back-link back-button">← Torna alla home</a>
+        </div>
+    {% endif %}
+
+</div>
+
+<!-- MODAL DETTAGLIO -->
+<div class="dashboard-modal" id="results-modal" aria-hidden="true">
+    <div class="dashboard-modal-backdrop" data-close-modal="true"></div>
+    <div class="dashboard-modal-card">
+        <button type="button" class="dashboard-modal-close" id="results-modal-close" aria-label="Chiudi">✕</button>
+
+        <div class="dashboard-modal-poster-wrap">
+            <img id="results-modal-poster" src="" alt="" class="dashboard-modal-poster">
+        </div>
+
+        <div class="dashboard-modal-content">
+            <div class="dashboard-editorial-badge" id="results-modal-badge"></div>
+            <h3 id="results-modal-title" class="modal-title-big"></h3>
+            <div class="dashboard-badge" id="results-modal-type"></div>
+            <p id="results-modal-explanation" class="modal-reason"></p>
+            <p id="results-modal-overview" class="modal-reason" style="color: var(--muted, #94a3b8); font-size: 0.9rem;"></p>
+            <p id="results-modal-why" class="modal-reason"></p>
+
+            <div class="modal-actions">
+                <a href="#" id="results-modal-watch" class="modal-btn primary" target="_blank">▶ Dove guardarlo</a>
+                <button id="results-modal-fav" class="modal-btn secondary">+ Preferiti</button>
             </div>
-        {% endif %}
+        </div>
     </div>
-    {% endblock %}
+</div>
 
-    {% block scripts %}
-    <script>
-    function sendFeedback(title, contentType, feedbackType, el) {
-        fetch("/feedback", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                title: title,
-                content_type: contentType,
-                feedback_type: feedbackType
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/feedback.js') }}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const modal      = document.getElementById("results-modal");
+    const closeBtn   = document.getElementById("results-modal-close");
+    const posterEl   = document.getElementById("results-modal-poster");
+    const badgeEl    = document.getElementById("results-modal-badge");
+    const titleEl    = document.getElementById("results-modal-title");
+    const typeEl     = document.getElementById("results-modal-type");
+    const explEl     = document.getElementById("results-modal-explanation");
+    const overviewEl = document.getElementById("results-modal-overview");
+    const whyEl      = document.getElementById("results-modal-why");
+    const watchBtn   = document.getElementById("results-modal-watch");
+    const favBtn     = document.getElementById("results-modal-fav");
+
+    function openModal(card) {
+        const title    = card.dataset.title       || "";
+        const type     = card.dataset.type        || "";
+        const poster   = card.dataset.poster      || "";
+        const expl     = card.dataset.explanation || "";
+        const overview = card.dataset.overview    || "";
+        const match    = card.dataset.match       || "";
+        const badge    = card.dataset.badge       || "";
+        const isLiked  = card.dataset.isLiked     === "1";
+
+        titleEl.textContent    = title;
+        typeEl.textContent     = type === "tv" ? "SERIE TV" : "FILM";
+        badgeEl.textContent    = badge;
+        explEl.textContent     = expl;
+        overviewEl.textContent = overview;
+        whyEl.innerHTML        = match ? `<strong>Match:</strong> ${match}/10` : "";
+        watchBtn.href          = `https://www.justwatch.com/it/cerca?q=${encodeURIComponent(title)}`;
+
+        if (poster) {
+            posterEl.src           = poster;
+            posterEl.alt           = title;
+            posterEl.style.display = "block";
+        } else {
+            posterEl.style.display = "none";
+        }
+
+        favBtn.classList.toggle("active", isLiked);
+        favBtn.textContent = isLiked ? "✓ Nei preferiti" : "+ Preferiti";
+
+        favBtn.onclick = function () {
+            if (card.dataset.isLiked === "1") return;
+            fetch("/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title, content_type: type, feedback_type: "liked" })
             })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === "ok") {
-                const parent = el.parentElement
-
-                if (feedbackType === "liked") {
-                    const likedBtn = parent.querySelector('[data-type="liked"]')
-                    const dislikedBtn = parent.querySelector('[data-type="disliked"]')
-
-                    if (likedBtn) likedBtn.classList.add("active")
-                    if (dislikedBtn) dislikedBtn.classList.remove("active")
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === "ok") {
+                    card.dataset.isLiked = "1";
+                    favBtn.classList.add("active");
+                    favBtn.textContent = "✓ Nei preferiti";
+                    const likedBtn = card.querySelector('[data-feedback="liked"]');
+                    if (likedBtn) likedBtn.classList.add("active");
                 }
+            });
+        };
 
-                if (feedbackType === "disliked") {
-                    const likedBtn = parent.querySelector('[data-type="liked"]')
-                    const dislikedBtn = parent.querySelector('[data-type="disliked"]')
-
-                    if (dislikedBtn) dislikedBtn.classList.add("active")
-                    if (likedBtn) likedBtn.classList.remove("active")
-                }
-
-                if (feedbackType === "seen") {
-                    if (data.seen === 1) {
-                        el.classList.add("active")
-                    } else {
-                        el.classList.remove("active")
-                    }
-                }
-            }
-        })
+        modal.classList.add("is-open");
+        modal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
     }
-    </script>
-    {% endblock %}
+
+    function closeModal() {
+        modal.classList.remove("is-open");
+        modal.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+    }
+
+    document.querySelectorAll(".result-scroll-card").forEach(card => {
+        card.addEventListener("click", function (e) {
+            if (e.target.closest(".feedback-actions")) return;
+            openModal(card);
+        });
+    });
+
+    closeBtn.addEventListener("click", closeModal);
+    modal.addEventListener("click", e => { if (e.target.dataset.closeModal === "true") closeModal(); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && modal.classList.contains("is-open")) closeModal(); });
+});
+</script>
+
+<style>
+/* ── RISULTATI SCROLL ORIZZONTALE ─────────────────── */
+.results-scroll-wrap {
+    margin: 0 -16px;
+    padding: 0 16px;
+    overflow: hidden;
+}
+
+.results-scroll-row {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 12px;
+}
+
+.results-scroll-row::-webkit-scrollbar { display: none; }
+
+.result-scroll-card {
+    flex: 0 0 72vw;
+    max-width: 280px;
+    min-width: 200px;
+    scroll-snap-align: start;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.result-scroll-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+}
+
+.result-scroll-poster {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 2/3;
+    background: #1e293b;
+    overflow: hidden;
+}
+
+.result-scroll-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.result-scroll-rank {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 28px;
+    height: 28px;
+    background: #2563eb;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 700;
+    z-index: 2;
+}
+
+.result-scroll-badge {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.72);
+    backdrop-filter: blur(6px);
+    border-radius: 8px;
+    padding: 5px 9px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fbbf24;
+    z-index: 2;
+}
+
+.result-scroll-body {
+    padding: 12px 14px 14px;
+}
+
+.result-scroll-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.result-scroll-why {
+    font-size: 0.8rem;
+    color: #93c5fd;
+    margin: 0 0 10px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.result-scroll-feedback {
+    margin-bottom: 8px;
+}
+
+.result-scroll-more {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-align: center;
+    margin-top: 4px;
+}
+
+/* DESKTOP: griglia 3-4 colonne */
+@media (min-width: 768px) {
+    .results-scroll-wrap {
+        margin: 0;
+        padding: 0;
+        overflow: visible;
+    }
+    .results-scroll-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        overflow-x: visible;
+        scroll-snap-type: none;
+        padding-bottom: 0;
+    }
+    .result-scroll-card {
+        flex: none;
+        max-width: none;
+        min-width: 0;
+    }
+}
+</style>
+{% endblock %}

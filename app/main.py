@@ -29,15 +29,16 @@ from core.recommendation_api import (
     recommend_from_seed_titles,
     search_movies,
     get_movie_tmdb_info,
+    get_trending_tmdb,
 )
 
-from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series
+from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
 app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key="cosaguardo-secret-key")
+app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SECRET_KEY", "cosaguardo-secret-key"))
 init_db()
 
 app.mount(
@@ -65,11 +66,13 @@ def prettify_title(title: str) -> str:
 
 @app.get("/")
 def home(request: Request):
+    trending = get_trending_tmdb(limit=12)
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
-            "request": request
+            "request": request,
+            "trending": trending,
         },
     )
 
@@ -124,6 +127,11 @@ def dashboard(request: Request):
             tmdb_info = get_movie_tmdb_info(item["title"])
             item["poster_url"] = tmdb_info.get("poster_url", "") if tmdb_info else ""
 
+        elif item["content_type"] == "tv" and not item["poster_url"]:
+            tv_info = find_tv_by_title(item["title"])
+            if tv_info and tv_info.get("poster_path"):
+                item["poster_url"] = f"https://image.tmdb.org/t/p/w342{tv_info['poster_path']}"
+
     taste_profile = build_taste_profile(searches)
 
     today_key = datetime.now().strftime("%Y-%m-%d")
@@ -132,8 +140,6 @@ def dashboard(request: Request):
     if daily_recs and len(daily_recs) > 0:
         recommendations = [dict(rec) for rec in daily_recs]
     else:
-        liked_titles = get_liked_states_by_user(user_id)
-
         recommendations = build_dashboard_recommendations(
             user_id=user_id,
             searches=searches,
@@ -337,9 +343,6 @@ def recommend(
             "missing_titles": seed_titles,
             "recommendations": [],
         }
-
-    print("DEBUG TV RESULTS COUNT:", len(result["recommendations"]))
-    print("DEBUG TV TITLES:", [r["title"] for r in result["recommendations"]])
 
     resolved_seeds = result["resolved_seeds"]
     missing_titles = result["missing_titles"]

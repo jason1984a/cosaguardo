@@ -3,6 +3,7 @@ import sqlite3
 import re
 import requests
 from collections import defaultdict
+from core.explainability import enrich_with_explanations
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -577,24 +578,12 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed
         tag_score = components.get("tag_score", 0)
         collab_score = components.get("collab_score", 0)
 
-        print(
-            "DEBUG MOVIE:",
-            rec.get("title"),
-            "| avg=", rec.get("avg_score", 0),
-            "| quality=", quality_score,
-            "| genre=", genre_score,
-            "| tag=", tag_score,
-            "| collab=", collab_score,
-        )
-
         # filtro qualità base
         if quality_score < 0.45:
-            print("SCARTATO quality:", rec.get("title"))
             continue
 
         # filtro rilevanza generale
         if rec.get("avg_score", 0) < 0.22:
-            print("SCARTATO avg:", rec.get("title"))
             continue
 
         if rec.get("adjusted_score", 0) < 0.24:
@@ -602,12 +591,10 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed
 
         # filtro "film vuoti" (pochi segnali reali)
         if genre_score < 0.2 and tag_score < 0.1 and collab_score < 0.1:
-            print("SCARTATO vuoto:", rec.get("title"))
             continue
 
         release_year = get_movie_release_year(rec.get("title", ""))
         best_seed = build_movie_best_seed_title(rec)
-        print("YEAR PARSED:", rec.get("title"), release_year)
 
         if release_year >= 2015:
             rec["avg_score"] += 0.05
@@ -638,8 +625,6 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed
         filtered.append(rec)
         if best_seed:
             seed_tracker[best_seed] = seed_tracker.get(best_seed, 0) + 1
-
-        print("BEST SEED:", rec.get("title"), best_seed)
 
         if primary_genre:
             genre_tracker[primary_genre] = genre_tracker.get(primary_genre, 0) + 1
@@ -684,13 +669,15 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed
 
     for i, rec in enumerate(filtered):
         rec["best_seed_title"] = build_movie_best_seed_title(rec)
+        # mappa why_titles → matched_seed_titles per explainability.py
+        rec["matched_seed_titles"] = rec.get("why_titles", [])
+        rec["matched_keywords"] = rec.get("keywords", [])
 
         if i == 0:
             rec["badge"] = {"text": "⭐ Miglior match", "type": "top"}
         else:
             rec["badge"] = build_movie_badge(rec)
 
-        rec["explanation"] = build_movie_explanation(rec, index=i)
         rec["ui_signals"] = build_movie_ui_signals(rec)
         components = rec.get("components", {})
 
@@ -699,10 +686,28 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed
         tag_score = components.get("tag_score", 0)
         collab_score = components.get("collab_score", 0)
 
-        # scala UI più "premium" e leggibile
         rec["match_score"] = round(min(9.8, 5.5 + avg_score * 8), 1)
         rec["genre_score_ui"] = round(min(9.7, 5.0 + genre_score * 4), 1)
         rec["vibe_score_ui"] = round(min(9.6, 5.0 + max(tag_score, collab_score) * 8), 1)
+
+    # genera spiegazioni personalizzate con explainability.py
+    # prima arricchisce genres/keywords da TMDb per i rec che li hanno null
+    for rec in filtered:
+        if not rec.get("genres") or not rec.get("matched_keywords"):
+            try:
+                tmdb = get_movie_tmdb_match(rec.get("title", ""))
+                if tmdb:
+                    if not rec.get("genres"):
+                        rec["genres"] = movie_genre_ids_to_names(tmdb.get("genre_ids", []))
+                    if not rec.get("matched_keywords") and tmdb.get("tmdb_id"):
+                        url = f"https://api.themoviedb.org/3/movie/{tmdb['tmdb_id']}/keywords"
+                        resp = requests.get(url, params={"api_key": TMDB_API_KEY}, timeout=4)
+                        kws = [k["name"].strip().lower() for k in resp.json().get("keywords", []) if k.get("name")]
+                        rec["matched_keywords"] = kws
+            except Exception:
+                pass
+
+    enrich_with_explanations(filtered)
 
 
     return {
@@ -1058,3 +1063,57 @@ def get_movie_tmdb_info(title: str):
         "display_title": title,
         "overview": None,
     }
+
+
+def get_trending_tmdb(limit: int = 12):
+    """
+    Recupera i contenuti trending del giorno da TMDb (film + serie TV).
+    Restituisce una lista di dict con: title, content_type, poster_url, label.
+    """
+    if not TMDB_API_KEY:
+        return []
+
+    try:
+        url = "https://api.themoviedb.org/3/trending/all/day"
+        params = {
+            "api_key": TMDB_API_KEY,
+            "language": "it-IT",
+        }
+
+        response = requests.get(url, params=params, timeout=5)
+        data = response.json()
+
+        results = []
+        for item in data.get("results", [])[:limit]:
+            media_type = item.get("media_type", "")
+            if media_type not in ("movie", "tv"):
+                continue
+
+            poster_path = item.get("poster_path")
+            poster_url = f"https://image.tmdb.org/t/p/w342{poster_path}" if poster_path else None
+
+            if not poster_url:
+                continue
+
+            if media_type == "movie":
+                title = item.get("title") or item.get("original_title") or ""
+                label = "Film"
+            else:
+                title = item.get("name") or item.get("original_name") or ""
+                label = "Serie TV"
+
+            if not title:
+                continue
+
+            results.append({
+                "title": title,
+                "content_type": media_type,
+                "poster_url": poster_url,
+                "label": label,
+                "overview": (item.get("overview") or "")[:120],
+            })
+
+        return results
+
+    except Exception:
+        return []

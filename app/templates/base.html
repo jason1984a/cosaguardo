@@ -120,9 +120,9 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 18px;
-            min-width: 18px;
-            font-size: 14px;
+            width: 20px;
+            min-width: 20px;
+            font-size: 18px;
             line-height: 1;
         }
 
@@ -239,9 +239,9 @@
             }
 
             .nav-icon {
-                width: 16px;
-                min-width: 16px;
-                font-size: 12px;
+                width: 20px;
+                min-width: 20px;
+                font-size: 18px;
             }
 
             .nav-link-item .nav-text,
@@ -263,7 +263,7 @@
         }
     </style>
 
-    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=3">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=5">
 
     {% block head_extra %}{% endblock %}
 </head>
@@ -279,40 +279,15 @@
                 <nav class="nav">
                     <div class="nav-links">
                         <a href="/" class="nav-link-item" aria-label="Home">
-                            <span class="nav-icon">⌂</span>
+                            <span class="nav-icon">🏠</span>
                             <span class="nav-text">Home</span>
                         </a>
 
-                        {% if request.session.get("user_id") %}
-                            <a href="/dashboard" class="nav-link-item" aria-label="Dashboard">
-                                <span class="nav-icon">▦</span>
-                                <span class="nav-text">Dashboard</span>
-                            </a>
-                        {% else %}
-                            <a href="/login" class="nav-link-item" aria-label="Login">
-                                <span class="nav-icon">⟶</span>
-                                <span class="nav-text">Login</span>
-                            </a>
-                            <a href="/register" class="nav-link-item" aria-label="Registrati">
-                                <span class="nav-icon">✚</span>
-                                <span class="nav-text">Registrati</span>
-                            </a>
-                        {% endif %}
-                    </div>
-
-                    {% if request.session.get("user_id") %}
-                        <form action="/logout" method="post">
-                            <button type="submit" class="btn btn-secondary nav-logout-btn" aria-label="Logout">
-                                <span class="nav-icon">⇢</span>
-                                <span class="nav-text">Logout</span>
-                            </button>
-                        </form>
-                    {% else %}
-                        <a href="/login" class="btn btn-primary nav-login-btn" aria-label="Accedi">
-                            <span class="nav-icon">→</span>
-                            <span class="nav-text">Accedi</span>
+                        <a href="/dashboard" class="nav-link-item" aria-label="Dashboard">
+                            <span class="nav-icon">👤</span>
+                            <span class="nav-text">Profilo</span>
                         </a>
-                    {% endif %}
+                    </div>
                 </nav>
             </div>
         </header>

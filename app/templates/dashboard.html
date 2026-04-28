@@ -24,8 +24,14 @@
                 </p>
             </div>
 
-            <div class="dashboard-hero-action">
+            <div class="dashboard-hero-action" style="display:flex; gap:10px;">
                 <a href="/" class="btn btn-primary">Nuova ricerca</a>
+
+                <form action="/logout" method="post">
+                    <button type="submit" class="btn btn-secondary">
+                        🚪 Logout
+                    </button>
+                </form>
             </div>
 
         </div>
@@ -43,7 +49,18 @@
         {% if recommendations and recommendations|length > 0 %}
             <div class="daily-picks-grid">
                 {% for rec in recommendations %}
-                    <div class="dashboard-pick-card">
+                    <div
+                        class="dashboard-pick-card dashboard-pick-clickable"
+                        data-title="{{ rec.title }}"
+                        data-type="{{ rec.content_type|upper }}"
+                        data-badge="{% if loop.first %}⭐ Miglior match{% else %}🎯 Per te{% endif %}"
+                        data-reason="{{ (rec.reason if rec.reason else 'Una scelta compatibile con i tuoi gusti.')|e }}"
+                        data-poster="{{ rec.poster_url if rec.poster_url else '' }}"
+                        data-why="{{ (rec.reason if rec.reason else 'Ti viene consigliato per affinità con i tuoi gusti.')|e }}"
+                        data-match="{{ rec.match_score if rec.match_score else '' }}"
+                        data-keywords="{{ rec.matched_keywords[:2] | join(', ') if rec.matched_keywords else '' }}"
+                        data-is-liked="{{ 1 if rec.is_liked else 0 }}"
+                    >
 
                         <div class="dashboard-pick-poster">
                             {% if rec.poster_url %}
@@ -56,6 +73,14 @@
                         <div class="dashboard-pick-content">
 
                             <div class="dashboard-pick-top">
+                                <span class="dashboard-editorial-badge">
+                                    {% if loop.first %}
+                                        ⭐ Miglior match
+                                    {% else %}
+                                        🎯 Per te
+                                    {% endif %}
+                                </span>
+
                                 <div class="dashboard-pick-title">
                                     {{ rec.title }}
                                 </div>
@@ -65,15 +90,21 @@
                                 </span>
                             </div>
 
-                            {% if rec.score %}
-                                <div class="dashboard-score">
-                                    {{ rec.score }}
-                                </div>
-                            {% endif %}
-
                             <p class="dashboard-pick-reason">
-                                {{ rec.reason if rec.reason else "Compatibile con i tuoi gusti." }}
+                                {{ rec.reason if rec.reason else "Una scelta compatibile con i tuoi gusti." }}
                             </p>
+
+                            <!-- ✅ FEEDBACK ACTIONS -->
+                            <div class="feedback-actions"
+                                 data-title="{{ rec.title }}"
+                                 data-type="{{ rec.content_type }}">
+                              <button class="feedback-btn" data-feedback="liked">👍</button>
+                              <button class="feedback-btn" data-feedback="disliked">👎</button>
+                              <button class="feedback-btn" data-feedback="seen">👁</button>
+                            </div>
+
+
+                            <div class="dashboard-pick-more">Tocca per saperne di più</div>
 
                         </div>
                     </div>
@@ -90,6 +121,45 @@
                 Fai ancora qualche ricerca e qui compariranno i tuoi 3 consigli del giorno.
             </div>
         {% endif %}
+
+        <div class="dashboard-modal" id="dashboard-rec-modal" aria-hidden="true">
+            <div class="dashboard-modal-backdrop" data-close-modal="true"></div>
+
+            <div class="dashboard-modal-card">
+                <button type="button" class="dashboard-modal-close" id="dashboard-modal-close" aria-label="Chiudi">
+                    ✕
+                </button>
+
+                <div class="dashboard-modal-poster-wrap">
+                    <img id="dashboard-modal-poster" src="" alt="" class="dashboard-modal-poster">
+                </div>
+
+                <div class="dashboard-modal-content">
+    
+                    <div class="dashboard-editorial-badge" id="dashboard-modal-badge"></div>
+
+                    <h3 id="dashboard-modal-title" class="modal-title-big"></h3>
+
+                    <div class="dashboard-badge" id="dashboard-modal-type"></div>
+
+                    <p id="dashboard-modal-reason" class="modal-reason"></p>
+                    <p id="dashboard-modal-why" class="modal-reason"></p>
+
+                    <!-- NUOVA SEZIONE -->
+                    <div class="modal-actions">
+                        <a href="#" id="dashboard-modal-watch" class="modal-btn primary" target="_blank">
+                            ▶ Dove guardarlo
+                        </a>
+
+                        <button id="dashboard-modal-fav" class="modal-btn secondary">
+                            + Preferiti
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
     </section>
 
     <!-- GRID TOP -->
@@ -142,7 +212,7 @@
             </p>
 
             {% if liked_titles and liked_titles|length > 0 %}
-                <div class="liked-row">
+                <div class="liked-row" id="likedRow">
                     {% for item in liked_titles[:10] %}
                         <div class="liked-card">
                             <div class="liked-poster">
@@ -229,4 +299,123 @@
 
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/feedback.js') }}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const modal = document.getElementById("dashboard-rec-modal");
+    const closeBtn = document.getElementById("dashboard-modal-close");
+    const posterEl = document.getElementById("dashboard-modal-poster");
+    const badgeEl = document.getElementById("dashboard-modal-badge");
+    const titleEl = document.getElementById("dashboard-modal-title");
+    const typeEl = document.getElementById("dashboard-modal-type");
+    const reasonEl = document.getElementById("dashboard-modal-reason");
+    const whyEl = document.getElementById("dashboard-modal-why");
+    const watchBtn = document.getElementById("dashboard-modal-watch");
+    const cards = document.querySelectorAll(".dashboard-pick-clickable");
+    const favBtn = document.getElementById("dashboard-modal-fav");
+    
+    function openModal(card) {
+
+        const isLiked = card.dataset.isLiked === "1";
+
+        if (isLiked) {
+            favBtn.classList.add("active");
+            favBtn.textContent = "✓ Nei preferiti";
+        } else {
+            favBtn.classList.remove("active");
+            favBtn.textContent = "+ Preferiti";
+        }
+
+        const title = card.dataset.title || "";
+        const type = card.dataset.type || "";
+        const badge = card.dataset.badge || "";
+        const reason = card.dataset.reason || "";
+        const why = card.dataset.why || "";
+        const poster = card.dataset.poster || "";
+        const match = card.dataset.match || "";
+        const keywords = card.dataset.keywords || "";
+
+        titleEl.textContent = title;
+        typeEl.textContent = type;
+        badgeEl.textContent = badge;
+        reasonEl.textContent = reason;
+        whyEl.innerHTML = `
+        <strong>Perché ti viene consigliato:</strong><br>
+        ${match ? `Match: ${match}/10<br>` : ""}
+        ${keywords ? `Temi: ${keywords}<br>` : ""}
+        ${!match && !keywords ? "Coerente con i titoli che ti piacciono di più" : ""}
+        `;
+        const query = encodeURIComponent(title);
+        watchBtn.href = `https://www.justwatch.com/it/cerca?q=${query}`;
+
+        if (poster) {
+            posterEl.src = poster;
+            posterEl.alt = title;
+            posterEl.style.display = "block";
+        } else {
+            posterEl.style.display = "none";
+        }
+
+        modal.classList.add("is-open");
+        modal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+
+        favBtn.onclick = function () {
+            if (card.dataset.isLiked === "1") {
+                favBtn.classList.add("active");
+                favBtn.textContent = "✓ Nei preferiti";
+                return;
+            }
+
+            fetch("/feedback", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    title: title,
+                    content_type: type.toLowerCase(),
+                    feedback_type: "liked"
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                card.dataset.isLiked = "1";
+                favBtn.classList.add("active");
+                favBtn.textContent = "✓ Nei preferiti";
+            });
+        };
+
+    }
+
+    function closeModal() {
+        modal.classList.remove("is-open");
+        modal.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+    }
+
+    cards.forEach((card) => {
+        card.addEventListener("click", function () {
+            openModal(card);
+        });
+    });
+
+    closeBtn.addEventListener("click", closeModal);
+
+    modal.addEventListener("click", function (e) {
+        if (e.target.dataset.closeModal === "true") {
+            closeModal();
+        }
+    });
+
+    document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && modal.classList.contains("is-open")) {
+            closeModal();
+        }
+    });
+});
+</script>
 {% endblock %}

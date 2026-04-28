@@ -161,6 +161,12 @@ def build_dashboard_recommendations(
         unique.append(rec)
 
     day_key = datetime.now().strftime("%Y-%m-%d")
-    picks = stable_daily_pick(unique, user_id=user_id, day_key=day_key, count=final_count)
+    # ordina per punteggio
+    unique.sort(key=lambda x: x.get("score") or 0, reverse=True)
+
+    # poi applica random giornaliero sui top
+    top_candidates = unique[:10]
+
+    picks = stable_daily_pick(top_candidates, user_id=user_id, day_key=day_key, count=final_count)
 
     return picks
