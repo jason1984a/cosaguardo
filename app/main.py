@@ -36,6 +36,7 @@ from core.recommendation_api import (
     get_top_rated_recent,
     get_detail_movie,
     get_detail_tv,
+    get_cinema_news,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
@@ -136,6 +137,7 @@ def home(request: Request):
             "now_playing": cinema.get("now_playing") or [],
             "upcoming": cinema.get("upcoming") or [],
             "top_rated": get_toprated_cached(limit=10),
+            "news": get_news_cached(limit=8),
         },
     )
 
@@ -543,6 +545,7 @@ def recommend(
                 "collab_score": round(rec.get("components", {}).get("collab_score", 0), 3),
                 "keyword_score": 0,
                 "matched_keywords": [],
+                "tmdb_id": tmdb_info.get("tmdb_id") if tmdb_info else None,
                 "is_seen": is_seen,
                 "is_liked": preference == "liked",
                 "is_disliked": preference == "disliked",
@@ -566,6 +569,7 @@ def recommend(
                 "collab_score": 0,
                 "keyword_score": round(rec.get("keyword_score", 0), 3),
                 "matched_keywords": rec.get("matched_keywords", []),
+                "tmdb_id": rec.get("tv_id"),
             })
 
     return templates.TemplateResponse(
@@ -691,4 +695,10 @@ def serie_detail(request: Request, tmdb_id: int):
             "is_seen":    title_state.get("seen", 0) == 1,
         },
     )
+
+
+@app.get("/news", response_class=JSONResponse)
+def news_endpoint():
+    """Feed RSS news cinema aggregato — cached 1h."""
+    return get_news_cached(limit=8)
 

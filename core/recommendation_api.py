@@ -1472,6 +1472,69 @@ def get_detail_tv(tmdb_id: int) -> dict:
     except Exception:
         return {}
 
+
+def get_cinema_news(limit: int = 8) -> list:
+    """
+    Aggrega news cinematografiche da feed RSS pubblici italiani e internazionali.
+    Cached esternamente (main.py). Richiede: pip install feedparser
+    """
+    feeds = [
+        ("BadTaste.it",     "https://www.badtaste.it/feed/"),
+        ("Cinematographe",  "https://cinematographe.it/feed/"),
+        ("The Film Stage",  "https://thefilmstage.com/feed/"),
+        ("Screen Rant",     "https://screenrant.com/feed/"),
+    ]
+
+    items = []
+    try:
+        import feedparser
+    except ImportError:
+        return []
+
+    for source_name, url in feeds:
+        try:
+            feed = feedparser.parse(url)
+            for entry in feed.entries[:3]:
+                title = entry.get("title", "").strip()
+                link  = entry.get("link", "").strip()
+                summary = entry.get("summary", "") or entry.get("description", "") or ""
+                # Strip HTML tags basic
+                import re
+                summary = re.sub(r"<[^>]+>", "", summary).strip()[:200]
+                published = entry.get("published", "") or entry.get("updated", "")
+
+                # Thumb: try media:thumbnail or enclosure
+                thumb = ""
+                if hasattr(entry, "media_thumbnail") and entry.media_thumbnail:
+                    thumb = entry.media_thumbnail[0].get("url", "")
+                elif hasattr(entry, "enclosures") and entry.enclosures:
+                    for enc in entry.enclosures:
+                        if enc.get("type", "").startswith("image"):
+                            thumb = enc.get("href", "")
+                            break
+
+                if not title or not link:
+                    continue
+
+                items.append({
+                    "title":   title,
+                    "link":    link,
+                    "summary": summary,
+                    "source":  source_name,
+                    "thumb":   thumb,
+                    "published": published[:16] if published else "",
+                })
+
+                if len(items) >= limit:
+                    break
+        except Exception:
+            continue
+
+        if len(items) >= limit:
+            break
+
+    return items[:limit]
+
 # Mappa ID piattaforma TMDb → nome + colore brand
 PROVIDER_META = {
     8:   {"name": "Netflix",        "color": "#E50914"},

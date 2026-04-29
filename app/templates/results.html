@@ -64,7 +64,7 @@
                         data-is-liked="{{ 1 if rec.is_liked else 0 }}"
                         data-is-seen="{{ 1 if rec.is_seen else 0 }}"
                         data-is-disliked="{{ 1 if rec.is_disliked else 0 }}"
-                        data-tv-id="{{ rec.tv_id if rec.tv_id is defined else '' }}"
+                        data-tmdb-id="{{ rec.tmdb_id or '' }}"
                     >
                         <div class="result-scroll-poster">
                             <div class="result-scroll-rank">{{ loop.index }}</div>
@@ -95,7 +95,7 @@
                                 <button class="feedback-btn {% if rec.is_seen %}active{% endif %}" data-feedback="seen"><i data-lucide="eye" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i></button>
                             </div>
 
-                            <div class="result-scroll-more">Tocca per dettagli</div>
+                            <div class="result-scroll-more">→ Scheda completa</div>
                         </div>
                     </article>
                 {% endfor %}
@@ -132,8 +132,18 @@
 
             <div class="modal-actions">
                 <div id="results-modal-providers" style="margin-bottom:12px;"></div>
-                <a href="#" id="results-modal-watch" class="modal-btn primary" target="_blank" style="display:none;"><i data-lucide="play-circle" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Dove guardarlo</a>
-                <button id="results-modal-fav" class="modal-btn secondary"><i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Preferiti</button>
+                <a href="#" id="results-modal-detail" class="modal-btn primary">
+                    <i data-lucide="info" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    Scheda completa
+                </a>
+                <a href="#" id="results-modal-watch" class="modal-btn secondary" target="_blank" style="display:none;">
+                    <i data-lucide="play-circle" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    Dove guardarlo
+                </a>
+                <button id="results-modal-fav" class="modal-btn secondary">
+                    <i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    Preferiti
+                </button>
             </div>
         </div>
     </div>
@@ -156,6 +166,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const overviewEl = document.getElementById("results-modal-overview");
     const whyEl      = document.getElementById("results-modal-why");
     const watchBtn   = document.getElementById("results-modal-watch");
+    const detailBtn  = document.getElementById("results-modal-detail");
     const favBtn     = document.getElementById("results-modal-fav");
     const providersEl = document.getElementById("results-modal-providers");
 
@@ -163,13 +174,10 @@ document.addEventListener("DOMContentLoaded", function () {
         providersEl.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Caricamento piattaforme...</p>';
         watchBtn.style.display = "none";
         try {
-            let res;
-            // Per le serie TV usiamo l'endpoint ottimizzato con tv_id (nessuna ricerca ridondante)
-            if (type === "tv" && tvId) {
-                res = await fetch(`/watch-providers/tv/${encodeURIComponent(tvId)}`);
-            } else {
-                res = await fetch(`/watch-providers?title=${encodeURIComponent(title)}&content_type=${type}`);
-            }
+            const endpoint = (type === "tv" && tvId)
+                ? `/watch-providers/tv/${tvId}`
+                : `/watch-providers?title=${encodeURIComponent(title)}&content_type=${type}`;
+            const res = await fetch(endpoint);
             const data = await res.json();
             const flatrate = data.flatrate || [];
             const rent = data.rent || [];
@@ -210,10 +218,10 @@ document.addEventListener("DOMContentLoaded", function () {
         const poster   = card.dataset.poster      || "";
         const expl     = card.dataset.explanation || "";
         const overview = card.dataset.overview    || "";
+        const tmdbId   = card.dataset.tmdbId      || "";
         const match    = card.dataset.match       || "";
         const badge    = card.dataset.badge       || "";
         const isLiked  = card.dataset.isLiked     === "1";
-        const tvId     = card.dataset.tvId        || "";
 
         titleEl.textContent    = title;
         typeEl.textContent     = type === "tv" ? "SERIE TV" : "FILM";
@@ -222,6 +230,13 @@ document.addEventListener("DOMContentLoaded", function () {
         overviewEl.textContent = overview;
         whyEl.innerHTML        = match ? `<strong>Match:</strong> ${match}/10` : "";
         watchBtn.href          = `https://www.justwatch.com/it/cerca?q=${encodeURIComponent(title)}`;
+
+        // Link scheda dettaglio interna
+        if (detailBtn) {
+            const basePath = type === "tv" ? "serie" : "film";
+            detailBtn.href = tmdbId ? `/${basePath}/${tmdbId}` : `https://www.themoviedb.org/search?query=${encodeURIComponent(title)}`;
+            detailBtn.target = tmdbId ? "_self" : "_blank";
+        }
 
         if (poster) {
             posterEl.src           = poster;
@@ -261,7 +276,7 @@ document.addEventListener("DOMContentLoaded", function () {
         modal.setAttribute("aria-hidden", "false");
         document.body.style.overflow = "hidden";
 
-        loadProviders(title, type, tvId);
+        loadProviders(title, type, tmdbId);
     }
 
     function closeModal() {
