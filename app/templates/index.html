@@ -15,33 +15,38 @@
     </section>
 
     <section class="hero-trending-strip">
-        <div class="section-heading section-heading-compact">
-            <div>
-                <span class="section-kicker">Trend del momento</span>
-            </div>
+        <div class="personal-strip-header">
+            <span class="personal-strip-label">🏆 I più apprezzati del momento</span>
         </div>
         <div class="hero-trending-wrap">
-            <button class="trend-nav trend-nav-left" type="button" aria-label="Scorri a sinistra">
-                ‹
-            </button>
+            <button class="trend-nav trend-nav-left trend-nav-left-main" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="hero-trending-row" id="hero-trending-row">
-                {% if trending %}
-                    {% for item in trending %}
-                        <article class="trend-mini-card">
-                            <img src="{{ item.poster_url }}" alt="{{ item.title }}" onerror="this.style.display='none'">
+                {% if top_rated %}
+                    {% for item in top_rated %}
+                        <article class="trend-mini-card trend-mini-card--hot"
+                            data-cinema-title="{{ item.title | e }}"
+                            data-cinema-poster="{{ item.poster_url }}"
+                            data-cinema-overview="{{ (item.overview or '') | e }}"
+                            data-cinema-vote="{{ item.vote_average or '' }}"
+                            data-cinema-date="{{ item.release_date or '' }}"
+                            data-cinema-tmdb-id="{{ item.tmdb_id or '' }}"
+                            data-cinema-type="top_rated"
+                            data-cinema-content-type="{{ item.content_type }}">
+                            <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" onerror="this.style.display='none'">
                             <div class="trend-mini-overlay">
-                                <span>{{ item.label }}</span>
+                                <span class="trend-mini-type {{ 'trend-type-tv' if item.content_type == 'tv' else 'trend-type-movie' }}">{{ item.label }}</span>
+                                {% if item.vote_average and item.vote_average > 0 %}
+                                <span class="trend-mini-score">★ {{ item.vote_average }}</span>
+                                {% endif %}
                                 <strong>{{ item.title }}</strong>
                             </div>
                         </article>
                     {% endfor %}
                 {% else %}
-                    <p style="color: var(--muted); padding: 16px;">Nessun trend disponibile al momento.</p>
+                    <p style="color: var(--muted); padding: 16px;">Nessun contenuto disponibile.</p>
                 {% endif %}
             </div>
-            <button class="trend-nav trend-nav-right" type="button" aria-label="Scorri a destra">
-                ›
-            </button>
+            <button class="trend-nav trend-nav-right trend-nav-right-main" type="button" aria-label="Scorri a destra">›</button>
         </div>
     </section>
 
@@ -245,6 +250,9 @@
 
             <p id="cinema-modal-overview" class="modal-reason" style="color:var(--muted,#94a3b8);font-size:0.9rem;margin-bottom:14px;"></p>
 
+            <!-- Provider streaming (solo top_rated) -->
+            <div id="cinema-modal-providers" style="display:none;margin-bottom:14px;"></div>
+
             <div class="modal-actions">
                 <!-- CTA dinamica: varia in base a now_playing vs upcoming -->
                 <a id="cinema-modal-cta-primary" href="#" target="_blank" class="modal-btn primary" style="display:none;">
@@ -277,21 +285,24 @@
 <script src="/static/app.js"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const row = document.getElementById("hero-trending-row");
-    const leftBtn = document.querySelector(".trend-nav-left:not(.personal-nav-left)");
-    const rightBtn = document.querySelector(".trend-nav-right:not(.personal-nav-right)");
+    // ── Nav fascia principale "I più apprezzati" ────────────────────────────
+    const row      = document.getElementById("hero-trending-row");
+    const leftBtn  = document.querySelector(".trend-nav-left-main");
+    const rightBtn = document.querySelector(".trend-nav-right-main");
 
     if (row && leftBtn && rightBtn) {
-        const scrollAmount = 480;
-
-        leftBtn.addEventListener("click", function () {
-            row.scrollBy({ left: -scrollAmount, behavior: "smooth" });
-        });
-
-        rightBtn.addEventListener("click", function () {
-            row.scrollBy({ left: scrollAmount, behavior: "smooth" });
-        });
+        leftBtn.addEventListener("click",  () => row.scrollBy({ left: -440, behavior: "smooth" }));
+        rightBtn.addEventListener("click", () => row.scrollBy({ left:  440, behavior: "smooth" }));
     }
+
+    // Click su card "più apprezzati" → apre modal cinema (stesso già usato da cinema strips)
+    document.querySelectorAll(".trend-mini-card--hot").forEach(card => {
+        card.style.cursor = "pointer";
+        card.addEventListener("click", () => {
+            if (typeof openCinemaModal === "function") openCinemaModal(card);
+        });
+    });
+    // ────────────────────────────────────────────────────────────────────────
 
     const extraTitles = document.getElementById("extra-titles");
     const addTitleBtn = document.querySelector(".add-title-btn");
@@ -457,7 +468,7 @@ document.addEventListener("DOMContentLoaded", function () {
         cinemaPoster.src = poster;
         cinemaPoster.alt = title;
 
-        // Badge e CTA differenziati
+        // Badge e CTA differenziati per tipo
         if (type === "now_playing") {
             cinemaBadge.textContent = "🎬 In sala adesso";
             cinemaCtaText.textContent = "Cerca al cinema";
@@ -465,6 +476,72 @@ document.addEventListener("DOMContentLoaded", function () {
             cinemaCtaPrim.style.display = "flex";
             cinemaRelWrap.style.display = "none";
             cinemaNoteText.textContent = "Questo film è attualmente in programmazione nelle sale cinematografiche. Non è ancora disponibile in streaming.";
+        } else if (type === "top_rated") {
+            const contentType = card.dataset.cinemaContentType || "movie";
+            cinemaBadge.textContent = "🏆 Molto apprezzato";
+            cinemaCtaPrim.style.display = "none";   // nascosto, i provider sostituiscono
+            cinemaRelWrap.style.display = "none";
+            cinemaNoteText.textContent = "Uno dei titoli più apprezzati degli ultimi mesi.";
+
+            // Carica watch providers reali
+            const providersEl = document.getElementById("cinema-modal-providers");
+            providersEl.style.display = "block";
+            providersEl.innerHTML = '<p style="color:var(--muted);font-size:0.82rem;">Caricamento piattaforme...</p>';
+
+            const endpoint = contentType === "tv"
+                ? `/watch-providers/tv/${tmdbId}`
+                : `/watch-providers?title=${encodeURIComponent(title)}&content_type=movie`;
+
+            fetch(endpoint)
+                .then(r => r.json())
+                .then(data => {
+                    const flatrate = data.flatrate || [];
+                    const rent     = data.rent     || [];
+                    const link     = data.link     || `https://www.justwatch.com/it/cerca?q=${encodeURIComponent(title)}`;
+
+                    if (flatrate.length === 0 && rent.length === 0) {
+                        providersEl.innerHTML = `<p style="color:var(--muted);font-size:0.82rem;">Non trovato su piattaforme streaming IT al momento.</p>
+                            <a href="${link}" target="_blank" class="modal-btn secondary" style="margin-top:8px;font-size:0.82rem;">
+                                Cerca su JustWatch
+                            </a>`;
+                        return;
+                    }
+
+                    let html = "";
+                    if (flatrate.length) {
+                        html += '<div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Incluso in abbonamento</div>';
+                        html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
+                        flatrate.forEach(p => {
+                            html += `<a href="${p.link || link}" target="_blank" title="${p.name}"
+                                style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;
+                                background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);
+                                text-decoration:none;color:#fff;font-size:0.78rem;font-weight:600;transition:background 0.15s;">
+                                ${p.logo_url ? `<img src="${p.logo_url}" style="width:20px;height:20px;border-radius:4px;" alt="${p.name}">` : ""}
+                                ${p.name}
+                            </a>`;
+                        });
+                        html += "</div>";
+                    }
+                    if (rent.length) {
+                        html += '<div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Noleggio/Acquisto</div>';
+                        html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+                        rent.slice(0, 4).forEach(p => {
+                            html += `<a href="${p.link || link}" target="_blank" title="${p.name}"
+                                style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;
+                                background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);
+                                text-decoration:none;color:#94a3b8;font-size:0.78rem;font-weight:600;">
+                                ${p.logo_url ? `<img src="${p.logo_url}" style="width:20px;height:20px;border-radius:4px;" alt="${p.name}">` : ""}
+                                ${p.name}
+                            </a>`;
+                        });
+                        html += "</div>";
+                    }
+                    providersEl.innerHTML = html;
+                })
+                .catch(() => {
+                    providersEl.innerHTML = "";
+                    providersEl.style.display = "none";
+                });
         } else {
             cinemaBadge.textContent = "🔜 Prossimamente";
             cinemaCtaPrim.style.display = "none";
@@ -500,9 +577,12 @@ document.addEventListener("DOMContentLoaded", function () {
         cinemaModal.classList.remove("is-open");
         cinemaModal.setAttribute("aria-hidden", "true");
         document.body.style.overflow = "";
-        // Rimuovi eventuale voto inserito dinamicamente
+        // Rimuovi voto dinamico
         const voteEl = cinemaTitle.nextElementSibling;
         if (voteEl && voteEl.style.color === "rgb(252, 211, 77)") voteEl.remove();
+        // Reset providers
+        const providersEl = document.getElementById("cinema-modal-providers");
+        if (providersEl) { providersEl.innerHTML = ""; providersEl.style.display = "none"; }
     }
 
     if (cinemaModal) {

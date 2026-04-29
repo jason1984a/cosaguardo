@@ -33,6 +33,7 @@ from core.recommendation_api import (
     get_watch_providers,
     get_now_playing,
     get_upcoming,
+    get_top_rated_recent,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
@@ -73,6 +74,22 @@ def get_cinema_cached() -> dict:
         _cinema_cache["upcoming"] = up
         _cinema_cache["ts"] = now
     return _cinema_cache
+# ──────────────────────────────────────────────────────────────────────────
+
+# ─── Cache top rated recent (TTL 24 ore) ──────────────────────────────────
+_toprated_cache: dict = {"data": None, "ts": 0.0}
+_TOPRATED_TTL = 86400  # 24 ore — shufflato con seed giornaliero
+
+
+def get_toprated_cached(limit: int = 10) -> list:
+    now = _time.time()
+    if _toprated_cache["data"] is not None and (now - _toprated_cache["ts"]) < _TOPRATED_TTL:
+        return _toprated_cache["data"]
+    fresh = get_top_rated_recent(limit=limit)
+    if fresh:
+        _toprated_cache["data"] = fresh
+        _toprated_cache["ts"] = now
+    return fresh or _toprated_cache.get("data") or []
 # ──────────────────────────────────────────────────────────────────────────
 
 app = FastAPI()
@@ -116,6 +133,7 @@ def home(request: Request):
             "is_logged_in": bool(user_id),
             "now_playing": cinema.get("now_playing") or [],
             "upcoming": cinema.get("upcoming") or [],
+            "top_rated": get_toprated_cached(limit=10),
         },
     )
 

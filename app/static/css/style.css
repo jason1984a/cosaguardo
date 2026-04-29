@@ -2518,3 +2518,31 @@ body {
     cursor: pointer;
 }
 
+/* ── TOP RATED CARD enhancements ─────────────────────────────────────────── */
+.trend-mini-card--hot {
+    cursor: pointer;
+}
+
+/* Score e type badge nell'overlay */
+.trend-mini-overlay {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.trend-mini-score {
+    font-size: 10px;
+    font-weight: 700;
+    color: #fcd34d;
+    margin-bottom: 2px;
+}
+
+.trend-type-movie {
+    color: #93c5fd;
+}
+
+.trend-type-tv {
+    color: #c4b5fd;
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
+

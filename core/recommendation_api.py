@@ -1065,6 +1065,99 @@ def get_movie_tmdb_info(title: str):
     }
 
 
+def get_top_rated_recent(limit: int = 10) -> list:
+    """
+    I più apprezzati del momento: film e serie TV usciti negli ultimi 6 mesi
+    con almeno 500 voti e rating >= 7.0. Pool di 40 titoli shufflati con seed
+    giornaliero (cambia ogni giorno, stabile durante la giornata).
+    """
+    if not TMDB_API_KEY:
+        return []
+
+    import datetime, random
+
+    # Data 6 mesi fa
+    today = datetime.date.today()
+    six_months_ago = (today - datetime.timedelta(days=180)).isoformat()
+
+    base_params = {
+        "api_key":           TMDB_API_KEY,
+        "language":          "it-IT",
+        "sort_by":           "vote_count.desc",
+        "vote_count.gte":    500,
+        "vote_average.gte":  7.0,
+        "with_original_language": "en|it|fr|es|de|ko|ja",
+    }
+
+    pool = []
+
+    # Film
+    try:
+        r = requests.get(
+            "https://api.themoviedb.org/3/discover/movie",
+            params={**base_params,
+                    "primary_release_date.gte": six_months_ago,
+                    "region": "IT"},
+            timeout=6
+        )
+        for item in r.json().get("results", [])[:25]:
+            pp = item.get("poster_path")
+            title = item.get("title") or item.get("original_title") or ""
+            if not pp or not title:
+                continue
+            pool.append({
+                "tmdb_id":      item.get("id"),
+                "title":        title,
+                "content_type": "movie",
+                "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}",
+                "overview":     (item.get("overview") or "")[:160],
+                "vote_average": round(item.get("vote_average", 0), 1),
+                "vote_count":   item.get("vote_count", 0),
+                "release_date": item.get("release_date", ""),
+                "label":        "Film",
+            })
+    except Exception:
+        pass
+
+    # Serie TV
+    try:
+        r = requests.get(
+            "https://api.themoviedb.org/3/discover/tv",
+            params={**base_params,
+                    "first_air_date.gte": six_months_ago,
+                    "watch_region": "IT"},
+            timeout=6
+        )
+        for item in r.json().get("results", [])[:25]:
+            pp = item.get("poster_path")
+            title = item.get("name") or item.get("original_name") or ""
+            if not pp or not title:
+                continue
+            pool.append({
+                "tmdb_id":      item.get("id"),
+                "title":        title,
+                "content_type": "tv",
+                "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}",
+                "overview":     (item.get("overview") or "")[:160],
+                "vote_average": round(item.get("vote_average", 0), 1),
+                "vote_count":   item.get("vote_count", 0),
+                "release_date": item.get("first_air_date", ""),
+                "label":        "Serie TV",
+            })
+    except Exception:
+        pass
+
+    if not pool:
+        return []
+
+    # Shuffle con seed giornaliero — ogni giorno ordine diverso, stabile durante la giornata
+    seed = int(today.strftime("%Y%m%d"))
+    rng = random.Random(seed)
+    rng.shuffle(pool)
+
+    return pool[:limit]
+
+
 def get_trending_tmdb(limit: int = 12):
     """
     Recupera i contenuti trending del giorno da TMDb (film + serie TV).
