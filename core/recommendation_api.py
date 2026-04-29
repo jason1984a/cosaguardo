@@ -1283,6 +1283,193 @@ def get_upcoming(limit: int = 8) -> list:
     except Exception:
         return []
 
+
+def get_detail_movie(tmdb_id: int) -> dict:
+    """
+    Dati completi di un film: info base, generi, cast, trailer YouTube, providers IT.
+    """
+    if not TMDB_API_KEY or not tmdb_id:
+        return {}
+    try:
+        r = requests.get(
+            f"https://api.themoviedb.org/3/movie/{tmdb_id}",
+            params={"api_key": TMDB_API_KEY, "language": "it-IT",
+                    "append_to_response": "credits,videos,watch/providers"},
+            timeout=8
+        )
+        d = r.json()
+        if d.get("status_code") == 34:   # not found
+            return {}
+
+        # Poster / backdrop
+        poster_path   = d.get("poster_path") or ""
+        backdrop_path = d.get("backdrop_path") or ""
+
+        # Generi
+        genres = [g["name"] for g in d.get("genres", [])]
+
+        # Cast top 8
+        cast = []
+        for p in d.get("credits", {}).get("cast", [])[:8]:
+            cast.append({
+                "name":       p.get("name", ""),
+                "character":  p.get("character", ""),
+                "profile_url": (f"https://image.tmdb.org/t/p/w185{p['profile_path']}"
+                                if p.get("profile_path") else ""),
+            })
+
+        # Regia
+        directors = [p["name"] for p in d.get("credits", {}).get("crew", [])
+                     if p.get("job") == "Director"]
+
+        # Trailer YouTube (primo trailer IT, fallback EN)
+        trailer_key = ""
+        videos = d.get("videos", {}).get("results", [])
+        for v in videos:
+            if v.get("type") == "Trailer" and v.get("site") == "YouTube":
+                trailer_key = v["key"]
+                break
+
+        # Watch providers IT
+        prov_it = d.get("watch/providers", {}).get("results", {}).get("IT", {})
+        jw_link = prov_it.get("link", "")
+
+        def _parse_prov(items):
+            out, seen = [], set()
+            for p in (items or []):
+                name = p.get("provider_name", "")
+                if name in seen:
+                    continue
+                seen.add(name)
+                pid  = p.get("provider_id")
+                logo = p.get("logo_path", "")
+                meta = PROVIDER_META.get(pid, {})
+                out.append({
+                    "name":     meta.get("name", name),
+                    "logo_url": f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
+                    "color":    meta.get("color", "#444"),
+                    "link":     jw_link,
+                })
+            return out
+
+        return {
+            "tmdb_id":      tmdb_id,
+            "title":        d.get("title") or d.get("original_title", ""),
+            "original_title": d.get("original_title", ""),
+            "tagline":      d.get("tagline", ""),
+            "overview":     d.get("overview", ""),
+            "release_date": d.get("release_date", ""),
+            "runtime":      d.get("runtime") or 0,
+            "vote_average": round(d.get("vote_average", 0), 1),
+            "vote_count":   d.get("vote_count", 0),
+            "poster_url":   f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else "",
+            "backdrop_url": f"https://image.tmdb.org/t/p/w1280{backdrop_path}" if backdrop_path else "",
+            "genres":       genres,
+            "cast":         cast,
+            "directors":    directors,
+            "trailer_key":  trailer_key,
+            "providers": {
+                "flatrate": _parse_prov(prov_it.get("flatrate", [])),
+                "rent":     _parse_prov(prov_it.get("rent", [])),
+                "buy":      _parse_prov(prov_it.get("buy", [])),
+                "link":     jw_link,
+            },
+            "content_type": "movie",
+        }
+    except Exception:
+        return {}
+
+
+def get_detail_tv(tmdb_id: int) -> dict:
+    """
+    Dati completi di una serie TV: info base, generi, cast, trailer YouTube, providers IT.
+    """
+    if not TMDB_API_KEY or not tmdb_id:
+        return {}
+    try:
+        r = requests.get(
+            f"https://api.themoviedb.org/3/tv/{tmdb_id}",
+            params={"api_key": TMDB_API_KEY, "language": "it-IT",
+                    "append_to_response": "credits,videos,watch/providers"},
+            timeout=8
+        )
+        d = r.json()
+        if d.get("status_code") == 34:
+            return {}
+
+        poster_path   = d.get("poster_path") or ""
+        backdrop_path = d.get("backdrop_path") or ""
+        genres        = [g["name"] for g in d.get("genres", [])]
+
+        cast = []
+        for p in d.get("credits", {}).get("cast", [])[:8]:
+            cast.append({
+                "name":        p.get("name", ""),
+                "character":   p.get("character", ""),
+                "profile_url": (f"https://image.tmdb.org/t/p/w185{p['profile_path']}"
+                                if p.get("profile_path") else ""),
+            })
+
+        creators = [p["name"] for p in d.get("created_by", [])]
+
+        trailer_key = ""
+        for v in d.get("videos", {}).get("results", []):
+            if v.get("type") == "Trailer" and v.get("site") == "YouTube":
+                trailer_key = v["key"]
+                break
+
+        prov_it = d.get("watch/providers", {}).get("results", {}).get("IT", {})
+        jw_link = prov_it.get("link", "")
+
+        def _parse_prov(items):
+            out, seen = [], set()
+            for p in (items or []):
+                name = p.get("provider_name", "")
+                if name in seen:
+                    continue
+                seen.add(name)
+                pid  = p.get("provider_id")
+                logo = p.get("logo_path", "")
+                meta = PROVIDER_META.get(pid, {})
+                out.append({
+                    "name":     meta.get("name", name),
+                    "logo_url": f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
+                    "color":    meta.get("color", "#444"),
+                    "link":     jw_link,
+                })
+            return out
+
+        seasons = d.get("number_of_seasons") or 0
+        episodes = d.get("number_of_episodes") or 0
+
+        return {
+            "tmdb_id":        tmdb_id,
+            "title":          d.get("name") or d.get("original_name", ""),
+            "original_title": d.get("original_name", ""),
+            "tagline":        d.get("tagline", ""),
+            "overview":       d.get("overview", ""),
+            "release_date":   d.get("first_air_date", ""),
+            "seasons":        seasons,
+            "episodes":       episodes,
+            "vote_average":   round(d.get("vote_average", 0), 1),
+            "vote_count":     d.get("vote_count", 0),
+            "poster_url":     f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else "",
+            "backdrop_url":   f"https://image.tmdb.org/t/p/w1280{backdrop_path}" if backdrop_path else "",
+            "genres":         genres,
+            "cast":           cast,
+            "creators":       creators,
+            "trailer_key":    trailer_key,
+            "providers": {
+                "flatrate": _parse_prov(prov_it.get("flatrate", [])),
+                "rent":     _parse_prov(prov_it.get("rent", [])),
+                "buy":      _parse_prov(prov_it.get("buy", [])),
+                "link":     jw_link,
+            },
+            "content_type": "tv",
+        }
+    except Exception:
+        return {}
+
 # Mappa ID piattaforma TMDb → nome + colore brand
 PROVIDER_META = {
     8:   {"name": "Netflix",        "color": "#E50914"},

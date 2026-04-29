@@ -1,0 +1,927 @@
+{% extends "base.html" %}
+
+{% block title %}{{ detail.title }} — CosaGuardo{% endblock %}
+
+{% block head_extra %}
+<style>
+/* ── PAGE OVERFLOW FIX ──────────────────────────────────────────────────── */
+html, body {
+    overflow-x: hidden;
+    max-width: 100%;
+}
+
+* {
+    min-width: 0;   /* prevents flex/grid children from overflowing */
+}
+
+/* ── BACK BUTTON ────────────────────────────────────────────────────────── */
+.detail-back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: var(--text, #f5f7ff);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    backdrop-filter: blur(8px);
+    transition: background 0.18s ease, border-color 0.18s ease;
+    margin-bottom: 16px;
+}
+.detail-back-btn:hover {
+    background: rgba(255,255,255,0.18);
+    border-color: rgba(255,255,255,0.28);
+}
+
+/* ── HERO BACKDROP ──────────────────────────────────────────────────────── */
+.detail-hero {
+    position: relative;
+    width: 100%;
+    min-height: 320px;
+    margin-bottom: 0;
+    overflow: hidden;
+    border-radius: 0 0 28px 28px;
+}
+
+.detail-backdrop {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center top;
+    filter: brightness(0.32) saturate(1.2);
+    transform: scale(1.04);
+    transition: transform 8s ease;
+}
+
+.detail-hero:hover .detail-backdrop {
+    transform: scale(1.0);
+}
+
+.detail-backdrop-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        to bottom,
+        rgba(11,16,32,0.0) 0%,
+        rgba(11,16,32,0.5) 60%,
+        rgba(11,16,32,1.0) 100%
+    );
+}
+
+.detail-hero-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    gap: 32px;
+    align-items: flex-end;
+    padding: 48px 0 36px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+/* ── POSTER ─────────────────────────────────────────────────────────────── */
+.detail-poster-wrap {
+    flex-shrink: 0;
+    width: 180px;
+}
+
+.detail-poster {
+    width: 100%;
+    border-radius: 18px;
+    box-shadow: 0 24px 56px rgba(0,0,0,0.65);
+    display: block;
+}
+
+.detail-poster-placeholder {
+    width: 180px;
+    aspect-ratio: 2/3;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+}
+
+/* ── INFO HEADER ─────────────────────────────────────────────────────────── */
+.detail-info {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.detail-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+}
+
+.detail-type-movie { background: rgba(59,130,246,0.25); color: #93c5fd; border: 1px solid rgba(59,130,246,0.35); }
+.detail-type-tv    { background: rgba(139,92,246,0.25); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.35); }
+
+.detail-title {
+    font-size: clamp(1.6rem, 4vw, 2.6rem);
+    font-weight: 900;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin-bottom: 6px;
+}
+
+.detail-original-title {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 10px;
+    font-style: italic;
+}
+
+.detail-tagline {
+    font-size: 1rem;
+    color: #93c5fd;
+    font-style: italic;
+    margin-bottom: 12px;
+    opacity: 0.9;
+}
+
+.detail-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.detail-meta-chip {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--muted);
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.detail-score {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #fcd34d;
+    background: rgba(252,211,77,0.12);
+    border: 1px solid rgba(252,211,77,0.25);
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
+.detail-genres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.detail-genre-tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: rgba(110,168,254,0.12);
+    color: #93c5fd;
+    border: 1px solid rgba(110,168,254,0.2);
+}
+
+/* ── ACTIONS ─────────────────────────────────────────────────────────────── */
+.detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.detail-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 18px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.18s ease;
+    text-decoration: none;
+}
+
+.detail-btn-primary {
+    background: var(--primary, #6ea8fe);
+    color: #08101f;
+}
+.detail-btn-primary:hover { filter: brightness(1.1); }
+
+.detail-btn-secondary {
+    background: rgba(255,255,255,0.07);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.12);
+}
+.detail-btn-secondary:hover { background: rgba(255,255,255,0.12); }
+
+.detail-btn-liked {
+    background: rgba(239,68,68,0.18);
+    color: #f87171;
+    border: 1px solid rgba(239,68,68,0.3);
+}
+.detail-btn-liked:hover { background: rgba(239,68,68,0.28); }
+
+.detail-btn-seen {
+    background: rgba(34,197,94,0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34,197,94,0.28);
+}
+.detail-btn-seen:hover { background: rgba(34,197,94,0.25); }
+
+/* ── BODY LAYOUT ────────────────────────────────────────────────────────── */
+.detail-body {
+    padding: 36px 0 0;
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 40px;
+    align-items: start;
+    /* ensure grid children don't exceed container */
+    width: 100%;
+    max-width: 100%;
+}
+
+/* Every direct text container clips itself */
+.detail-body > * {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.detail-section-title {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 14px;
+}
+
+/* ── OVERVIEW ───────────────────────────────────────────────────────────── */
+.detail-overview {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: #cbd5e1;
+    margin-bottom: 8px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+.detail-overview.is-clamped {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.detail-expand-btn {
+    background: none;
+    border: none;
+    color: #93c5fd;
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 0;
+    margin-bottom: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.detail-expand-btn:hover { color: #bfdbfe; }
+
+/* ── CAST ───────────────────────────────────────────────────────────────── */
+.cast-grid {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+    margin-bottom: 36px;
+}
+.cast-grid::-webkit-scrollbar { display: none; }
+
+.cast-card {
+    flex-shrink: 0;
+    width: 80px;
+    text-align: center;
+}
+
+.cast-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.1);
+    display: block;
+    margin-bottom: 6px;
+    background: rgba(255,255,255,0.06);
+}
+
+.cast-avatar-placeholder {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+    border: 2px solid rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 6px;
+    color: var(--muted);
+}
+
+.cast-name {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 2px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.cast-character {
+    font-size: 0.65rem;
+    color: var(--muted);
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* ── TRAILER ────────────────────────────────────────────────────────────── */
+.trailer-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 36px;
+    background: rgba(0,0,0,0.4);
+}
+
+.trailer-wrap iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* ── SIDEBAR: PROVIDERS ──────────────────────────────────────────────────── */
+.detail-sidebar {
+    position: sticky;
+    top: 72px;
+}
+
+.detail-sidebar-card {
+    background: rgba(22,31,61,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 20px;
+    margin-bottom: 18px;
+    backdrop-filter: blur(12px);
+}
+
+.providers-group-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 10px;
+}
+
+.providers-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.provider-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    text-decoration: none;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+.provider-item:hover {
+    background: rgba(255,255,255,0.10);
+    border-color: rgba(255,255,255,0.16);
+}
+
+.provider-logo {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.provider-name {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.provider-sublabel {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.no-providers-msg {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+/* ── SIMILI ─────────────────────────────────────────────────────────────── */
+.similar-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 48px;
+}
+
+.similar-card {
+    border-radius: 14px;
+    overflow: hidden;
+    background: rgba(17,24,39,0.88);
+    border: 1px solid rgba(255,255,255,0.07);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    text-decoration: none;
+    display: block;
+}
+.similar-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(96,165,250,0.3);
+    box-shadow: 0 16px 32px rgba(0,0,0,0.3);
+}
+
+.similar-card img {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+    display: block;
+}
+
+.similar-card-title {
+    padding: 8px 9px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* ── MOBILE ──────────────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+    .detail-hero {
+        border-radius: 0 0 20px 20px;
+    }
+
+    .detail-hero-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 20px;
+        padding: 24px 0 24px;
+    }
+
+    .detail-poster-wrap { width: 120px; }
+    .detail-poster-placeholder { width: 120px; }
+
+    .detail-title {
+        font-size: 1.5rem;
+    }
+
+    .detail-body {
+        grid-template-columns: 1fr;
+        gap: 24px;
+        padding: 24px 0 0;
+    }
+
+    .detail-sidebar { position: static; }
+
+    .similar-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+
+    .detail-meta {
+        gap: 6px;
+    }
+
+    .trailer-wrap {
+        border-radius: 14px;
+    }
+
+    .cast-card {
+        width: 70px;
+    }
+
+    .cast-avatar {
+        width: 70px;
+        height: 70px;
+    }
+
+    .cast-avatar-placeholder {
+        width: 70px;
+        height: 70px;
+    }
+
+    /* Hard stop any overflow on mobile */
+    .detail-hero-content,
+    .detail-info,
+    .detail-title,
+    .detail-overview,
+    .detail-meta,
+    .detail-actions,
+    .detail-sidebar-card {
+        max-width: 100%;
+        overflow-wrap: break-word;
+        word-break: break-word;
+        box-sizing: border-box;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+{# ── HERO BACKDROP ──────────────────────────────────────────────────────── #}
+<div class="detail-hero">
+    {% if detail.backdrop_url %}
+    <div class="detail-backdrop" style="background-image: url('{{ detail.backdrop_url }}');"></div>
+    {% else %}
+    <div class="detail-backdrop" style="background: radial-gradient(circle at 30% 50%, rgba(110,168,254,0.25), transparent 70%);"></div>
+    {% endif %}
+    <div class="detail-backdrop-gradient"></div>
+
+    <div class="container">
+        <button class="detail-back-btn" onclick="window.location.href = document.referrer && !document.referrer.includes(window.location.pathname) ? document.referrer : '/'">
+            <i data-lucide="arrow-left" style="width:14px;height:14px;stroke:currentColor;stroke-width:2.5;pointer-events:none;"></i>
+            Indietro
+        </button>
+    </div>
+    <div class="container detail-hero-content">
+        {# POSTER #}
+        <div class="detail-poster-wrap">
+            {% if detail.poster_url %}
+            <img src="{{ detail.poster_url }}" alt="{{ detail.title }}" class="detail-poster">
+            {% else %}
+            <div class="detail-poster-placeholder">
+                <i data-lucide="film" style="width:40px;height:40px;opacity:.35;"></i>
+            </div>
+            {% endif %}
+        </div>
+
+        {# INFO #}
+        <div class="detail-info">
+            <div class="detail-type-badge {{ 'detail-type-tv' if detail.content_type == 'tv' else 'detail-type-movie' }}">
+                <i data-lucide="{{ 'tv-2' if detail.content_type == 'tv' else 'film' }}" style="width:11px;height:11px;stroke:currentColor;stroke-width:2.5;"></i>
+                {{ "Serie TV" if detail.content_type == "tv" else "Film" }}
+            </div>
+
+            <h1 class="detail-title">{{ detail.title }}</h1>
+
+            {% if detail.original_title and detail.original_title != detail.title %}
+            <div class="detail-original-title">{{ detail.original_title }}</div>
+            {% endif %}
+
+            {% if detail.tagline %}
+            <div class="detail-tagline">"{{ detail.tagline }}"</div>
+            {% endif %}
+
+            <div class="detail-meta">
+                {% if detail.vote_average and detail.vote_average > 0 %}
+                <span class="detail-score">★ {{ detail.vote_average }}/10
+                    {% if detail.vote_count %}<span style="font-size:0.72rem;opacity:0.65;">({{ "{:,}".format(detail.vote_count).replace(",",".") }} voti)</span>{% endif %}
+                </span>
+                {% endif %}
+
+                {% if detail.release_date %}
+                <span class="detail-meta-chip">{{ detail.release_date[:4] }}</span>
+                {% endif %}
+
+                {% if detail.runtime and detail.runtime > 0 %}
+                <span class="detail-meta-chip">{{ detail.runtime // 60 }}h {{ detail.runtime % 60 }}m</span>
+                {% endif %}
+
+                {% if detail.seasons %}
+                <span class="detail-meta-chip">{{ detail.seasons }} stagion{{ "e" if detail.seasons == 1 else "i" }}</span>
+                {% endif %}
+
+                {% if detail.episodes %}
+                <span class="detail-meta-chip">{{ detail.episodes }} episodi</span>
+                {% endif %}
+
+                {% if detail.directors %}
+                <span class="detail-meta-chip">Dir. {{ detail.directors[0] }}</span>
+                {% endif %}
+
+                {% if detail.creators %}
+                <span class="detail-meta-chip">Creata da {{ detail.creators[0] }}</span>
+                {% endif %}
+            </div>
+
+            {% if detail.genres %}
+            <div class="detail-genres">
+                {% for g in detail.genres %}
+                <span class="detail-genre-tag">{{ g }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {# AZIONI #}
+            <div class="detail-actions">
+                {% if is_logged_in %}
+                <button class="detail-btn {% if is_liked %}detail-btn-liked{% else %}detail-btn-secondary{% endif %}"
+                    id="btn-like"
+                    data-title="{{ detail.title | e }}"
+                    data-type="{{ detail.content_type }}"
+                    onclick="toggleFeedback(this, 'liked')">
+                    <i data-lucide="{{ 'heart' if is_liked else 'heart' }}" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    {{ "Nei preferiti" if is_liked else "Aggiungi ai preferiti" }}
+                </button>
+                <button class="detail-btn {% if is_seen %}detail-btn-seen{% else %}detail-btn-secondary{% endif %}"
+                    id="btn-seen"
+                    data-title="{{ detail.title | e }}"
+                    data-type="{{ detail.content_type }}"
+                    onclick="toggleFeedback(this, 'seen')">
+                    <i data-lucide="{{ 'check-circle' if is_seen else 'eye' }}" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    {{ "Già visto" if is_seen else "Segna come visto" }}
+                </button>
+                {% endif %}
+
+                <a href="/?prefill={{ detail.title | urlencode }}&type={{ detail.content_type }}"
+                   class="detail-btn detail-btn-primary">
+                    <i data-lucide="search" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    Trova simili
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── BODY ─────────────────────────────────────────────────────────────── #}
+<div class="detail-body">
+
+    {# COLONNA SINISTRA #}
+    <div>
+        {# OVERVIEW #}
+        {% if detail.overview %}
+        <div class="detail-section-title">Trama</div>
+        <p class="detail-overview is-clamped" id="detail-overview-text">{{ detail.overview }}</p>
+        <button class="detail-expand-btn" id="detail-expand-btn" onclick="expandOverview()">
+            <i data-lucide="chevron-down" style="width:13px;height:13px;stroke:currentColor;stroke-width:2.5;pointer-events:none;"></i>
+            Leggi tutto
+        </button>
+        {% endif %}
+
+        {# CAST #}
+        {% if detail.cast %}
+        <div class="detail-section-title">Cast principale</div>
+        <div class="cast-grid">
+            {% for actor in detail.cast %}
+            <div class="cast-card">
+                {% if actor.profile_url %}
+                <img src="{{ actor.profile_url }}" alt="{{ actor.name }}" class="cast-avatar" loading="lazy">
+                {% else %}
+                <div class="cast-avatar-placeholder">
+                    <i data-lucide="user" style="width:28px;height:28px;opacity:.4;"></i>
+                </div>
+                {% endif %}
+                <div class="cast-name">{{ actor.name }}</div>
+                <div class="cast-character">{{ actor.character }}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# TRAILER #}
+        {% if detail.trailer_key %}
+        <div class="detail-section-title">Trailer</div>
+        <div class="trailer-wrap">
+            <iframe
+                src="https://www.youtube.com/embed/{{ detail.trailer_key }}?rel=0&modestbranding=1"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen
+                loading="lazy"
+                title="Trailer {{ detail.title }}">
+            </iframe>
+        </div>
+        {% endif %}
+
+        {# SIMILI #}
+        {% if similar %}
+        <div class="detail-section-title">Potrebbe piacerti anche</div>
+        <div class="similar-grid">
+            {% for s in similar %}
+            <a href="/{{ 'serie' if s.content_type == 'tv' else 'film' }}/{{ s.tmdb_id }}"
+               class="similar-card"
+               {% if not s.tmdb_id %}style="pointer-events:none;"{% endif %}>
+                {% if s.poster_url %}
+                <img src="{{ s.poster_url }}" alt="{{ s.title }}" loading="lazy">
+                {% else %}
+                <div style="aspect-ratio:2/3;background:rgba(255,255,255,0.05);display:flex;align-items:center;justify-content:center;">
+                    <i data-lucide="film" style="width:28px;height:28px;opacity:.3;"></i>
+                </div>
+                {% endif %}
+                <div class="similar-card-title">{{ s.title }}</div>
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+
+    {# SIDEBAR #}
+    <div class="detail-sidebar">
+
+        {# PROVIDERS #}
+        <div class="detail-sidebar-card">
+            <div class="detail-section-title" style="margin-bottom:16px;">Dove vederlo in Italia</div>
+
+            {% set prov = detail.providers %}
+            {% if prov.flatrate %}
+            <div class="providers-group-label">Incluso in abbonamento</div>
+            <div class="providers-list">
+                {% for p in prov.flatrate %}
+                <a href="{{ p.link or prov.link or '#' }}" target="_blank" class="provider-item">
+                    {% if p.logo_url %}
+                    <img src="{{ p.logo_url }}" alt="{{ p.name }}" class="provider-logo">
+                    {% endif %}
+                    <span class="provider-name">{{ p.name }}</span>
+                    <span class="provider-sublabel">Streaming</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if prov.rent %}
+            <div class="providers-group-label">Noleggio</div>
+            <div class="providers-list">
+                {% for p in prov.rent[:3] %}
+                <a href="{{ p.link or prov.link or '#' }}" target="_blank" class="provider-item">
+                    {% if p.logo_url %}
+                    <img src="{{ p.logo_url }}" alt="{{ p.name }}" class="provider-logo">
+                    {% endif %}
+                    <span class="provider-name">{{ p.name }}</span>
+                    <span class="provider-sublabel">Noleggio</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if not prov.flatrate and not prov.rent %}
+            <p class="no-providers-msg">Non disponibile in streaming in Italia al momento.</p>
+            {% endif %}
+
+
+        </div>
+
+        {# INFO EXTRA #}
+        <div class="detail-sidebar-card">
+            <div class="detail-section-title" style="margin-bottom:12px;">Info</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+                {% if detail.release_date %}
+                <div>
+                    <div style="font-size:0.7rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;">
+                        {{ "Prima messa in onda" if detail.content_type == "tv" else "Uscita" }}
+                    </div>
+                    <div style="font-size:0.88rem;font-weight:600;">{{ detail.release_date }}</div>
+                </div>
+                {% endif %}
+                {% if detail.directors %}
+                <div>
+                    <div style="font-size:0.7rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;">Regia</div>
+                    <div style="font-size:0.88rem;font-weight:600;">{{ detail.directors | join(", ") }}</div>
+                </div>
+                {% endif %}
+                {% if detail.creators %}
+                <div>
+                    <div style="font-size:0.7rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:2px;">Creata da</div>
+                    <div style="font-size:0.88rem;font-weight:600;">{{ detail.creators | join(", ") }}</div>
+                </div>
+                {% endif %}
+                {% if detail.genres %}
+                <div>
+                    <div style="font-size:0.7rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Generi</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                        {% for g in detail.genres %}
+                        <span class="detail-genre-tag" style="font-size:0.7rem;">{{ g }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>{# /sidebar #}
+</div>{# /detail-body #}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function expandOverview() {
+    const p   = document.getElementById("detail-overview-text");
+    const btn = document.getElementById("detail-expand-btn");
+    if (!p || !btn) return;
+
+    const isExpanded = !p.classList.contains("is-clamped");
+    if (isExpanded) {
+        p.classList.add("is-clamped");
+        btn.innerHTML = '<i data-lucide="chevron-down" style="width:13px;height:13px;stroke:currentColor;stroke-width:2.5;pointer-events:none;"></i> Leggi tutto';
+    } else {
+        p.classList.remove("is-clamped");
+        btn.innerHTML = '<i data-lucide="chevron-up" style="width:13px;height:13px;stroke:currentColor;stroke-width:2.5;pointer-events:none;"></i> Mostra meno';
+    }
+    if (window.lucide) lucide.createIcons();
+}
+
+// Hide expand button if text is not actually clamped (short overviews)
+document.addEventListener("DOMContentLoaded", function() {
+    const p   = document.getElementById("detail-overview-text");
+    const btn = document.getElementById("detail-expand-btn");
+    if (!p || !btn) return;
+    // Compare scroll height vs actual height — if equal, text fits, hide button
+    if (p.scrollHeight <= p.clientHeight + 4) {
+        btn.style.display = "none";
+        p.classList.remove("is-clamped");
+    }
+});
+
+async function toggleFeedback(btn, type) {
+    const title = btn.dataset.title;
+    const contentType = btn.dataset.type;
+
+    try {
+        const res = await fetch("/feedback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title, content_type: contentType, feedback_type: type })
+        });
+        const data = await res.json();
+        if (data.status !== "ok") return;
+
+        if (type === "liked") {
+            const isNowLiked = btn.classList.contains("detail-btn-secondary");
+            if (isNowLiked) {
+                btn.className = "detail-btn detail-btn-liked";
+                btn.innerHTML = `<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Nei preferiti`;
+            } else {
+                btn.className = "detail-btn detail-btn-secondary";
+                btn.innerHTML = `<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Aggiungi ai preferiti`;
+            }
+        } else if (type === "seen") {
+            const isNowSeen = btn.classList.contains("detail-btn-secondary");
+            if (isNowSeen) {
+                btn.className = "detail-btn detail-btn-seen";
+                btn.innerHTML = `<i data-lucide="check-circle" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Già visto`;
+            } else {
+                btn.className = "detail-btn detail-btn-secondary";
+                btn.innerHTML = `<i data-lucide="eye" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Segna come visto`;
+            }
+        }
+
+        if (window.lucide) lucide.createIcons();
+    } catch(e) {
+        console.error(e);
+    }
+}
+</script>
+{% endblock %}

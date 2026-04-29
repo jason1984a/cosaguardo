@@ -34,6 +34,8 @@ from core.recommendation_api import (
     get_now_playing,
     get_upcoming,
     get_top_rated_recent,
+    get_detail_movie,
+    get_detail_tv,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
@@ -602,3 +604,91 @@ def watch_providers(title: str = "", content_type: str = "movie"):
     if not title.strip():
         return {}
     return get_watch_providers(title.strip(), content_type=content_type)
+
+
+@app.get("/film/{tmdb_id}", response_class=HTMLResponse)
+def film_detail(request: Request, tmdb_id: int):
+    detail = get_detail_movie(tmdb_id)
+    if not detail:
+        return RedirectResponse(url="/", status_code=302)
+
+    user_id = request.session.get("user_id")
+    title_state = {}
+    if user_id and detail.get("title"):
+        title_state = get_title_states_map(user_id, "movie").get(
+            detail["title"].strip().lower(), {}
+        )
+
+    # Raccomandazioni simili dal motore interno
+    similar = []
+    if detail.get("title"):
+        try:
+            res = recommend_from_seed_titles([detail["title"]], top_k=6, per_seed_limit=20)
+            for rec in res.get("recommendations", [])[:6]:
+                tmdb_info = get_movie_tmdb_info(rec["title"])
+                if tmdb_info and tmdb_info.get("poster_url"):
+                    similar.append({
+                        "title":      tmdb_info.get("display_title") or rec["title"],
+                        "poster_url": tmdb_info["poster_url"],
+                        "tmdb_id":    tmdb_info.get("tmdb_id"),
+                        "content_type": "movie",
+                    })
+        except Exception:
+            pass
+
+    return templates.TemplateResponse(
+        request=request,
+        name="detail.html",
+        context={
+            "request":    request,
+            "detail":     detail,
+            "similar":    similar,
+            "is_logged_in": bool(user_id),
+            "is_liked":   title_state.get("preference") == "liked",
+            "is_seen":    title_state.get("seen", 0) == 1,
+        },
+    )
+
+
+@app.get("/serie/{tmdb_id}", response_class=HTMLResponse)
+def serie_detail(request: Request, tmdb_id: int):
+    detail = get_detail_tv(tmdb_id)
+    if not detail:
+        return RedirectResponse(url="/", status_code=302)
+
+    user_id = request.session.get("user_id")
+    title_state = {}
+    if user_id and detail.get("title"):
+        title_state = get_title_states_map(user_id, "tv").get(
+            detail["title"].strip().lower(), {}
+        )
+
+    # Raccomandazioni simili
+    similar = []
+    if detail.get("title"):
+        try:
+            res = recommend_tv_from_seed_titles([detail["title"]])
+            for rec in res.get("recommendations", [])[:6]:
+                pp = rec.get("poster_path", "")
+                similar.append({
+                    "title":        rec.get("title", ""),
+                    "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
+                    "tmdb_id":      rec.get("tv_id"),
+                    "content_type": "tv",
+                })
+        except Exception:
+            pass
+
+    return templates.TemplateResponse(
+        request=request,
+        name="detail.html",
+        context={
+            "request":    request,
+            "detail":     detail,
+            "similar":    similar,
+            "is_logged_in": bool(user_id),
+            "is_liked":   title_state.get("preference") == "liked",
+            "is_seen":    title_state.get("seen", 0) == 1,
+        },
+    )
+

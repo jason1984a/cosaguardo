@@ -23,15 +23,9 @@
             <div class="hero-trending-row" id="hero-trending-row">
                 {% if top_rated %}
                     {% for item in top_rated %}
-                        <article class="trend-mini-card trend-mini-card--hot"
-                            data-cinema-title="{{ item.title | e }}"
-                            data-cinema-poster="{{ item.poster_url }}"
-                            data-cinema-overview="{{ (item.overview or '') | e }}"
-                            data-cinema-vote="{{ item.vote_average or '' }}"
-                            data-cinema-date="{{ item.release_date or '' }}"
-                            data-cinema-tmdb-id="{{ item.tmdb_id or '' }}"
-                            data-cinema-type="top_rated"
-                            data-cinema-content-type="{{ item.content_type }}">
+                        <a href="/{% if item.content_type == 'tv' %}serie{% else %}film{% endif %}/{{ item.tmdb_id }}"
+                            class="trend-mini-card trend-mini-card--hot"
+                            style="display:block;text-decoration:none;">
                             <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" onerror="this.style.display='none'">
                             <div class="trend-mini-overlay">
                                 <span class="trend-mini-type {{ 'trend-type-tv' if item.content_type == 'tv' else 'trend-type-movie' }}">{{ item.label }}</span>
@@ -40,7 +34,7 @@
                                 {% endif %}
                                 <strong>{{ item.title }}</strong>
                             </div>
-                        </article>
+                        </a>
                     {% endfor %}
                 {% else %}
                     <p style="color: var(--muted); padding: 16px;">Nessun contenuto disponibile.</p>
@@ -168,14 +162,9 @@
             <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-np" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="personal-strip-row cinema-strip-row" id="cinema-now-row">
                 {% for item in now_playing %}
-                <article class="personal-card cinema-card"
-                    data-cinema-title="{{ item.title | e }}"
-                    data-cinema-poster="{{ item.poster_url }}"
-                    data-cinema-overview="{{ (item.overview or '') | e }}"
-                    data-cinema-vote="{{ item.vote_average or '' }}"
-                    data-cinema-date="{{ item.release_date or '' }}"
-                    data-cinema-tmdb-id="{{ item.tmdb_id or '' }}"
-                    data-cinema-type="now_playing">
+                <a href="/film/{{ item.tmdb_id }}"
+                    class="personal-card cinema-card"
+                    style="display:flex;flex-direction:column;text-decoration:none;">
                     <div class="personal-card-poster">
                         <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
                         <span class="personal-card-type badge-movie">Film</span>
@@ -189,7 +178,7 @@
                         <div class="cinema-card-date">{{ item.release_date[:7] }}</div>
                         {% endif %}
                     </div>
-                </article>
+                </a>
                 {% endfor %}
             </div>
             <button class="trend-nav trend-nav-right cinema-nav-right cinema-nav-right-np" type="button" aria-label="Scorri a destra">›</button>
@@ -465,8 +454,14 @@ document.addEventListener("DOMContentLoaded", function () {
 
         cinemaTitle.textContent   = title;
         cinemaOverview.textContent = overview || "Nessuna descrizione disponibile.";
-        cinemaPoster.src = poster;
         cinemaPoster.alt = title;
+        cinemaPoster.src = "";          // reset first to force reload
+        if (poster) {
+            cinemaPoster.src = poster;
+            cinemaPoster.style.display = "block";
+        } else {
+            cinemaPoster.style.display = "none";
+        }
 
         // Badge e CTA differenziati per tipo
         if (type === "now_playing") {
