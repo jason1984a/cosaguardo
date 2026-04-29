@@ -50,7 +50,7 @@
         <div class="personal-strip-header">
             <span class="personal-strip-label">✦ Scelti per te</span>
         </div>
-        <div class="personal-strip-wrap">
+        <div class="personal-strip-wrap personal-strip-wrap--nav">
             <button class="trend-nav trend-nav-left personal-nav-left" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="personal-strip-row" id="personal-strip-row">
                 <!-- skeleton cards mentre carica -->
@@ -337,8 +337,17 @@ document.addEventListener("DOMContentLoaded", function () {
                         ? `<img src="${p.poster_url}" alt="${escHtml(p.title)}" loading="lazy">`
                         : `<div class="personal-card-no-poster"><i data-lucide="film" style="width:32px;height:32px;opacity:.4;"></i></div>`;
 
+                    // Build detail URL — tmdb_id may come as number or string
+                    const tmdbId = p.tmdb_id || p.tv_id || null;
+                    const basePath = (p.content_type === 'tv') ? 'serie' : 'film';
+                    const detailUrl = tmdbId ? `/${basePath}/${tmdbId}` : null;
+
                     return `
-                    <article class="personal-card" data-title="${escAttr(p.title)}" data-type="${escAttr(p.content_type)}">
+                    <a ${detailUrl ? `href="${detailUrl}"` : `href="#" onclick="searchByTitle(event, '${escAttr(p.title)}', '${escAttr(p.content_type)}')"`}
+                       class="personal-card"
+                       data-title="${escAttr(p.title)}"
+                       data-type="${escAttr(p.content_type)}"
+                       style="text-decoration:none;">
                         <div class="personal-card-poster">
                             ${posterHtml}
                             <span class="personal-card-type ${typeClass}">${typeLabel}</span>
@@ -349,7 +358,7 @@ document.addEventListener("DOMContentLoaded", function () {
                             <div class="personal-card-title">${escHtml(p.title)}</div>
                             ${p.reason ? `<p class="personal-card-reason">${escHtml(p.reason)}</p>` : ""}
                         </div>
-                    </article>`;
+                    </a>`;
                 }).join("");
 
                 // Re-init lucide icons
@@ -371,6 +380,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 personalRow.querySelectorAll(".personal-card-add-btn").forEach(btn => {
                     btn.addEventListener("click", function(e) {
                         e.stopPropagation();
+                        e.preventDefault();
                         const title = this.dataset.title;
                         const type  = this.dataset.type;
                         const inputs = document.querySelectorAll('input[name^="movie"]');
@@ -607,6 +617,19 @@ document.addEventListener("DOMContentLoaded", function () {
         rBtn.addEventListener("click", () => row.scrollBy({ left:  440, behavior: "smooth" }));
     });
     // ────────────────────────────────────────────────────────────────────────
+
+    // Fallback: se non c'è tmdb_id, pre-compila il form e scrolla
+    function searchByTitle(e, title, type) {
+        e.preventDefault();
+        const radio = document.querySelector('input[name="content_type"][value="' + type + '"]');
+        if (radio) radio.click();
+        const inputs = document.querySelectorAll('input[name^="movie"]');
+        if (inputs.length > 0) {
+            inputs[0].value = title;
+            inputs[0].focus();
+        }
+        document.getElementById("search-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
 
     function escHtml(s) {
         return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");

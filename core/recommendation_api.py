@@ -1053,6 +1053,7 @@ def get_movie_tmdb_info(title: str):
                 "poster_url": poster_url,
                 "display_title": display_title,
                 "overview": overview,
+                "tmdb_id": first.get("id"),
             }
 
     except Exception:
@@ -1062,6 +1063,7 @@ def get_movie_tmdb_info(title: str):
         "poster_url": None,
         "display_title": title,
         "overview": None,
+        "tmdb_id": None,
     }
 
 

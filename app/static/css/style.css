@@ -2546,3 +2546,26 @@ body {
 }
 /* ─────────────────────────────────────────────────────────────────────────── */
 
+/* personal-card-wrap removed — card is now directly an <a> */
+
+/* ── NAV ARROWS: always visible on desktop for personal strip ────────────── */
+.personal-strip-wrap--nav .trend-nav {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.personal-strip-wrap--nav .trend-nav-left {
+    left: -18px;
+}
+
+.personal-strip-wrap--nav .trend-nav-right {
+    right: -18px;
+}
+
+@media (max-width: 760px) {
+    .personal-strip-wrap--nav .trend-nav {
+        display: none;  /* su mobile si scorre con swipe */
+    }
+}
+/* ─────────────────────────────────────────────────────────────────────────── */
+

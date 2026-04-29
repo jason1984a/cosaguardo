@@ -71,12 +71,22 @@ def normalize_movie_rec(rec):
         except Exception:
             poster = None
 
+    # Recupera tmdb_id se non già presente
+    tmdb_id = rec.get("tmdb_id")
+    if not tmdb_id:
+        try:
+            info = get_movie_tmdb_info(rec.get("title", ""))
+            tmdb_id = info.get("tmdb_id") if info else None
+        except Exception:
+            tmdb_id = None
+
     return {
         "title": rec.get("title", ""),
         "content_type": "movie",
         "reason": rec.get("explanation") or "Compatibile con i tuoi gusti recenti.",
         "score": round(rec.get("match_score", 0), 1) if rec.get("match_score") else None,
         "poster_url": poster,
+        "tmdb_id": tmdb_id,
     }
 
 
@@ -92,6 +102,7 @@ def normalize_tv_rec(rec):
         "reason": rec.get("explanation") or "Compatibile con i tuoi gusti recenti.",
         "score": round(rec.get("match_score", 0), 1) if rec.get("match_score") else None,
         "poster_url": poster,
+        "tmdb_id": rec.get("tv_id") or rec.get("tmdb_id"),
     }
 
 
