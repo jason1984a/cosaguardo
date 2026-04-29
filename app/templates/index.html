@@ -195,14 +195,10 @@
             <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-up" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="personal-strip-row cinema-strip-row" id="cinema-upcoming-row">
                 {% for item in upcoming %}
-                <article class="personal-card cinema-card cinema-card--upcoming"
-                    data-cinema-title="{{ item.title | e }}"
-                    data-cinema-poster="{{ item.poster_url }}"
-                    data-cinema-overview="{{ (item.overview or '') | e }}"
-                    data-cinema-vote="{{ item.vote_average or '' }}"
-                    data-cinema-date="{{ item.release_date or '' }}"
-                    data-cinema-tmdb-id="{{ item.tmdb_id or '' }}"
-                    data-cinema-type="upcoming">
+                <a href="/film/{{ item.tmdb_id }}"
+                    class="personal-card cinema-card cinema-card--upcoming"
+                    style="display:flex;flex-direction:column;text-decoration:none;"
+                    {% if not item.tmdb_id %}onclick="return false;"{% endif %}>
                     <div class="personal-card-poster">
                         <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
                         <span class="personal-card-type badge-upcoming">Prossimamente</span>
@@ -213,7 +209,7 @@
                     <div class="personal-card-body">
                         <div class="personal-card-title">{{ item.title }}</div>
                     </div>
-                </article>
+                </a>
                 {% endfor %}
             </div>
             <button class="trend-nav trend-nav-right cinema-nav-right cinema-nav-right-up" type="button" aria-label="Scorri a destra">›</button>
@@ -276,7 +272,7 @@
                     <i data-lucide="map-pin" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
                     <span id="cinema-modal-cta-primary-text">Cerca al cinema</span>
                 </a>
-                <a id="cinema-modal-cta-tmdb" href="#" target="_blank" class="modal-btn secondary">
+                <a id="cinema-modal-cta-tmdb" href="#" class="modal-btn secondary">
                     <i data-lucide="info" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
                     Scheda completa
                 </a>
@@ -596,9 +592,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
         // Link scheda TMDb (search)
         const tmdbId = card.dataset.cinemaTmdbId;
+        const contentType = card.dataset.cinemaContentType || "movie";
+        const internalPath = contentType === "tv" ? "serie" : "film";
         cinemaCtaTmdb.href = tmdbId
-            ? `https://www.themoviedb.org/movie/${tmdbId}`
+            ? `/${internalPath}/${tmdbId}`
             : `https://www.themoviedb.org/search?query=${encodeURIComponent(title)}`;
+        cinemaCtaTmdb.target = tmdbId ? "_self" : "_blank";
 
         cinemaModal.classList.add("is-open");
         cinemaModal.setAttribute("aria-hidden", "false");

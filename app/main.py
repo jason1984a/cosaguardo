@@ -122,6 +122,23 @@ def prettify_title(title: str) -> str:
     return title
 
 
+
+# ─── Cache RSS news (TTL 1 ora) ───────────────────────────────────────────
+_news_cache: dict = {"data": None, "ts": 0.0}
+_NEWS_TTL = 3600  # 1 ora
+
+
+def get_news_cached(limit: int = 8) -> list:
+    now = _time.time()
+    if _news_cache["data"] is not None and (now - _news_cache["ts"]) < _NEWS_TTL:
+        return _news_cache["data"]
+    fresh = get_cinema_news(limit=limit)
+    if fresh:
+        _news_cache["data"] = fresh
+        _news_cache["ts"] = now
+    return fresh or _news_cache.get("data") or []
+# ──────────────────────────────────────────────────────────────────────────
+
 @app.get("/")
 def home(request: Request):
     trending = get_trending_cached(limit=12)
