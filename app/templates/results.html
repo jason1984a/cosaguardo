@@ -64,6 +64,7 @@
                         data-is-liked="{{ 1 if rec.is_liked else 0 }}"
                         data-is-seen="{{ 1 if rec.is_seen else 0 }}"
                         data-is-disliked="{{ 1 if rec.is_disliked else 0 }}"
+                        data-tv-id="{{ rec.tv_id if rec.tv_id is defined else '' }}"
                     >
                         <div class="result-scroll-poster">
                             <div class="result-scroll-rank">{{ loop.index }}</div>
@@ -89,9 +90,9 @@
                             <div class="feedback-actions result-scroll-feedback"
                                  data-title="{{ rec.title }}"
                                  data-type="{{ content_type }}">
-                                <button class="feedback-btn {% if rec.is_liked %}active{% endif %}" data-feedback="liked">👍</button>
-                                <button class="feedback-btn {% if rec.is_disliked %}active{% endif %}" data-feedback="disliked">👎</button>
-                                <button class="feedback-btn {% if rec.is_seen %}active{% endif %}" data-feedback="seen">👁</button>
+                                <button class="feedback-btn {% if rec.is_liked %}active{% endif %}" data-feedback="liked"><i data-lucide="thumbs-up" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i></button>
+                                <button class="feedback-btn {% if rec.is_disliked %}active{% endif %}" data-feedback="disliked"><i data-lucide="thumbs-down" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i></button>
+                                <button class="feedback-btn {% if rec.is_seen %}active{% endif %}" data-feedback="seen"><i data-lucide="eye" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i></button>
                             </div>
 
                             <div class="result-scroll-more">Tocca per dettagli</div>
@@ -130,8 +131,9 @@
             <p id="results-modal-why" class="modal-reason"></p>
 
             <div class="modal-actions">
-                <a href="#" id="results-modal-watch" class="modal-btn primary" target="_blank">▶ Dove guardarlo</a>
-                <button id="results-modal-fav" class="modal-btn secondary">+ Preferiti</button>
+                <div id="results-modal-providers" style="margin-bottom:12px;"></div>
+                <a href="#" id="results-modal-watch" class="modal-btn primary" target="_blank" style="display:none;"><i data-lucide="play-circle" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Dove guardarlo</a>
+                <button id="results-modal-fav" class="modal-btn secondary"><i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Preferiti</button>
             </div>
         </div>
     </div>
@@ -155,6 +157,52 @@ document.addEventListener("DOMContentLoaded", function () {
     const whyEl      = document.getElementById("results-modal-why");
     const watchBtn   = document.getElementById("results-modal-watch");
     const favBtn     = document.getElementById("results-modal-fav");
+    const providersEl = document.getElementById("results-modal-providers");
+
+    async function loadProviders(title, type, tvId) {
+        providersEl.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Caricamento piattaforme...</p>';
+        watchBtn.style.display = "none";
+        try {
+            let res;
+            // Per le serie TV usiamo l'endpoint ottimizzato con tv_id (nessuna ricerca ridondante)
+            if (type === "tv" && tvId) {
+                res = await fetch(`/watch-providers/tv/${encodeURIComponent(tvId)}`);
+            } else {
+                res = await fetch(`/watch-providers?title=${encodeURIComponent(title)}&content_type=${type}`);
+            }
+            const data = await res.json();
+            const flatrate = data.flatrate || [];
+            const rent = data.rent || [];
+            const link = data.link || "";
+
+            if (flatrate.length === 0 && rent.length === 0) {
+                providersEl.innerHTML = "";
+                if (link) { watchBtn.href = link; watchBtn.style.display = "flex"; }
+                return;
+            }
+
+            let html = "";
+            const renderProviders = (items, label) => {
+                let h = `<div style="margin-bottom:10px;">
+                    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;font-weight:600;">${label}</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">`;
+                for (const p of items) {
+                    h += `<a href="${p.link}" target="_blank" title="${p.name}"
+                        style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);text-decoration:none;color:var(--text);font-size:0.8rem;font-weight:600;">
+                        ${p.logo_url ? `<img src="${p.logo_url}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;">` : ""}
+                        ${p.name}</a>`;
+                }
+                h += `</div></div>`;
+                return h;
+            };
+            if (flatrate.length > 0) html += renderProviders(flatrate, "INCLUSO IN");
+            if (rent.length > 0) html += renderProviders(rent, "IN NOLEGGIO/ACQUISTO");
+            providersEl.innerHTML = html;
+        } catch(e) {
+            providersEl.innerHTML = "";
+            watchBtn.style.display = "flex";
+        }
+    }
 
     function openModal(card) {
         const title    = card.dataset.title       || "";
@@ -165,6 +213,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const match    = card.dataset.match       || "";
         const badge    = card.dataset.badge       || "";
         const isLiked  = card.dataset.isLiked     === "1";
+        const tvId     = card.dataset.tvId        || "";
 
         titleEl.textContent    = title;
         typeEl.textContent     = type === "tv" ? "SERIE TV" : "FILM";
@@ -183,7 +232,10 @@ document.addEventListener("DOMContentLoaded", function () {
         }
 
         favBtn.classList.toggle("active", isLiked);
-        favBtn.textContent = isLiked ? "✓ Nei preferiti" : "+ Preferiti";
+        favBtn.innerHTML = isLiked
+            ? '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;fill:currentColor;"></i> Nei preferiti'
+            : '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Preferiti';
+        lucide.createIcons();
 
         favBtn.onclick = function () {
             if (card.dataset.isLiked === "1") return;
@@ -197,7 +249,8 @@ document.addEventListener("DOMContentLoaded", function () {
                 if (data.status === "ok") {
                     card.dataset.isLiked = "1";
                     favBtn.classList.add("active");
-                    favBtn.textContent = "✓ Nei preferiti";
+                    favBtn.innerHTML = '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;fill:currentColor;"></i> Nei preferiti';
+                    lucide.createIcons();
                     const likedBtn = card.querySelector('[data-feedback="liked"]');
                     if (likedBtn) likedBtn.classList.add("active");
                 }
@@ -207,6 +260,8 @@ document.addEventListener("DOMContentLoaded", function () {
         modal.classList.add("is-open");
         modal.setAttribute("aria-hidden", "false");
         document.body.style.overflow = "hidden";
+
+        loadProviders(title, type, tvId);
     }
 
     function closeModal() {

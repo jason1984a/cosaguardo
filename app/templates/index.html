@@ -45,6 +45,31 @@
         </div>
     </section>
 
+    {% if is_logged_in %}
+    <!-- CAROSELLO PERSONALE (solo utenti loggati) -->
+    <section class="home-personal-strip" id="home-personal-strip" style="display:none;">
+        <div class="personal-strip-header">
+            <span class="personal-strip-label">✦ Scelti per te</span>
+        </div>
+        <div class="personal-strip-wrap">
+            <button class="trend-nav trend-nav-left personal-nav-left" type="button" aria-label="Scorri a sinistra">‹</button>
+            <div class="personal-strip-row" id="personal-strip-row">
+                <!-- skeleton cards mentre carica -->
+                {% for _ in range(6) %}
+                <div class="personal-card personal-card--skeleton">
+                    <div class="personal-card-poster skeleton-pulse"></div>
+                    <div class="personal-card-body">
+                        <div class="skeleton-line skeleton-pulse" style="width:70%;height:12px;border-radius:6px;"></div>
+                        <div class="skeleton-line skeleton-pulse" style="width:50%;height:10px;border-radius:6px;margin-top:6px;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <button class="trend-nav trend-nav-right personal-nav-right" type="button" aria-label="Scorri a destra">›</button>
+        </div>
+    </section>
+    {% endif %}
+
     <section class="search-panel search-panel-v2" id="search-panel">
         <div class="panel-header panel-header-v2">
             <div>
@@ -129,33 +154,123 @@
         </div>
     </section>
 
-    <section class="home-picks" id="home-picks">
-        <div class="section-heading">
-            <div>
-                <span class="section-kicker">Di tendenza oggi</span>
-                <h2>Da non perdere adesso</h2>
-            </div>
+    {% if now_playing %}
+    <section class="cinema-strip-section">
+        <div class="personal-strip-header">
+            <span class="personal-strip-label">🎬 In sala adesso</span>
         </div>
-
-        <div class="home-picks-grid">
-            {% for item in trending[:4] %}
-                <article class="pick-card">
-                    <div class="pick-poster">
-                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" onerror="this.style.display='none'">
+        <div class="personal-strip-wrap">
+            <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-np" type="button" aria-label="Scorri a sinistra">‹</button>
+            <div class="personal-strip-row cinema-strip-row" id="cinema-now-row">
+                {% for item in now_playing %}
+                <article class="personal-card cinema-card"
+                    data-cinema-title="{{ item.title | e }}"
+                    data-cinema-poster="{{ item.poster_url }}"
+                    data-cinema-overview="{{ (item.overview or '') | e }}"
+                    data-cinema-vote="{{ item.vote_average or '' }}"
+                    data-cinema-date="{{ item.release_date or '' }}"
+                    data-cinema-tmdb-id="{{ item.tmdb_id or '' }}"
+                    data-cinema-type="now_playing">
+                    <div class="personal-card-poster">
+                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+                        <span class="personal-card-type badge-movie">Film</span>
+                        {% if item.vote_average and item.vote_average > 0 %}
+                        <span class="personal-card-score">{{ item.vote_average }}/10</span>
+                        {% endif %}
                     </div>
-                    <div class="pick-body">
-                        <span class="pick-tag">{{ item.label }}</span>
-                        <h3>{{ item.title }}</h3>
-                        {% if item.overview %}
-                            <p>{{ item.overview }}{% if item.overview|length == 120 %}…{% endif %}</p>
+                    <div class="personal-card-body">
+                        <div class="personal-card-title">{{ item.title }}</div>
+                        {% if item.release_date %}
+                        <div class="cinema-card-date">{{ item.release_date[:7] }}</div>
                         {% endif %}
                     </div>
                 </article>
-            {% endfor %}
+                {% endfor %}
+            </div>
+            <button class="trend-nav trend-nav-right cinema-nav-right cinema-nav-right-np" type="button" aria-label="Scorri a destra">›</button>
         </div>
     </section>
+    {% endif %}
+
+    {% if upcoming %}
+    <section class="cinema-strip-section">
+        <div class="personal-strip-header">
+            <span class="personal-strip-label">🔜 Prossimamente</span>
+        </div>
+        <div class="personal-strip-wrap">
+            <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-up" type="button" aria-label="Scorri a sinistra">‹</button>
+            <div class="personal-strip-row cinema-strip-row" id="cinema-upcoming-row">
+                {% for item in upcoming %}
+                <article class="personal-card cinema-card cinema-card--upcoming"
+                    data-cinema-title="{{ item.title | e }}"
+                    data-cinema-poster="{{ item.poster_url }}"
+                    data-cinema-overview="{{ (item.overview or '') | e }}"
+                    data-cinema-vote="{{ item.vote_average or '' }}"
+                    data-cinema-date="{{ item.release_date or '' }}"
+                    data-cinema-tmdb-id="{{ item.tmdb_id or '' }}"
+                    data-cinema-type="upcoming">
+                    <div class="personal-card-poster">
+                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+                        <span class="personal-card-type badge-upcoming">Prossimamente</span>
+                        {% if item.release_date %}
+                        <span class="cinema-card-release-overlay">{{ item.release_date[5:] | replace("-", "/") }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="personal-card-body">
+                        <div class="personal-card-title">{{ item.title }}</div>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            <button class="trend-nav trend-nav-right cinema-nav-right cinema-nav-right-up" type="button" aria-label="Scorri a destra">›</button>
+        </div>
+    </section>
+    {% endif %}
 
 </div>
+
+<!-- MODAL CINEMA -->
+<div class="dashboard-modal" id="cinema-modal" aria-hidden="true">
+    <div class="dashboard-modal-backdrop" data-cinema-close="true"></div>
+    <div class="dashboard-modal-card">
+        <button type="button" class="dashboard-modal-close" id="cinema-modal-close" aria-label="Chiudi">✕</button>
+
+        <div class="dashboard-modal-poster-wrap">
+            <img id="cinema-modal-poster" src="" alt="" class="dashboard-modal-poster">
+        </div>
+
+        <div class="dashboard-modal-content">
+            <div class="dashboard-editorial-badge" id="cinema-modal-badge"></div>
+            <h3 id="cinema-modal-title" class="modal-title-big"></h3>
+
+            <p id="cinema-modal-overview" class="modal-reason" style="color:var(--muted,#94a3b8);font-size:0.9rem;margin-bottom:14px;"></p>
+
+            <div class="modal-actions">
+                <!-- CTA dinamica: varia in base a now_playing vs upcoming -->
+                <a id="cinema-modal-cta-primary" href="#" target="_blank" class="modal-btn primary" style="display:none;">
+                    <i data-lucide="map-pin" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    <span id="cinema-modal-cta-primary-text">Cerca al cinema</span>
+                </a>
+                <a id="cinema-modal-cta-tmdb" href="#" target="_blank" class="modal-btn secondary">
+                    <i data-lucide="info" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    Scheda completa
+                </a>
+            </div>
+
+            <!-- Info data uscita (prossimamente) -->
+            <div id="cinema-modal-release-wrap" style="display:none;margin-top:14px;">
+                <div style="font-size:0.75rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Data di uscita</div>
+                <div id="cinema-modal-release" style="font-size:1rem;font-weight:700;color:#fcd34d;"></div>
+            </div>
+
+            <!-- Nota no-streaming -->
+            <div id="cinema-modal-note" style="margin-top:14px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);">
+                <p style="margin:0;font-size:0.78rem;color:var(--muted,#94a3b8);line-height:1.5;" id="cinema-modal-note-text"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -163,8 +278,8 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const row = document.getElementById("hero-trending-row");
-    const leftBtn = document.querySelector(".trend-nav-left");
-    const rightBtn = document.querySelector(".trend-nav-right");
+    const leftBtn = document.querySelector(".trend-nav-left:not(.personal-nav-left)");
+    const rightBtn = document.querySelector(".trend-nav-right:not(.personal-nav-right)");
 
     if (row && leftBtn && rightBtn) {
         const scrollAmount = 480;
@@ -186,6 +301,243 @@ document.addEventListener("DOMContentLoaded", function () {
             const isOpen = extraTitles.classList.toggle("is-open");
             addTitleBtn.textContent = isOpen ? "−" : "+";
         });
+    }
+
+    // ── Carosello personale ──────────────────────────────────────────────
+    const personalStrip = document.getElementById("home-personal-strip");
+    const personalRow   = document.getElementById("personal-strip-row");
+    const pNavLeft      = document.querySelector(".personal-nav-left");
+    const pNavRight     = document.querySelector(".personal-nav-right");
+
+    if (personalStrip && personalRow) {
+        // Scroll buttons
+        if (pNavLeft && pNavRight) {
+            pNavLeft.addEventListener("click",  () => personalRow.scrollBy({ left: -480, behavior: "smooth" }));
+            pNavRight.addEventListener("click", () => personalRow.scrollBy({ left:  480, behavior: "smooth" }));
+        }
+
+        // Carica consigli personali
+        fetch("/home-picks")
+            .then(r => {
+                if (!r.ok) return null;
+                return r.json();
+            })
+            .then(picks => {
+                if (!picks || picks.length === 0) {
+                    personalStrip.style.display = "none";
+                    return;
+                }
+
+                // Costruisce le card
+                personalRow.innerHTML = picks.map(p => {
+                    const typeLabel  = p.content_type === "tv" ? "Serie TV" : "Film";
+                    const typeClass  = p.content_type === "tv" ? "badge-tv" : "badge-movie";
+                    const scoreText  = p.score ? `${p.score}/10` : "";
+                    const posterHtml = p.poster_url
+                        ? `<img src="${p.poster_url}" alt="${escHtml(p.title)}" loading="lazy">`
+                        : `<div class="personal-card-no-poster"><i data-lucide="film" style="width:32px;height:32px;opacity:.4;"></i></div>`;
+
+                    return `
+                    <article class="personal-card" data-title="${escAttr(p.title)}" data-type="${escAttr(p.content_type)}">
+                        <div class="personal-card-poster">
+                            ${posterHtml}
+                            <span class="personal-card-type ${typeClass}">${typeLabel}</span>
+                            ${scoreText ? `<span class="personal-card-score">${scoreText}</span>` : ""}
+                            <button class="personal-card-add-btn" data-title="${escAttr(p.title)}" data-type="${escAttr(p.content_type)}" title="Usa come punto di partenza">+</button>
+                        </div>
+                        <div class="personal-card-body">
+                            <div class="personal-card-title">${escHtml(p.title)}</div>
+                            ${p.reason ? `<p class="personal-card-reason">${escHtml(p.reason)}</p>` : ""}
+                        </div>
+                    </article>`;
+                }).join("");
+
+                // Re-init lucide icons
+                if (window.lucide) lucide.createIcons();
+
+                // Sincronizza stato + / - di tutti i bottoni con i valori degli input
+                function syncAddBtns() {
+                    const inputs = document.querySelectorAll('input[name^="movie"]');
+                    const filled = new Set(
+                        Array.from(inputs).map(i => i.value.trim().toLowerCase()).filter(Boolean)
+                    );
+                    personalRow.querySelectorAll(".personal-card-add-btn").forEach(b => {
+                        const isAdded = filled.has((b.dataset.title || "").toLowerCase());
+                        b.textContent = isAdded ? "\u2212" : "+";
+                        b.classList.toggle("is-added", isAdded);
+                    });
+                }
+
+                personalRow.querySelectorAll(".personal-card-add-btn").forEach(btn => {
+                    btn.addEventListener("click", function(e) {
+                        e.stopPropagation();
+                        const title = this.dataset.title;
+                        const type  = this.dataset.type;
+                        const inputs = document.querySelectorAll('input[name^="movie"]');
+
+                        const alreadyIn = Array.from(inputs).find(
+                            i => i.value.trim().toLowerCase() === title.toLowerCase()
+                        );
+
+                        if (alreadyIn) {
+                            // Rimuovi e compatta i campi
+                            alreadyIn.value = "";
+                            const vals = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+                            inputs.forEach((inp, idx) => { inp.value = vals[idx] || ""; });
+                        } else {
+                            // Seleziona il tipo
+                            const radio = document.querySelector('input[name="content_type"][value="' + type + '"]');
+                            if (radio) radio.click();
+
+                            // Inserisce nel primo campo vuoto
+                            let placed = false;
+                            for (const inp of inputs) {
+                                if (!inp.value.trim()) {
+                                    inp.value = title;
+                                    inp.focus();
+                                    placed = true;
+                                    break;
+                                }
+                            }
+                            if (!placed && inputs.length > 0) {
+                                inputs[0].value = title;
+                                inputs[0].focus();
+                            }
+
+                            document.getElementById("search-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+
+                        syncAddBtns();
+                    });
+                });
+
+                // Aggiorna i bottoni anche quando l'utente modifica gli input manualmente
+                document.querySelectorAll('input[name^="movie"]').forEach(inp => {
+                    inp.addEventListener("input", syncAddBtns);
+                });
+
+                personalStrip.style.display = "";
+            })
+            .catch(() => {
+                if (personalStrip) personalStrip.style.display = "none";
+            });
+    }
+
+    // ── Modal cinema ─────────────────────────────────────────────────────────
+    const cinemaModal     = document.getElementById("cinema-modal");
+    const cinemaClose     = document.getElementById("cinema-modal-close");
+    const cinemaPoster    = document.getElementById("cinema-modal-poster");
+    const cinemaBadge     = document.getElementById("cinema-modal-badge");
+    const cinemaTitle     = document.getElementById("cinema-modal-title");
+    const cinemaOverview  = document.getElementById("cinema-modal-overview");
+    const cinemaCtaPrim   = document.getElementById("cinema-modal-cta-primary");
+    const cinemaCtaText   = document.getElementById("cinema-modal-cta-primary-text");
+    const cinemaCtaTmdb   = document.getElementById("cinema-modal-cta-tmdb");
+    const cinemaRelWrap   = document.getElementById("cinema-modal-release-wrap");
+    const cinemaRelDate   = document.getElementById("cinema-modal-release");
+    const cinemaNoteText  = document.getElementById("cinema-modal-note-text");
+
+    function formatDate(iso) {
+        if (!iso || iso.length < 10) return iso;
+        const [y, m, d] = iso.split("-");
+        const months = ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"];
+        return `${parseInt(d)} ${months[parseInt(m)-1]} ${y}`;
+    }
+
+    function openCinemaModal(card) {
+        const title    = card.dataset.cinemaTitle   || "";
+        const poster   = card.dataset.cinemaPoster  || "";
+        const overview = card.dataset.cinemaOverview|| "";
+        const vote     = card.dataset.cinemaVote    || "";
+        const date     = card.dataset.cinemaDate    || "";
+        const type     = card.dataset.cinemaType    || "";
+
+        cinemaTitle.textContent   = title;
+        cinemaOverview.textContent = overview || "Nessuna descrizione disponibile.";
+        cinemaPoster.src = poster;
+        cinemaPoster.alt = title;
+
+        // Badge e CTA differenziati
+        if (type === "now_playing") {
+            cinemaBadge.textContent = "🎬 In sala adesso";
+            cinemaCtaText.textContent = "Cerca al cinema";
+            cinemaCtaPrim.href = `https://www.google.com/search?q=${encodeURIComponent(title + " cinema vicino a me")}`;
+            cinemaCtaPrim.style.display = "flex";
+            cinemaRelWrap.style.display = "none";
+            cinemaNoteText.textContent = "Questo film è attualmente in programmazione nelle sale cinematografiche. Non è ancora disponibile in streaming.";
+        } else {
+            cinemaBadge.textContent = "🔜 Prossimamente";
+            cinemaCtaPrim.style.display = "none";
+            if (date) {
+                cinemaRelWrap.style.display = "block";
+                cinemaRelDate.textContent = formatDate(date);
+            } else {
+                cinemaRelWrap.style.display = "none";
+            }
+            cinemaNoteText.textContent = "Non ancora uscito. Aggiungilo ai tuoi preferiti per trovarlo subito quando sarà disponibile in streaming.";
+        }
+
+        // Voto
+        if (vote && parseFloat(vote) > 0) {
+            cinemaTitle.insertAdjacentHTML("afterend",
+                `<div style="font-size:0.82rem;color:#fcd34d;font-weight:700;margin:4px 0 10px;">★ ${vote}/10</div>`
+            );
+        }
+
+        // Link scheda TMDb (search)
+        const tmdbId = card.dataset.cinemaTmdbId;
+        cinemaCtaTmdb.href = tmdbId
+            ? `https://www.themoviedb.org/movie/${tmdbId}`
+            : `https://www.themoviedb.org/search?query=${encodeURIComponent(title)}`;
+
+        cinemaModal.classList.add("is-open");
+        cinemaModal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+        if (window.lucide) lucide.createIcons();
+    }
+
+    function closeCinemaModal() {
+        cinemaModal.classList.remove("is-open");
+        cinemaModal.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+        // Rimuovi eventuale voto inserito dinamicamente
+        const voteEl = cinemaTitle.nextElementSibling;
+        if (voteEl && voteEl.style.color === "rgb(252, 211, 77)") voteEl.remove();
+    }
+
+    if (cinemaModal) {
+        document.querySelectorAll(".cinema-card").forEach(card => {
+            card.addEventListener("click", () => openCinemaModal(card));
+        });
+        cinemaClose.addEventListener("click", closeCinemaModal);
+        cinemaModal.addEventListener("click", e => {
+            if (e.target.dataset.cinemaClose === "true") closeCinemaModal();
+        });
+        document.addEventListener("keydown", e => {
+            if (e.key === "Escape" && cinemaModal.classList.contains("is-open")) closeCinemaModal();
+        });
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
+    // ── Nav caroselli cinema ────────────────────────────────────────────────
+    [
+        ["cinema-nav-left-np",  "cinema-nav-right-np",  "cinema-now-row"],
+        ["cinema-nav-left-up",  "cinema-nav-right-up",  "cinema-upcoming-row"],
+    ].forEach(([lClass, rClass, rowId]) => {
+        const row  = document.getElementById(rowId);
+        const lBtn = document.querySelector("." + lClass);
+        const rBtn = document.querySelector("." + rClass);
+        if (!row || !lBtn || !rBtn) return;
+        lBtn.addEventListener("click", () => row.scrollBy({ left: -440, behavior: "smooth" }));
+        rBtn.addEventListener("click", () => row.scrollBy({ left:  440, behavior: "smooth" }));
+    });
+    // ────────────────────────────────────────────────────────────────────────
+
+    function escHtml(s) {
+        return String(s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    }
+    function escAttr(s) {
+        return String(s || "").replace(/"/g,"&quot;").replace(/'/g,"&#39;");
     }
 });
 </script>

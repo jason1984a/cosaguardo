@@ -1117,3 +1117,166 @@ def get_trending_tmdb(limit: int = 12):
 
     except Exception:
         return []
+
+
+def get_now_playing(limit: int = 8) -> list:
+    """
+    Film attualmente in sala in Italia (aggiornato giornalmente da TMDb).
+    """
+    if not TMDB_API_KEY:
+        return []
+
+    try:
+        resp = requests.get(
+            "https://api.themoviedb.org/3/movie/now_playing",
+            params={"api_key": TMDB_API_KEY, "language": "it-IT", "region": "IT"},
+            timeout=5
+        )
+        results = []
+        for item in resp.json().get("results", [])[:limit]:
+            poster_path = item.get("poster_path")
+            if not poster_path:
+                continue
+            title = item.get("title") or item.get("original_title") or ""
+            if not title:
+                continue
+            results.append({
+                "tmdb_id": item.get("id"),
+                "title": title,
+                "poster_url": f"https://image.tmdb.org/t/p/w342{poster_path}",
+                "overview": (item.get("overview") or "")[:120],
+                "vote_average": round(item.get("vote_average", 0), 1),
+                "release_date": item.get("release_date", ""),
+                "content_type": "movie",
+                "label": "In sala",
+            })
+        return results
+    except Exception:
+        return []
+
+
+def get_upcoming(limit: int = 8) -> list:
+    """
+    Film in uscita prossimamente in Italia (aggiornato giornalmente da TMDb).
+    """
+    if not TMDB_API_KEY:
+        return []
+
+    try:
+        resp = requests.get(
+            "https://api.themoviedb.org/3/movie/upcoming",
+            params={"api_key": TMDB_API_KEY, "language": "it-IT", "region": "IT"},
+            timeout=5
+        )
+        results = []
+        for item in resp.json().get("results", [])[:limit]:
+            poster_path = item.get("poster_path")
+            if not poster_path:
+                continue
+            title = item.get("title") or item.get("original_title") or ""
+            if not title:
+                continue
+            results.append({
+                "tmdb_id": item.get("id"),
+                "title": title,
+                "poster_url": f"https://image.tmdb.org/t/p/w342{poster_path}",
+                "overview": (item.get("overview") or "")[:120],
+                "vote_average": round(item.get("vote_average", 0), 1),
+                "release_date": item.get("release_date", ""),
+                "content_type": "movie",
+                "label": "Prossimamente",
+            })
+        return results
+    except Exception:
+        return []
+
+# Mappa ID piattaforma TMDb → nome + colore brand
+PROVIDER_META = {
+    8:   {"name": "Netflix",        "color": "#E50914"},
+    9:   {"name": "Prime Video",    "color": "#00A8E0"},
+    10:  {"name": "Amazon Video",   "color": "#00A8E0"},
+    35:  {"name": "Rakuten TV",     "color": "#BF0000"},
+    39:  {"name": "NOW TV",         "color": "#00BCD4"},
+    40:  {"name": "Chili",          "color": "#FF6600"},
+    119: {"name": "Prime Video",    "color": "#00A8E0"},
+    149: {"name": "Rakuten TV",     "color": "#BF0000"},
+    337: {"name": "Disney+",        "color": "#113CCF"},
+    341: {"name": "Apple TV+",      "color": "#000000"},
+    350: {"name": "Apple TV+",      "color": "#000000"},
+    381: {"name": "Canal+",         "color": "#000000"},
+    531: {"name": "Paramount+",     "color": "#0064FF"},
+    619: {"name": "Disney+",        "color": "#113CCF"},
+}
+
+
+def get_watch_providers(title: str, content_type: str = "movie", country: str = "IT") -> dict:
+    """
+    Recupera le piattaforme streaming per un film o serie TV.
+    Restituisce dict con: flatrate, rent, buy, link.
+    """
+    if not TMDB_API_KEY or not title:
+        return {}
+
+    try:
+        # 1. Cerca il titolo su TMDb
+        if content_type == "tv":
+            search_url = "https://api.themoviedb.org/3/search/tv"
+        else:
+            search_url = "https://api.themoviedb.org/3/search/movie"
+
+        search_resp = requests.get(search_url, params={
+            "api_key": TMDB_API_KEY,
+            "query": title,
+            "language": "it-IT",
+        }, timeout=5)
+        results = search_resp.json().get("results", [])
+
+        if not results:
+            return {}
+
+        tmdb_id = results[0]["id"]
+
+        # 2. Recupera watch providers
+        if content_type == "tv":
+            providers_url = f"https://api.themoviedb.org/3/tv/{tmdb_id}/watch/providers"
+        else:
+            providers_url = f"https://api.themoviedb.org/3/movie/{tmdb_id}/watch/providers"
+
+        prov_resp = requests.get(providers_url, params={
+            "api_key": TMDB_API_KEY,
+        }, timeout=5)
+        country_data = prov_resp.json().get("results", {}).get(country, {})
+
+        if not country_data:
+            return {}
+
+        justwatch_link = country_data.get("link", "")
+
+        def parse_providers(items):
+            out = []
+            seen = set()
+            for p in (items or []):
+                name = p.get("provider_name", "")
+                if name in seen:
+                    continue
+                seen.add(name)
+                pid = p.get("provider_id")
+                logo_path = p.get("logo_path", "")
+                meta = PROVIDER_META.get(pid, {})
+                out.append({
+                    "name":     meta.get("name", name),
+                    "logo_url": f"https://image.tmdb.org/t/p/w45{logo_path}" if logo_path else "",
+                    "color":    meta.get("color", "#444"),
+                    "link":     justwatch_link,
+                })
+            return out
+
+        return {
+            "flatrate": parse_providers(country_data.get("flatrate", [])),
+            "rent":     parse_providers(country_data.get("rent", [])),
+            "buy":      parse_providers(country_data.get("buy", [])),
+            "link":     justwatch_link,
+        }
+
+    except Exception:
+        return {}

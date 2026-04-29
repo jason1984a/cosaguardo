@@ -9,31 +9,24 @@
     <!-- HERO DASHBOARD -->
     <section class="page-card dashboard-hero">
         <div class="dashboard-hero-inner">
-
             <div class="dashboard-hero-text">
-                <p class="dashboard-kicker">
-                    Area personale
-                </p>
-
+                <p class="dashboard-kicker">Area personale</p>
                 <h1 class="dashboard-title">
                     Bentornato{% if user_email %}, {{ user_email }}{% endif %} 👋
                 </h1>
-
                 <p class="dashboard-subtitle">
                     Riparti subito con nuovi consigli basati sui tuoi gusti.
                 </p>
             </div>
-
             <div class="dashboard-hero-action" style="display:flex; gap:10px;">
                 <a href="/" class="btn btn-primary">Nuova ricerca</a>
-
                 <form action="/logout" method="post">
                     <button type="submit" class="btn btn-secondary">
-                        🚪 Logout
+                        <i data-lucide="log-out" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                        Logout
                     </button>
                 </form>
             </div>
-
         </div>
     </section>
 
@@ -61,7 +54,6 @@
                         data-keywords="{{ rec.matched_keywords[:2] | join(', ') if rec.matched_keywords else '' }}"
                         data-is-liked="{{ 1 if rec.is_liked else 0 }}"
                     >
-
                         <div class="dashboard-pick-poster">
                             {% if rec.poster_url %}
                                 <img src="{{ rec.poster_url }}" alt="{{ rec.title }}">
@@ -71,98 +63,72 @@
                         </div>
 
                         <div class="dashboard-pick-content">
-
                             <div class="dashboard-pick-top">
                                 <span class="dashboard-editorial-badge">
-                                    {% if loop.first %}
-                                        ⭐ Miglior match
-                                    {% else %}
-                                        🎯 Per te
-                                    {% endif %}
+                                    {% if loop.first %}⭐ Miglior match{% else %}🎯 Per te{% endif %}
                                 </span>
-
-                                <div class="dashboard-pick-title">
-                                    {{ rec.title }}
-                                </div>
-
-                                <span class="dashboard-badge">
-                                    {{ rec.content_type|upper }}
-                                </span>
+                                <div class="dashboard-pick-title">{{ rec.title }}</div>
+                                <span class="dashboard-badge">{{ rec.content_type|upper }}</span>
                             </div>
 
                             <p class="dashboard-pick-reason">
                                 {{ rec.reason if rec.reason else "Una scelta compatibile con i tuoi gusti." }}
                             </p>
 
-                            <!-- ✅ FEEDBACK ACTIONS -->
                             <div class="feedback-actions"
                                  data-title="{{ rec.title }}"
                                  data-type="{{ rec.content_type }}">
-                              <button class="feedback-btn" data-feedback="liked">👍</button>
-                              <button class="feedback-btn" data-feedback="disliked">👎</button>
-                              <button class="feedback-btn" data-feedback="seen">👁</button>
+                                <button class="feedback-btn" data-feedback="liked">
+                                    <i data-lucide="thumbs-up" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                                </button>
+                                <button class="feedback-btn" data-feedback="disliked">
+                                    <i data-lucide="thumbs-down" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                                </button>
+                                <button class="feedback-btn" data-feedback="seen">
+                                    <i data-lucide="eye" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                                </button>
                             </div>
 
-
                             <div class="dashboard-pick-more">Tocca per saperne di più</div>
-
                         </div>
                     </div>
                 {% endfor %}
             </div>
         {% else %}
-            <div style="
-                padding: 18px;
-                border-radius: 16px;
-                border: 1px dashed var(--border);
-                background: rgba(255,255,255,0.02);
-                color: var(--muted);
-            ">
+            <div style="padding:18px;border-radius:16px;border:1px dashed var(--border);background:rgba(255,255,255,0.02);color:var(--muted);">
                 Fai ancora qualche ricerca e qui compariranno i tuoi 3 consigli del giorno.
             </div>
         {% endif %}
 
+        <!-- MODAL -->
         <div class="dashboard-modal" id="dashboard-rec-modal" aria-hidden="true">
             <div class="dashboard-modal-backdrop" data-close-modal="true"></div>
-
             <div class="dashboard-modal-card">
-                <button type="button" class="dashboard-modal-close" id="dashboard-modal-close" aria-label="Chiudi">
-                    ✕
-                </button>
-
+                <button type="button" class="dashboard-modal-close" id="dashboard-modal-close" aria-label="Chiudi">✕</button>
                 <div class="dashboard-modal-poster-wrap">
                     <img id="dashboard-modal-poster" src="" alt="" class="dashboard-modal-poster">
                 </div>
-
                 <div class="dashboard-modal-content">
-    
                     <div class="dashboard-editorial-badge" id="dashboard-modal-badge"></div>
-
                     <h3 id="dashboard-modal-title" class="modal-title-big"></h3>
-
                     <div class="dashboard-badge" id="dashboard-modal-type"></div>
-
                     <p id="dashboard-modal-reason" class="modal-reason"></p>
                     <p id="dashboard-modal-why" class="modal-reason"></p>
-
-                    <!-- NUOVA SEZIONE -->
                     <div class="modal-actions">
-                        <a href="#" id="dashboard-modal-watch" class="modal-btn primary" target="_blank">
-                            ▶ Dove guardarlo
+                        <div id="dashboard-modal-providers" style="margin-bottom: 12px;"></div>
+                        <a href="#" id="dashboard-modal-watch" class="modal-btn primary" target="_blank" style="display:none;">
+                            <i data-lucide="play-circle" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Dove guardarlo
                         </a>
-
                         <button id="dashboard-modal-fav" class="modal-btn secondary">
-                            + Preferiti
+                            <i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Preferiti
                         </button>
                     </div>
-
                 </div>
             </div>
         </div>
-
     </section>
 
-    <!-- GRID TOP -->
+    <!-- GRID -->
     <section class="dashboard-grid">
 
         <!-- ULTIME RICERCHE -->
@@ -176,36 +142,30 @@
                     {% for search in searches %}
                         <form method="post" action="/recommend" class="search-chip-form">
                             {% set titles = search.seed_titles.split(", ") %}
-
-                            <input type="hidden" name="movie1" value="{{ titles[0] if titles|length > 0 else '' }}">
-                            <input type="hidden" name="movie2" value="{{ titles[1] if titles|length > 1 else '' }}">
-                            <input type="hidden" name="movie3" value="{{ titles[2] if titles|length > 2 else '' }}">
-                            <input type="hidden" name="movie4" value="{{ titles[3] if titles|length > 3 else '' }}">
-                            <input type="hidden" name="movie5" value="{{ titles[4] if titles|length > 4 else '' }}">
-                            <input type="hidden" name="movie6" value="{{ titles[5] if titles|length > 5 else '' }}">
-
-                            <input type="hidden" name="content_type" value="{{ search.content_type or 'movie' }}">
-
+                            {% for title in titles %}
+                                <input type="hidden" name="movie{{ loop.index }}" value="{{ title }}">
+                            {% endfor %}
+                            <input type="hidden" name="content_type" value="{{ search.content_type }}">
                             <button type="submit" class="search-chip">
-                                {{ search.seed_titles }}
+                                {% set titles = search.seed_titles.split(", ") %}
+                                {% set first = titles[0] %}
+                                <span class="chip-label">
+                                    {{ first[:12] }}{% if first|length > 12 %}…{% endif %}{% if titles|length > 1 %} +{{ titles|length - 1 }}{% endif %}
+                                </span>
+                                <span class="chip-type">{{ search.content_type|upper }}</span>
                             </button>
                         </form>
                     {% endfor %}
                 </div>
             {% else %}
-                <div style="
-                    padding: 18px;
-                    border-radius: 16px;
-                    border: 1px dashed var(--border);
-                    background: rgba(255,255,255,0.02);
-                    color: var(--muted);
-                ">
+                <div style="padding:18px;border-radius:16px;border:1px dashed var(--border);background:rgba(255,255,255,0.02);color:var(--muted);">
                     Non hai ancora ricerche salvate.
                 </div>
             {% endif %}
         </section>
 
-        <section class="page-card dashboard-section">
+        <!-- TI È PIACIUTO -->
+        <section class="page-card dashboard-section" style="padding-bottom: 20px; overflow: visible;">
             <h2 style="font-size: 1.3rem; margin-bottom: 6px;">Ti è piaciuto</h2>
             <p style="color: var(--muted); font-size: 0.95rem; margin-bottom: 18px;">
                 I titoli che hai apprezzato e che useremo per migliorare i consigli.
@@ -214,7 +174,11 @@
             {% if liked_titles and liked_titles|length > 0 %}
                 <div class="liked-row" id="likedRow">
                     {% for item in liked_titles[:10] %}
-                        <div class="liked-card">
+                        <div class="liked-card"
+                             data-title="{{ item.title }}"
+                             data-type="{{ item.content_type|upper }}"
+                             data-poster="{{ item.poster_url or '' }}"
+                             style="cursor:pointer;">
                             <div class="liked-poster">
                                 {% if item.poster_url %}
                                     <img src="{{ item.poster_url }}" alt="{{ item.title }}">
@@ -222,7 +186,6 @@
                                     <div class="poster-fallback">No image</div>
                                 {% endif %}
                             </div>
-
                             <div class="liked-overlay">
                                 <div class="liked-title">{{ item.title }}</div>
                                 <span class="liked-type">{{ item.content_type|capitalize }}</span>
@@ -231,21 +194,37 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <div style="
-                    padding: 18px;
-                    border-radius: 16px;
-                    border: 1px dashed var(--border);
-                    background: rgba(255,255,255,0.02);
-                    color: var(--muted);
-                ">
-                    Quando metterai 👍 ai contenuti consigliati, li troverai qui.
+                <div style="padding:18px;border-radius:16px;border:1px dashed var(--border);background:rgba(255,255,255,0.02);color:var(--muted);">
+                    Quando metterai
+                    <i data-lucide="thumbs-up" style="width:13px;height:13px;stroke:currentColor;stroke-width:2;vertical-align:middle;"></i>
+                    ai contenuti consigliati, li troverai qui.
                 </div>
             {% endif %}
-            
         </section>
 
+        <!-- MODAL LIKED -->
+        <div class="dashboard-modal" id="liked-modal" aria-hidden="true">
+            <div class="dashboard-modal-backdrop" data-close-liked="true"></div>
+            <div class="dashboard-modal-card">
+                <button type="button" class="dashboard-modal-close" id="liked-modal-close" aria-label="Chiudi">✕</button>
+                <div class="dashboard-modal-poster-wrap">
+                    <img id="liked-modal-poster" src="" alt="" class="dashboard-modal-poster">
+                </div>
+                <div class="dashboard-modal-content">
+                    <h3 id="liked-modal-title" class="modal-title-big"></h3>
+                    <div class="dashboard-badge" id="liked-modal-type"></div>
+                    <p id="liked-modal-overview" class="modal-reason" style="margin-top:12px; color: var(--muted); font-size:0.9rem;"></p>
+                    <div class="modal-actions" style="margin-top: 20px;">
+                        <div id="liked-modal-providers" style="margin-bottom:12px;"></div>
+                        <a href="#" id="liked-modal-watch" class="modal-btn primary" target="_blank" style="display:none;">
+                            <i data-lucide="play-circle" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Dove guardarlo
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- PROFILO GUSTI -->
-        
         <section class="page-card dashboard-section">
             <h2 style="font-size: 1.3rem; margin-bottom: 6px;">Profilo gusti</h2>
             <p style="color: var(--muted); font-size: 0.95rem; margin-bottom: 18px;">
@@ -254,7 +233,6 @@
 
             {% if taste_profile and (taste_profile.genres or taste_profile.keywords or taste_profile.vibes) %}
                 <div style="display: grid; gap: 18px;">
-
                     <div class="taste-block">
                         <div style="font-weight: 700; margin-bottom: 8px;">Generi</div>
                         <div class="tag-list">
@@ -263,7 +241,6 @@
                             {% endfor %}
                         </div>
                     </div>
-
                     <div class="taste-block">
                         <div style="font-weight: 700; margin-bottom: 8px;">Keyword</div>
                         <div class="tag-list">
@@ -272,7 +249,6 @@
                             {% endfor %}
                         </div>
                     </div>
-
                     <div class="taste-block">
                         <div style="font-weight: 700; margin-bottom: 8px;">Vibes</div>
                         <div class="tag-list">
@@ -281,20 +257,14 @@
                             {% endfor %}
                         </div>
                     </div>
-
                 </div>
             {% else %}
-                <div style="
-                    padding: 18px;
-                    border-radius: 16px;
-                    border: 1px dashed var(--border);
-                    background: rgba(255,255,255,0.02);
-                    color: var(--muted);
-                ">
+                <div style="padding:18px;border-radius:16px;border:1px dashed var(--border);background:rgba(255,255,255,0.02);color:var(--muted);">
                     Il profilo gusti comparirà dopo le prime ricerche salvate.
                 </div>
             {% endif %}
         </section>
+
     </section>
 
 </div>
@@ -305,90 +275,141 @@
 <script src="{{ url_for('static', path='js/feedback.js') }}"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const modal = document.getElementById("dashboard-rec-modal");
+    const modal    = document.getElementById("dashboard-rec-modal");
     const closeBtn = document.getElementById("dashboard-modal-close");
     const posterEl = document.getElementById("dashboard-modal-poster");
-    const badgeEl = document.getElementById("dashboard-modal-badge");
-    const titleEl = document.getElementById("dashboard-modal-title");
-    const typeEl = document.getElementById("dashboard-modal-type");
+    const badgeEl  = document.getElementById("dashboard-modal-badge");
+    const titleEl  = document.getElementById("dashboard-modal-title");
+    const typeEl   = document.getElementById("dashboard-modal-type");
     const reasonEl = document.getElementById("dashboard-modal-reason");
-    const whyEl = document.getElementById("dashboard-modal-why");
+    const whyEl    = document.getElementById("dashboard-modal-why");
     const watchBtn = document.getElementById("dashboard-modal-watch");
-    const cards = document.querySelectorAll(".dashboard-pick-clickable");
-    const favBtn = document.getElementById("dashboard-modal-fav");
-    
-    function openModal(card) {
+    const favBtn   = document.getElementById("dashboard-modal-fav");
+    const cards    = document.querySelectorAll(".dashboard-pick-clickable");
 
-        const isLiked = card.dataset.isLiked === "1";
+    const providersEl = document.getElementById("dashboard-modal-providers");
 
-        if (isLiked) {
-            favBtn.classList.add("active");
-            favBtn.textContent = "✓ Nei preferiti";
-        } else {
-            favBtn.classList.remove("active");
-            favBtn.textContent = "+ Preferiti";
+    async function loadProviders(title, type) {
+        providersEl.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Caricamento piattaforme...</p>';
+        watchBtn.style.display = "none";
+
+        try {
+            const res = await fetch(`/watch-providers?title=${encodeURIComponent(title)}&content_type=${type.toLowerCase()}`);
+            const data = await res.json();
+
+            const flatrate = data.flatrate || [];
+            const rent = data.rent || [];
+            const link = data.link || "";
+
+            if (flatrate.length === 0 && rent.length === 0) {
+                providersEl.innerHTML = "";
+                if (link) {
+                    watchBtn.href = link;
+                    watchBtn.style.display = "flex";
+                }
+                return;
+            }
+
+            let html = "";
+
+            if (flatrate.length > 0) {
+                html += `<div style="margin-bottom:10px;">
+                    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;font-weight:600;">INCLUSO IN</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">`;
+                for (const p of flatrate) {
+                    html += `<a href="${p.link}" target="_blank" title="${p.name}"
+                        style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);text-decoration:none;color:var(--text);font-size:0.8rem;font-weight:600;">
+                        ${p.logo_url ? `<img src="${p.logo_url}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;">` : ""}
+                        ${p.name}
+                    </a>`;
+                }
+                html += `</div></div>`;
+            }
+
+            if (rent.length > 0) {
+                html += `<div style="margin-bottom:10px;">
+                    <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;font-weight:600;">IN NOLEGGIO/ACQUISTO</div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">`;
+                for (const p of rent) {
+                    html += `<a href="${p.link}" target="_blank" title="${p.name}"
+                        style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);text-decoration:none;color:var(--text);font-size:0.8rem;font-weight:600;">
+                        ${p.logo_url ? `<img src="${p.logo_url}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;">` : ""}
+                        ${p.name}
+                    </a>`;
+                }
+                html += `</div></div>`;
+            }
+
+            providersEl.innerHTML = html;
+
+        } catch(e) {
+            providersEl.innerHTML = "";
+            watchBtn.style.display = "flex";
         }
+    }
 
-        const title = card.dataset.title || "";
-        const type = card.dataset.type || "";
-        const badge = card.dataset.badge || "";
-        const reason = card.dataset.reason || "";
-        const why = card.dataset.why || "";
-        const poster = card.dataset.poster || "";
-        const match = card.dataset.match || "";
+    function openModal(card) {
+        const title    = card.dataset.title    || "";
+        const type     = card.dataset.type     || "";
+        const badge    = card.dataset.badge    || "";
+        const reason   = card.dataset.reason   || "";
+        const why      = card.dataset.why      || "";
+        const poster   = card.dataset.poster   || "";
+        const match    = card.dataset.match    || "";
         const keywords = card.dataset.keywords || "";
+        const isLiked  = card.dataset.isLiked  === "1";
 
-        titleEl.textContent = title;
-        typeEl.textContent = type;
-        badgeEl.textContent = badge;
+        titleEl.textContent  = title;
+        typeEl.textContent   = type;
+        badgeEl.textContent  = badge;
         reasonEl.textContent = reason;
-        whyEl.innerHTML = `
-        <strong>Perché ti viene consigliato:</strong><br>
-        ${match ? `Match: ${match}/10<br>` : ""}
-        ${keywords ? `Temi: ${keywords}<br>` : ""}
-        ${!match && !keywords ? "Coerente con i titoli che ti piacciono di più" : ""}
-        `;
-        const query = encodeURIComponent(title);
-        watchBtn.href = `https://www.justwatch.com/it/cerca?q=${query}`;
+        whyEl.innerHTML = `<strong>Perché ti viene consigliato:</strong><br>
+            ${match    ? `Match: ${match}/10<br>` : ""}
+            ${keywords ? `Temi: ${keywords}<br>`  : ""}
+            ${!match && !keywords ? "Coerente con i titoli che ti piacciono di più" : ""}`;
+
+        watchBtn.href = `https://www.justwatch.com/it/cerca?q=${encodeURIComponent(title)}`;
 
         if (poster) {
-            posterEl.src = poster;
-            posterEl.alt = title;
+            posterEl.src           = poster;
+            posterEl.alt           = title;
             posterEl.style.display = "block";
         } else {
             posterEl.style.display = "none";
         }
 
+        if (isLiked) {
+            favBtn.classList.add("active");
+            favBtn.innerHTML = '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;fill:currentColor;"></i> Nei preferiti';
+        } else {
+            favBtn.classList.remove("active");
+            favBtn.innerHTML = '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Preferiti';
+        }
+        lucide.createIcons();
+
         modal.classList.add("is-open");
         modal.setAttribute("aria-hidden", "false");
         document.body.style.overflow = "hidden";
 
-        favBtn.onclick = function () {
-            if (card.dataset.isLiked === "1") {
-                favBtn.classList.add("active");
-                favBtn.textContent = "✓ Nei preferiti";
-                return;
-            }
+        loadProviders(title, type);
 
+        favBtn.onclick = function () {
+            if (card.dataset.isLiked === "1") return;
             fetch("/feedback", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    title: title,
-                    content_type: type.toLowerCase(),
-                    feedback_type: "liked"
-                })
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title, content_type: type.toLowerCase(), feedback_type: "liked" })
             })
-            .then(res => res.json())
-            .then(data => {
+            .then(r => r.json())
+            .then(() => {
                 card.dataset.isLiked = "1";
                 favBtn.classList.add("active");
-                favBtn.textContent = "✓ Nei preferiti";
+                favBtn.innerHTML = '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;fill:currentColor;"></i> Nei preferiti';
+                lucide.createIcons();
+                const likedBtn = card.querySelector('[data-feedback="liked"]');
+                if (likedBtn) likedBtn.classList.add("active");
             });
         };
-
     }
 
     function closeModal() {
@@ -397,25 +418,175 @@ document.addEventListener("DOMContentLoaded", function () {
         document.body.style.overflow = "";
     }
 
-    cards.forEach((card) => {
-        card.addEventListener("click", function () {
+    cards.forEach(card => {
+        card.addEventListener("click", function (e) {
+            if (e.target.closest(".feedback-actions")) return;
             openModal(card);
         });
     });
 
     closeBtn.addEventListener("click", closeModal);
+    modal.addEventListener("click", e => { if (e.target.dataset.closeModal === "true") closeModal(); });
+    document.addEventListener("keydown", e => { if (e.key === "Escape" && modal.classList.contains("is-open")) closeModal(); });
+});
+</script>
 
-    modal.addEventListener("click", function (e) {
-        if (e.target.dataset.closeModal === "true") {
-            closeModal();
-        }
-    });
+<style>
+.liked-row {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    padding: 4px 120px 16px 20px;
+    scrollbar-width: none;
+    margin-left: -20px;
+    margin-right: -20px;
+    width: calc(100% + 40px);
+}
+.liked-row::-webkit-scrollbar { display: none; }
+.liked-card { 
+    flex: 0 0 30% !important;
+    min-width: 30% !important;
+    max-width: 30% !important;
+    height: auto !important;
+    aspect-ratio: 2/3 !important;
+    flex-shrink: 0;
+}
+.page-card { overflow: visible !important; }
+</style>
 
-    document.addEventListener("keydown", function (e) {
-        if (e.key === "Escape" && modal.classList.contains("is-open")) {
-            closeModal();
+<script>
+// Drag scroll per liked-row
+const likedRow = document.getElementById("likedRow");
+if (likedRow) {
+    let isDown = false, startX, scrollLeft;
+
+    const onStart = (x) => { isDown = true; startX = x - likedRow.offsetLeft; scrollLeft = likedRow.scrollLeft; };
+    const onEnd   = () => { isDown = false; };
+    const onMove  = (x) => {
+        if (!isDown) return;
+        const dx = x - likedRow.offsetLeft - startX;
+        likedRow.scrollLeft = scrollLeft - dx;
+    };
+
+    // Mouse (desktop)
+    likedRow.addEventListener("mousedown",  e => onStart(e.pageX));
+    likedRow.addEventListener("mouseleave", onEnd);
+    likedRow.addEventListener("mouseup",    onEnd);
+    likedRow.addEventListener("mousemove",  e => { e.preventDefault(); onMove(e.pageX); });
+
+    // Touch (mobile)
+    likedRow.addEventListener("touchstart", e => onStart(e.touches[0].pageX), { passive: true });
+    likedRow.addEventListener("touchend",   onEnd, { passive: true });
+    likedRow.addEventListener("touchmove",  e => onMove(e.touches[0].pageX), { passive: true });
+}
+
+// MODAL LIKED
+const likedModal     = document.getElementById("liked-modal");
+const likedClose     = document.getElementById("liked-modal-close");
+const likedPosterEl  = document.getElementById("liked-modal-poster");
+const likedTitleEl   = document.getElementById("liked-modal-title");
+const likedTypeEl    = document.getElementById("liked-modal-type");
+const likedWatchBtn  = document.getElementById("liked-modal-watch");
+const likedOverviewEl = document.getElementById("liked-modal-overview");
+const likedProvidersEl = document.getElementById("liked-modal-providers");
+
+const TMDB_KEY = "{{ tmdb_api_key }}";
+
+async function fetchOverview(title, type) {
+    try {
+        const endpoint = type === "TV"
+            ? `https://api.themoviedb.org/3/search/tv?api_key=${TMDB_KEY}&query=${encodeURIComponent(title)}&language=it-IT`
+            : `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_KEY}&query=${encodeURIComponent(title)}&language=it-IT`;
+        const res = await fetch(endpoint);
+        const data = await res.json();
+        return data.results?.[0]?.overview || "";
+    } catch { return ""; }
+}
+
+async function loadLikedProviders(title, type) {
+    likedProvidersEl.innerHTML = '<p style="color:var(--muted);font-size:0.85rem;">Caricamento piattaforme...</p>';
+    likedWatchBtn.style.display = "none";
+    try {
+        const res = await fetch(`/watch-providers?title=${encodeURIComponent(title)}&content_type=${type.toLowerCase()}`);
+        const data = await res.json();
+        const flatrate = data.flatrate || [];
+        const rent = data.rent || [];
+        const link = data.link || "";
+
+        if (flatrate.length === 0 && rent.length === 0) {
+            likedProvidersEl.innerHTML = "";
+            if (link) { likedWatchBtn.href = link; likedWatchBtn.style.display = "flex"; }
+            return;
         }
-    });
+
+        const renderProviders = (items, label) => {
+            let h = `<div style="margin-bottom:10px;">
+                <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;font-weight:600;">${label}</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">`;
+            for (const p of items) {
+                h += `<a href="${p.link}" target="_blank" title="${p.name}"
+                    style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);text-decoration:none;color:var(--text);font-size:0.8rem;font-weight:600;">
+                    ${p.logo_url ? `<img src="${p.logo_url}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;">` : ""}
+                    ${p.name}</a>`;
+            }
+            h += `</div></div>`;
+            return h;
+        };
+
+        let html = "";
+        if (flatrate.length > 0) html += renderProviders(flatrate, "INCLUSO IN");
+        if (rent.length > 0) html += renderProviders(rent, "IN NOLEGGIO/ACQUISTO");
+        likedProvidersEl.innerHTML = html;
+    } catch(e) {
+        likedProvidersEl.innerHTML = "";
+        likedWatchBtn.style.display = "flex";
+    }
+}
+
+async function openLikedModal(card) {
+    const title  = card.dataset.title  || "";
+    const type   = card.dataset.type   || "";
+    const poster = card.dataset.poster || "";
+
+    likedTitleEl.textContent    = title;
+    likedTypeEl.textContent     = type === "TV" ? "SERIE TV" : "FILM";
+    likedOverviewEl.textContent = "Caricamento...";
+
+    if (poster) {
+        likedPosterEl.src = poster;
+        likedPosterEl.alt = title;
+        likedPosterEl.style.display = "block";
+    } else {
+        likedPosterEl.style.display = "none";
+    }
+
+    likedModal.classList.add("is-open");
+    likedModal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    lucide.createIcons();
+
+    const [overview] = await Promise.all([
+        fetchOverview(title, type),
+        loadLikedProviders(title, type),
+    ]);
+    likedOverviewEl.textContent = overview || "";
+}
+
+function closeLikedModal() {
+    likedModal.classList.remove("is-open");
+    likedModal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+}
+
+document.querySelectorAll(".liked-card").forEach(card => {
+    card.addEventListener("click", () => openLikedModal(card));
+});
+
+likedClose.addEventListener("click", closeLikedModal);
+likedModal.addEventListener("click", e => {
+    if (e.target.dataset.closeLiked === "true") closeLikedModal();
 });
 </script>
 {% endblock %}

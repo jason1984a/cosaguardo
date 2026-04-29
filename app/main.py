@@ -30,12 +30,50 @@ from core.recommendation_api import (
     search_movies,
     get_movie_tmdb_info,
     get_trending_tmdb,
+    get_watch_providers,
+    get_now_playing,
+    get_upcoming,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
+
+# ─── Cache trending home (TTL 10 minuti) ───────────────────────────────────
+import time as _time
+_trending_cache: dict = {"data": None, "ts": 0.0}
+_TRENDING_TTL = 600  # secondi
+
+
+def get_trending_cached(limit: int = 12) -> list:
+    now = _time.time()
+    if _trending_cache["data"] is not None and (now - _trending_cache["ts"]) < _TRENDING_TTL:
+        return _trending_cache["data"]
+    fresh = get_trending_tmdb(limit=limit)
+    if fresh:
+        _trending_cache["data"] = fresh
+        _trending_cache["ts"] = now
+    return fresh or _trending_cache.get("data") or []
+# ───────────────────────────────────────────────────────────────────────────
+
+# ─── Cache now_playing / upcoming (TTL 6 ore) ─────────────────────────────
+_cinema_cache: dict = {"now_playing": None, "upcoming": None, "ts": 0.0}
+_CINEMA_TTL = 21600  # 6 ore — le uscite cambiano lentamente
+
+
+def get_cinema_cached() -> dict:
+    now = _time.time()
+    if _cinema_cache["now_playing"] is not None and (now - _cinema_cache["ts"]) < _CINEMA_TTL:
+        return _cinema_cache
+    np = get_now_playing(limit=10)
+    up = get_upcoming(limit=10)
+    if np or up:
+        _cinema_cache["now_playing"] = np
+        _cinema_cache["upcoming"] = up
+        _cinema_cache["ts"] = now
+    return _cinema_cache
+# ──────────────────────────────────────────────────────────────────────────
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SECRET_KEY", "cosaguardo-secret-key"))
@@ -66,15 +104,72 @@ def prettify_title(title: str) -> str:
 
 @app.get("/")
 def home(request: Request):
-    trending = get_trending_tmdb(limit=12)
+    trending = get_trending_cached(limit=12)
+    user_id = request.session.get("user_id")
+    cinema = get_cinema_cached()
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
             "request": request,
             "trending": trending,
+            "is_logged_in": bool(user_id),
+            "now_playing": cinema.get("now_playing") or [],
+            "upcoming": cinema.get("upcoming") or [],
         },
     )
+
+
+
+@app.get("/cinema-news", response_class=JSONResponse)
+def cinema_news():
+    """
+    Dati cinema aggiornati: film in sala + prossime uscite (IT).
+    Cached 6h lato server, può essere richiamato dal frontend.
+    """
+    cinema = get_cinema_cached()
+    return {
+        "now_playing": cinema.get("now_playing") or [],
+        "upcoming":    cinema.get("upcoming") or [],
+    }
+
+@app.get("/home-picks", response_class=JSONResponse)
+def home_picks(request: Request):
+    """
+    Consigli personalizzati per la home (carosello Netflix-style).
+    Restituisce una lista di raccomandazioni basate su preferiti e ricerche recenti.
+    Solo per utenti loggati — risponde 401 se non autenticato.
+    """
+    user_id = request.session.get("user_id")
+    if not user_id:
+        from fastapi.responses import JSONResponse as _JSONResponse
+        return _JSONResponse(status_code=401, content={"error": "not_logged_in"})
+
+    searches = get_searches_by_user(user_id, limit=10)
+    liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
+
+    # Recupera poster per i liked
+    for item in liked_titles:
+        item["poster_url"] = item.get("poster_url") or ""
+        if item["content_type"] == "movie" and not item["poster_url"]:
+            tmdb_info = get_movie_tmdb_info(item["title"])
+            item["poster_url"] = tmdb_info.get("poster_url", "") if tmdb_info else ""
+        elif item["content_type"] == "tv" and not item["poster_url"]:
+            tv_info = find_tv_by_title(item["title"])
+            if tv_info and tv_info.get("poster_path"):
+                item["poster_url"] = f"https://image.tmdb.org/t/p/w342{tv_info['poster_path']}"
+
+    # Usa lo stesso motore del dashboard ma con pool più ampio
+    picks = build_dashboard_recommendations(
+        user_id=user_id,
+        searches=searches,
+        liked_titles=liked_titles,
+        per_type_pool=18,
+        final_count=12,
+    )
+
+    return picks
+
 
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
@@ -160,6 +255,7 @@ def dashboard(request: Request):
             "liked_titles": liked_titles,
             "taste_profile": taste_profile,
             "recommendations": recommendations,
+            "tmdb_api_key": os.environ.get("TMDB_API_KEY", ""),
         },
     )
 
@@ -481,3 +577,10 @@ def search(q: str = "", content_type: str = "movie"):
         results = []
 
     return results
+
+
+@app.get("/watch-providers", response_class=JSONResponse)
+def watch_providers(title: str = "", content_type: str = "movie"):
+    if not title.strip():
+        return {}
+    return get_watch_providers(title.strip(), content_type=content_type)

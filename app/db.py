@@ -427,7 +427,7 @@ def get_liked_states_by_user(user_id: int, content_type: str | None = None):
         cur.execute(
             """
             SELECT uts.title, uts.content_type, uts.seen, uts.preference, uts.updated_at,
-                   dr.poster_url
+                   MAX(dr.poster_url) as poster_url
             FROM user_title_state uts
             LEFT JOIN daily_recommendations dr
                 ON uts.title = dr.title
@@ -436,6 +436,7 @@ def get_liked_states_by_user(user_id: int, content_type: str | None = None):
             WHERE uts.user_id = ?
               AND uts.content_type = ?
               AND uts.preference = 'liked'
+            GROUP BY uts.title, uts.content_type
             ORDER BY uts.updated_at DESC, uts.title ASC
             """,
             (user_id, content_type)
@@ -444,7 +445,7 @@ def get_liked_states_by_user(user_id: int, content_type: str | None = None):
         cur.execute(
             """
             SELECT uts.title, uts.content_type, uts.seen, uts.preference, uts.updated_at,
-                   dr.poster_url
+                   MAX(dr.poster_url) as poster_url
             FROM user_title_state uts
             LEFT JOIN daily_recommendations dr
                 ON uts.title = dr.title
@@ -452,6 +453,7 @@ def get_liked_states_by_user(user_id: int, content_type: str | None = None):
                 AND dr.user_id = uts.user_id
             WHERE uts.user_id = ?
               AND uts.preference = 'liked'
+            GROUP BY uts.title, uts.content_type
             ORDER BY uts.updated_at DESC, uts.title ASC
             """,
             (user_id,)

@@ -6,6 +6,74 @@ from core.explainability import enrich_with_explanations
 
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
+# Mappa provider_id → metadati brand (stessa di recommendation_api.py)
+PROVIDER_META = {
+    8:   {"name": "Netflix",     "color": "#E50914"},
+    9:   {"name": "Prime Video", "color": "#00A8E0"},
+    10:  {"name": "Amazon Video","color": "#00A8E0"},
+    35:  {"name": "Rakuten TV",  "color": "#BF0000"},
+    39:  {"name": "NOW TV",      "color": "#00BCD4"},
+    40:  {"name": "Chili",       "color": "#FF6600"},
+    119: {"name": "Prime Video", "color": "#00A8E0"},
+    149: {"name": "Rakuten TV",  "color": "#BF0000"},
+    337: {"name": "Disney+",     "color": "#113CCF"},
+    341: {"name": "Apple TV+",   "color": "#000000"},
+    350: {"name": "Apple TV+",   "color": "#000000"},
+    381: {"name": "Canal+",      "color": "#000000"},
+    531: {"name": "Paramount+",  "color": "#0064FF"},
+    619: {"name": "Disney+",     "color": "#113CCF"},
+}
+
+
+def get_tv_watch_providers_by_id(tv_id: int, country: str = "IT") -> dict:
+    """
+    Recupera le piattaforme streaming di una serie TV direttamente dal tv_id TMDb.
+    Molto più veloce di get_watch_providers() che fa prima una search per titolo.
+    Restituisce dict: flatrate, rent, buy, link.
+    """
+    if not tv_id or not TMDB_API_KEY:
+        return {}
+
+    try:
+        url = f"https://api.themoviedb.org/3/tv/{tv_id}/watch/providers"
+        resp = requests.get(url, params={"api_key": TMDB_API_KEY}, timeout=5)
+        country_data = resp.json().get("results", {}).get(country, {})
+
+        if not country_data:
+            return {}
+
+        justwatch_link = country_data.get("link", "")
+
+        def parse_providers(items):
+            out = []
+            seen = set()
+            for p in (items or []):
+                name = p.get("provider_name", "")
+                if name in seen:
+                    continue
+                seen.add(name)
+                pid = p.get("provider_id")
+                logo_path = p.get("logo_path", "")
+                meta = PROVIDER_META.get(pid, {})
+                out.append({
+                    "name":     meta.get("name", name),
+                    "logo_url": f"https://image.tmdb.org/t/p/w45{logo_path}" if logo_path else "",
+                    "color":    meta.get("color", "#444"),
+                    "link":     justwatch_link,
+                })
+            return out
+
+        return {
+            "flatrate": parse_providers(country_data.get("flatrate", [])),
+            "rent":     parse_providers(country_data.get("rent", [])),
+            "buy":      parse_providers(country_data.get("buy", [])),
+            "link":     justwatch_link,
+        }
+
+    except Exception:
+        return {}
+
+
 GENERIC_KEYWORDS = {
     "based on novel or book",
     "murder",
