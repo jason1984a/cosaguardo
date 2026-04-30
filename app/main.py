@@ -110,6 +110,28 @@ app.mount(
 )
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 
+# Inietta is_logged_in in ogni template automaticamente
+_original_TemplateResponse = templates.TemplateResponse
+
+def _patched_TemplateResponse(*args, **kwargs):
+    # Supporta sia chiamata positional che keyword
+    if args and isinstance(args[0], str):
+        name, context = args[0], args[1] if len(args) > 1 else kwargs.get("context", {})
+        request = context.get("request")
+    else:
+        request = kwargs.get("request") or (args[0] if args else None)
+        name = kwargs.get("name") or (args[1] if len(args) > 1 else "")
+        context = kwargs.get("context", {})
+
+    if request and "is_logged_in" not in context:
+        context["is_logged_in"] = bool(request.session.get("user_id"))
+    if request and "user_email" not in context:
+        context["user_email"] = request.session.get("user_email", "")
+
+    return _original_TemplateResponse(*args, **kwargs)
+
+templates.TemplateResponse = _patched_TemplateResponse
+
 
 def prettify_title(title: str) -> str:
     if not title:

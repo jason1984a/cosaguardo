@@ -154,6 +154,17 @@
             color: var(--text);
         }
 
+        .nav-link-cta {
+            background: rgba(110,168,254,0.12);
+            border: 1px solid rgba(110,168,254,0.3);
+            border-radius: 10px;
+            color: #93c5fd !important;
+        }
+        .nav-link-cta:hover {
+            background: rgba(110,168,254,0.22) !important;
+            border-color: rgba(110,168,254,0.5);
+        }
+
         .nav-icon {
             display: inline-flex;
             align-items: center;
@@ -340,10 +351,17 @@
                             <span class="nav-text">Home</span>
                         </a>
 
+                        {% if is_logged_in %}
                         <a href="/profilo" class="nav-link-item" aria-label="Profilo">
                             <span class="nav-icon"><i data-lucide="user-circle" style="width:18px;height:18px;stroke:currentColor;stroke-width:1.75;"></i></span>
                             <span class="nav-text">Profilo</span>
                         </a>
+                        {% else %}
+                        <a href="/login" class="nav-link-item nav-link-cta" aria-label="Accedi">
+                            <span class="nav-icon"><i data-lucide="log-in" style="width:18px;height:18px;stroke:currentColor;stroke-width:1.75;"></i></span>
+                            <span class="nav-text">Accedi</span>
+                        </a>
+                        {% endif %}
                     </div>
                 </nav>
             </div>
