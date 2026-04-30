@@ -167,6 +167,54 @@
         </div>
     </details>
 
+    <!-- ── GIÀ VISTI ────────────────────────────────────────────── -->
+    <details class="profilo-accordion">
+        <summary class="profilo-accordion-header">
+            <span class="profilo-accordion-title">
+                <i data-lucide="check-circle" style="width:15px;height:15px;stroke:#4ade80;stroke-width:2;"></i>
+                Già visti
+            </span>
+            <span class="profilo-accordion-count">{{ stats.seen_count }}</span>
+            <i data-lucide="chevron-down" class="profilo-accordion-chevron" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;"></i>
+        </summary>
+        <div class="profilo-accordion-body">
+            {% if seen_titles %}
+            <div class="profilo-liked-grid">
+                {% for item in seen_titles %}
+                <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.get('tmdb_id', '') }}"
+                   class="profilo-liked-card"
+                   {% if not item.get('tmdb_id') %}style="pointer-events:none;"{% endif %}>
+                    {% if item.poster_url %}
+                    <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+                    {% else %}
+                    <div class="profilo-liked-noposter">
+                        <i data-lucide="{{ 'tv-2' if item.content_type == 'tv' else 'film' }}" style="width:20px;height:20px;opacity:.3;"></i>
+                    </div>
+                    {% endif %}
+                    <div class="profilo-liked-overlay">
+                        <span class="profilo-liked-type {{ 'badge-tv' if item.content_type == 'tv' else 'badge-movie' }}">
+                            {{ "Serie" if item.content_type == "tv" else "Film" }}
+                        </span>
+                        <div class="profilo-liked-title">{{ item.title }}</div>
+                    </div>
+                    <div style="position:absolute;top:6px;right:6px;background:rgba(34,197,94,0.85);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;">
+                        <i data-lucide="check" style="width:11px;height:11px;stroke:#fff;stroke-width:3;"></i>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            <p style="color:var(--muted);font-size:0.75rem;margin-top:12px;line-height:1.5;">
+                Usati per non riproporre contenuti già visti nei consigli.
+            </p>
+            {% else %}
+            <div class="profilo-empty-hint">
+                <i data-lucide="check-circle" style="width:28px;height:28px;opacity:.25;"></i>
+                <p>Nessun titolo ancora. Dalla scheda di un film o serie clicca "Segna come visto".</p>
+            </div>
+            {% endif %}
+        </div>
+    </details>
+
     <!-- ── GUSTI ─────────────────────────────────────────────────────── -->
     {% if taste_profile.genres or taste_profile.vibes %}
     <details class="profilo-accordion">

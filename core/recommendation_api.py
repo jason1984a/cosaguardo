@@ -1323,8 +1323,9 @@ def get_detail_movie(tmdb_id: int) -> dict:
         cast = []
         for p in d.get("credits", {}).get("cast", [])[:8]:
             cast.append({
-                "name":       p.get("name", ""),
-                "character":  p.get("character", ""),
+                "person_id":   p.get("id"),
+                "name":        p.get("name", ""),
+                "character":   p.get("character", ""),
                 "profile_url": (f"https://image.tmdb.org/t/p/w185{p['profile_path']}"
                                 if p.get("profile_path") else ""),
             })
@@ -1415,6 +1416,7 @@ def get_detail_tv(tmdb_id: int) -> dict:
         cast = []
         for p in d.get("credits", {}).get("cast", [])[:8]:
             cast.append({
+                "person_id":   p.get("id"),
                 "name":        p.get("name", ""),
                 "character":   p.get("character", ""),
                 "profile_url": (f"https://image.tmdb.org/t/p/w185{p['profile_path']}"
@@ -1603,6 +1605,87 @@ def search_tv_fast(query: str, limit: int = 8) -> list:
         return results
     except Exception:
         return []
+
+
+
+def get_person_detail(person_id: int) -> dict:
+    """
+    Dati completi di un attore/regista: bio, foto, filmografia completa.
+    Usa append_to_response per una sola chiamata API.
+    """
+    if not TMDB_API_KEY or not person_id:
+        return {}
+    try:
+        r = requests.get(
+            f"https://api.themoviedb.org/3/person/{person_id}",
+            params={
+                "api_key": TMDB_API_KEY,
+                "language": "it-IT",
+                "append_to_response": "movie_credits,tv_credits",
+            },
+            timeout=8
+        )
+        d = r.json()
+        if d.get("status_code") == 34:
+            return {}
+
+        profile = d.get("profile_path","")
+
+        # Film — ordina per popolarità, filtra senza poster
+        movies = []
+        seen = set()
+        for m in sorted(d.get("movie_credits",{}).get("cast",[]),
+                        key=lambda x: x.get("popularity",0), reverse=True):
+            mid = m.get("id")
+            if not mid or mid in seen: continue
+            seen.add(mid)
+            pp = m.get("poster_path","")
+            movies.append({
+                "tmdb_id":    mid,
+                "title":      m.get("title") or m.get("original_title",""),
+                "poster_url": f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
+                "year":       (m.get("release_date") or "")[:4],
+                "character":  m.get("character",""),
+                "vote":       round(m.get("vote_average",0),1),
+            })
+
+        # Serie TV
+        tvs = []
+        seen_tv = set()
+        for t in sorted(d.get("tv_credits",{}).get("cast",[]),
+                        key=lambda x: x.get("popularity",0), reverse=True):
+            tid = t.get("id")
+            if not tid or tid in seen_tv: continue
+            seen_tv.add(tid)
+            pp = t.get("poster_path","")
+            tvs.append({
+                "tmdb_id":    tid,
+                "title":      t.get("name") or t.get("original_name",""),
+                "poster_url": f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
+                "year":       (t.get("first_air_date") or "")[:4],
+                "character":  t.get("character",""),
+                "vote":       round(t.get("vote_average",0),1),
+            })
+
+        # Bio troncata a 500 char
+        bio = (d.get("biography") or "")
+        bio_short = bio[:500] + ("…" if len(bio) > 500 else "")
+
+        return {
+            "person_id":   person_id,
+            "name":        d.get("name",""),
+            "birthday":    d.get("birthday",""),
+            "deathday":    d.get("deathday",""),
+            "place_of_birth": d.get("place_of_birth",""),
+            "biography":   bio,
+            "biography_short": bio_short,
+            "profile_url": f"https://image.tmdb.org/t/p/w342{profile}" if profile else "",
+            "known_for":   d.get("known_for_department",""),
+            "movies":      movies,
+            "tvs":         tvs,
+        }
+    except Exception:
+        return {}
 
 # Mappa ID piattaforma TMDb → nome + colore brand
 PROVIDER_META = {

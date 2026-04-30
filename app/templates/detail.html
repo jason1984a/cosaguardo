@@ -376,6 +376,17 @@ html, body {
     flex-shrink: 0;
     width: 80px;
     text-align: center;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    color: inherit;
+}
+
+.cast-card:hover {
+    transform: translateY(-3px);
+}
+
+.cast-card:hover .cast-name {
+    color: #93c5fd;
 }
 
 .cast-avatar {
@@ -768,7 +779,10 @@ html, body {
         <div class="detail-section-title">Cast principale</div>
         <div class="cast-grid">
             {% for actor in detail.cast %}
-            <div class="cast-card">
+            <a href="/persona/{{ actor.person_id }}"
+               class="cast-card"
+               style="text-decoration:none;color:inherit;"
+               {% if not actor.person_id %}onclick="return false;"{% endif %}>
                 {% if actor.profile_url %}
                 <img src="{{ actor.profile_url }}" alt="{{ actor.name }}" class="cast-avatar" loading="lazy">
                 {% else %}
@@ -778,7 +792,7 @@ html, body {
                 {% endif %}
                 <div class="cast-name">{{ actor.name }}</div>
                 <div class="cast-character">{{ actor.character }}</div>
-            </div>
+            </a>
             {% endfor %}
         </div>
         {% endif %}

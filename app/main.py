@@ -41,6 +41,7 @@ from core.recommendation_api import (
     get_detail_tv,
     get_cinema_news,
     search_movies_fast,
+    get_person_detail,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
@@ -812,8 +813,8 @@ def profilo(request: Request):
     liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
     taste_profile = build_taste_profile(searches)
 
-    # Poster e tmdb_id per liked — recupero parallelo
-    def _enrich_liked(item):
+    # Poster e tmdb_id — recupero parallelo per liked e seen
+    def _enrich_item(item):
         item["poster_url"] = item.get("poster_url") or ""
         if item["content_type"] == "movie":
             tmdb_info = get_movie_tmdb_info(item["title"])
@@ -831,9 +832,12 @@ def profilo(request: Request):
                 item["tmdb_id"] = None
         return item
 
+    seen_titles = stats.get("seen", [])
+
     from concurrent.futures import ThreadPoolExecutor, as_completed
-    with ThreadPoolExecutor(max_workers=8) as ex:
-        futures = {ex.submit(_enrich_liked, item): item for item in liked_titles}
+    all_items = liked_titles + seen_titles
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = {ex.submit(_enrich_item, item): item for item in all_items}
         for fut in as_completed(futures):
             try:
                 fut.result()
@@ -866,6 +870,7 @@ def profilo(request: Request):
             "stats":           stats,
             "taste_profile":   taste_profile,
             "liked_titles":    liked_titles,
+            "seen_titles":     seen_titles,
             "recommendations": recommendations,
             "searches":        searches,
             "tmdb_api_key":    os.environ.get("TMDB_API_KEY", ""),
@@ -1075,4 +1080,16 @@ def flush_news():
     _news_cache["data"] = None
     _news_cache["ts"]   = 0.0
     return {"status": "cache cleared"}
+
+
+@app.get("/persona/{person_id}", response_class=HTMLResponse)
+def persona_detail(request: Request, person_id: int):
+    detail = get_person_detail(person_id)
+    if not detail:
+        return RedirectResponse(url="/", status_code=302)
+    return templates.TemplateResponse(
+        request=request,
+        name="persona.html",
+        context={"request": request, "detail": detail},
+    )
 
