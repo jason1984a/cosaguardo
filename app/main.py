@@ -1068,3 +1068,11 @@ def privacy(request: Request):
 def termini(request: Request):
     return templates.TemplateResponse(request=request, name="termini.html", context={"request": request})
 
+
+@app.get("/flush-news")
+def flush_news():
+    """Svuota la cache news — solo per admin/debug."""
+    _news_cache["data"] = None
+    _news_cache["ts"]   = 0.0
+    return {"status": "cache cleared"}
+
