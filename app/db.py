@@ -114,14 +114,19 @@ def get_user_by_id(user_id: int):
     return user
 
 
-def create_user(email: str, password: str):
+def create_user(email: str, password: str,
+                first_name: str = "", last_name: str = "", birth_date: str = ""):
     password_hash = generate_password_hash(password)
 
     conn = get_connection()
     cur = conn.cursor()
     cur.execute(
-        "INSERT INTO users (email, password_hash) VALUES (?, ?)",
-        (email, password_hash)
+        """INSERT INTO users (email, password_hash, first_name, last_name, birth_date)
+           VALUES (?, ?, ?, ?, ?)""",
+        (email, password_hash,
+         first_name.strip() or None,
+         last_name.strip() or None,
+         birth_date.strip() or None)
     )
     conn.commit()
     user_id = cur.lastrowid
@@ -149,9 +154,18 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
+            first_name TEXT,
+            last_name TEXT,
+            birth_date TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
+    # Migrazione sicura — aggiunge colonne se non esistono già
+    existing_cols = {row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
+    for col, typedef in [("first_name","TEXT"), ("last_name","TEXT"), ("birth_date","TEXT")]:
+        if col not in existing_cols:
+            cur.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS searches (
@@ -602,5 +616,60 @@ def get_user_stats(user_id: int) -> dict:
         "seen_count": len(seen),
         "movie_liked": sum(1 for x in liked if x["content_type"] == "movie"),
         "tv_liked": sum(1 for x in liked if x["content_type"] == "tv"),
+    }
+
+
+def save_user_onboarding(user_id: int, content_pref: str, platforms: list):
+    """Salva preferenze raccolte durante la registrazione."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Assicura che la tabella esista
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            user_id      INTEGER PRIMARY KEY,
+            content_pref TEXT,    -- 'movie', 'tv', 'both'
+            platforms    TEXT,    -- JSON list es. '["netflix","prime"]'
+            updated_at   TEXT DEFAULT (datetime('now'))
+        )
+    """)
+
+    import json
+    cursor.execute("""
+        INSERT INTO user_preferences (user_id, content_pref, platforms)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            content_pref = excluded.content_pref,
+            platforms    = excluded.platforms,
+            updated_at   = datetime('now')
+    """, (user_id, content_pref, json.dumps(platforms)))
+
+    conn.commit()
+    conn.close()
+
+
+def get_user_preferences(user_id: int) -> dict:
+    """Recupera preferenze onboarding dell'utente."""
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS user_preferences (
+            user_id INTEGER PRIMARY KEY, content_pref TEXT,
+            platforms TEXT, updated_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    cursor.execute(
+        "SELECT content_pref, platforms FROM user_preferences WHERE user_id = ?",
+        (user_id,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return {}
+    import json
+    return {
+        "content_pref": row["content_pref"] or "both",
+        "platforms":    json.loads(row["platforms"] or "[]"),
     }
 

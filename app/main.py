@@ -412,7 +412,7 @@ def register_submit(
             },
         )
 
-    user_id = create_user(email, password)
+    user_id = create_user(email, password, first_name=first_name, last_name=last_name, birth_date=birth_date)
 
     request.session["user_id"] = user_id
     request.session["user_email"] = email
@@ -862,6 +862,7 @@ def profilo(request: Request):
         context={
             "request":         request,
             "user_email":      user["email"],
+            "user_name":       f"{user['first_name'] or ''} {user['last_name'] or ''}".strip() or user["email"],
             "stats":           stats,
             "taste_profile":   taste_profile,
             "liked_titles":    liked_titles,
@@ -902,7 +903,7 @@ import httpx
 
 GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
-GOOGLE_REDIRECT_URI  = os.environ.get("GOOGLE_REDIRECT_URI", "https://cosaguardo.onrender.com/auth/google/callback")
+GOOGLE_REDIRECT_URI  = os.environ.get("GOOGLE_REDIRECT_URI", "https://cosaguardo.com/auth/google/callback")
 
 
 @app.get("/auth/google")
@@ -986,7 +987,7 @@ def sitemap():
     Sitemap dinamica con pagine statiche + top film/serie da TMDb.
     Aggiornata ad ogni richiesta (cached dal CDN di Render/browser).
     """
-    base = "https://cosaguardo.onrender.com"
+    base = "https://cosaguardo.com"
 
     # Pagine statiche
     static_urls = [
@@ -1056,4 +1057,14 @@ def sitemap():
 
     return Response(content=xml, media_type="application/xml")
 # ──────────────────────────────────────────────────────────────────────────
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+def privacy(request: Request):
+    return templates.TemplateResponse(request=request, name="privacy.html", context={"request": request})
+
+
+@app.get("/termini", response_class=HTMLResponse)
+def termini(request: Request):
+    return templates.TemplateResponse(request=request, name="termini.html", context={"request": request})
 

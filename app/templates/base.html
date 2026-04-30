@@ -5,13 +5,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="uYZwMn6jbUHt9NtAmb2Hm-yUNaFxn34INa2PDfpNeIM">
 
-    <!-- Google Analytics 4 -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-HMNFXJ98H1"></script>
+    <!-- Google Analytics 4 — caricato solo dopo consenso cookie -->
     <script>
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-HMNFXJ98H1');
+        gtag('consent', 'default', {
+            'analytics_storage': 'denied'
+        });
+
+        function loadGA4() {
+            if (document.getElementById('ga4-script')) return;
+            var s = document.createElement('script');
+            s.id = 'ga4-script';
+            s.async = true;
+            s.src = 'https://www.googletagmanager.com/gtag/js?id=G-HMNFXJ98H1';
+            document.head.appendChild(s);
+            gtag('js', new Date());
+            gtag('config', 'G-HMNFXJ98H1');
+            gtag('consent', 'update', {'analytics_storage': 'granted'});
+        }
+
+        // Carica GA4 se consenso già dato
+        if (localStorage.getItem('cg_cookie_consent') === 'accepted') {
+            loadGA4();
+        }
     </script>
     <title>{% block title %}CosaGuardo{% endblock %}</title>
 
@@ -24,18 +41,18 @@
     <meta property="og:site_name" content="CosaGuardo">
     <meta property="og:title" content="{% block og_title %}CosaGuardo — Scopri cosa guardare{% endblock %}">
     <meta property="og:description" content="{% block og_description %}Consigli personalizzati su film e serie TV in base ai tuoi gusti.{% endblock %}">
-    <meta property="og:image" content="{% block og_image %}https://cosaguardo.onrender.com/static/og-default.jpg{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}https://cosaguardo.com/static/og-default.jpg{% endblock %}">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
-    <meta property="og:url" content="{% block og_url %}https://cosaguardo.onrender.com{% endblock %}">
+    <meta property="og:url" content="{% block og_url %}https://cosaguardo.com{% endblock %}">
     <meta property="og:locale" content="it_IT">
 
     {# Twitter/X Card #}
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{% block tw_title %}CosaGuardo{% endblock %}">
     <meta name="twitter:description" content="{% block tw_description %}Consigli personalizzati su film e serie TV.{% endblock %}">
-    <meta name="twitter:image" content="{% block tw_image %}https://cosaguardo.onrender.com/static/og-default.jpg{% endblock %}">
+    <meta name="twitter:image" content="{% block tw_image %}https://cosaguardo.com/static/og-default.jpg{% endblock %}">
 
     <style>
         :root {
@@ -164,6 +181,102 @@
             background: rgba(110,168,254,0.22) !important;
             border-color: rgba(110,168,254,0.5);
         }
+
+        /* Footer links */
+        .footer-links {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .footer-links a, .footer-cookie-btn {
+            color: var(--muted);
+            font-size: 0.8rem;
+            text-decoration: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 0;
+            font-family: inherit;
+        }
+        .footer-links a:hover, .footer-cookie-btn:hover {
+            color: var(--text);
+        }
+
+        /* Cookie banner */
+        #cookie-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            padding: 0 16px 16px;
+        }
+
+        .cookie-banner-inner {
+            max-width: 780px;
+            margin: 0 auto;
+            background: rgba(17, 24, 50, 0.97);
+            border: 1px solid rgba(110,168,254,0.25);
+            border-radius: 18px;
+            padding: 18px 20px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 -4px 32px rgba(0,0,0,0.4);
+        }
+
+        .cookie-banner-text {
+            flex: 1;
+            min-width: 0;
+        }
+        .cookie-banner-text strong {
+            display: block;
+            font-size: 0.9rem;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+        .cookie-banner-text p {
+            font-size: 0.78rem;
+            color: var(--muted);
+            margin: 0 0 4px;
+            line-height: 1.5;
+        }
+        .cookie-banner-link {
+            font-size: 0.75rem;
+            color: #93c5fd;
+            text-decoration: none;
+        }
+        .cookie-banner-link:hover { text-decoration: underline; }
+
+        .cookie-banner-actions {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .cookie-btn {
+            padding: 9px 18px;
+            border-radius: 10px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            transition: all 0.18s ease;
+        }
+        .cookie-btn--accept {
+            background: var(--primary, #6ea8fe);
+            color: #08101f;
+        }
+        .cookie-btn--accept:hover { filter: brightness(1.1); }
+        .cookie-btn--decline {
+            background: rgba(255,255,255,0.07);
+            color: var(--muted);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .cookie-btn--decline:hover { background: rgba(255,255,255,0.12); }
 
         .nav-icon {
             display: inline-flex;
@@ -378,16 +491,60 @@
                 <div>
                     © 2026 CosaGuardo — Scopri cosa guardare in base ai tuoi gusti.
                 </div>
-                <div>
+                <div class="footer-links">
                     <a href="/">Homepage</a>
+                    <a href="/privacy">Privacy Policy</a>
+                    <a href="/termini">Termini di servizio</a>
+                    <button onclick="resetCookieConsent()" class="footer-cookie-btn">Cookie</button>
                 </div>
             </div>
         </footer>
+
+        <!-- COOKIE BANNER -->
+        <div id="cookie-banner" style="display:none;" role="dialog" aria-label="Consenso cookie">
+            <div class="cookie-banner-inner">
+                <div class="cookie-banner-text">
+                    <strong>Rispettiamo la tua privacy</strong>
+                    <p>Usiamo cookie analitici (Google Analytics) per capire come viene usato il sito e migliorarlo. Non vendiamo dati a terze parti.</p>
+                    <a href="/privacy" class="cookie-banner-link">Leggi la Privacy Policy</a>
+                </div>
+                <div class="cookie-banner-actions">
+                    <button onclick="acceptCookies()" class="cookie-btn cookie-btn--accept">Accetta</button>
+                    <button onclick="declineCookies()" class="cookie-btn cookie-btn--decline">Solo necessari</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     {% block scripts %}{% endblock %}
     <script>
         if (typeof lucide !== "undefined") lucide.createIcons();
+    </script>
+
+    <!-- Cookie banner logic -->
+    <script>
+        (function() {
+            var consent = localStorage.getItem('cg_cookie_consent');
+            if (!consent) {
+                document.getElementById('cookie-banner').style.display = 'block';
+            }
+        })();
+
+        function acceptCookies() {
+            localStorage.setItem('cg_cookie_consent', 'accepted');
+            document.getElementById('cookie-banner').style.display = 'none';
+            if (typeof loadGA4 === 'function') loadGA4();
+        }
+
+        function declineCookies() {
+            localStorage.setItem('cg_cookie_consent', 'declined');
+            document.getElementById('cookie-banner').style.display = 'none';
+        }
+
+        function resetCookieConsent() {
+            localStorage.removeItem('cg_cookie_consent');
+            document.getElementById('cookie-banner').style.display = 'block';
+        }
     </script>
 </body>
 </html>

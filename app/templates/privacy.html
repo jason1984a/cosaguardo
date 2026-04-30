@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Privacy Policy — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, follow{% endblock %}
+
+{% block content %}
+<div style="max-width:720px;margin:0 auto;padding-bottom:48px;">
+
+    <h1 style="font-size:1.8rem;font-weight:900;margin-bottom:6px;">Privacy Policy</h1>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:32px;">Ultimo aggiornamento: maggio 2026</p>
+
+    <div class="privacy-body">
+
+        <h2>1. Titolare del trattamento</h2>
+        <p>Il titolare del trattamento dei dati personali è <strong>CosaGuardo</strong> (progetto personale). Per qualsiasi richiesta relativa alla privacy puoi scrivere a: <a href="mailto:privacy@cosaguardo.com">privacy@cosaguardo.com</a></p>
+
+        <h2>2. Dati raccolti</h2>
+        <p>CosaGuardo raccoglie i seguenti dati:</p>
+        <ul>
+            <li><strong>Dati di registrazione</strong> — indirizzo email e password cifrata (bcrypt), oppure email fornita tramite Google OAuth</li>
+            <li><strong>Dati di utilizzo</strong> — ricerche effettuate, titoli aggiunti ai preferiti, valutazioni (mi piace / non mi piace / già visto)</li>
+            <li><strong>Dati tecnici</strong> — indirizzi IP, tipo di browser, pagine visitate (solo se accetti i cookie analitici)</li>
+        </ul>
+
+        <h2>3. Finalità del trattamento</h2>
+        <p>I dati vengono utilizzati per:</p>
+        <ul>
+            <li>Erogare il servizio di raccomandazione personalizzata</li>
+            <li>Migliorare l'algoritmo di suggerimento in base alle preferenze</li>
+            <li>Analisi statistica aggregata dell'utilizzo del sito (solo con consenso)</li>
+        </ul>
+
+        <h2>4. Cookie</h2>
+        <p>CosaGuardo utilizza:</p>
+        <ul>
+            <li><strong>Cookie tecnici necessari</strong> — sessione di login. Non richiedono consenso.</li>
+            <li><strong>Cookie analitici (Google Analytics 4)</strong> — attivati solo dopo il tuo esplicito consenso tramite il banner. Puoi revocare il consenso in qualsiasi momento cliccando "Cookie" nel footer.</li>
+        </ul>
+        <p>Non utilizziamo cookie di profilazione pubblicitaria.</p>
+
+        <h2>5. Condivisione dei dati</h2>
+        <p>I tuoi dati non vengono venduti a terze parti. Vengono condivisi solo con:</p>
+        <ul>
+            <li><strong>Google Analytics</strong> — dati aggregati di navigazione (solo con consenso)</li>
+            <li><strong>Google OAuth</strong> — solo l'indirizzo email, per autenticazione</li>
+            <li><strong>TMDb (The Movie Database)</strong> — non riceviamo dati personali, utilizziamo solo la loro API pubblica per i contenuti</li>
+        </ul>
+
+        <h2>6. Conservazione dei dati</h2>
+        <p>I dati dell'account vengono conservati finché l'account è attivo. Puoi richiedere la cancellazione del tuo account e di tutti i dati associati in qualsiasi momento scrivendo a <a href="mailto:privacy@cosaguardo.com">privacy@cosaguardo.com</a>.</p>
+
+        <h2>7. I tuoi diritti (GDPR)</h2>
+        <p>Ai sensi del Regolamento UE 2016/679 (GDPR) hai diritto a:</p>
+        <ul>
+            <li>Accedere ai tuoi dati personali</li>
+            <li>Rettificare dati inesatti</li>
+            <li>Richiedere la cancellazione ("diritto all'oblio")</li>
+            <li>Opporti al trattamento</li>
+            <li>Portabilità dei dati</li>
+            <li>Revocare il consenso in qualsiasi momento</li>
+        </ul>
+        <p>Per esercitare questi diritti scrivi a <a href="mailto:privacy@cosaguardo.com">privacy@cosaguardo.com</a>.</p>
+
+        <h2>8. Sicurezza</h2>
+        <p>Le password sono cifrate con bcrypt. I dati sono trasmessi tramite HTTPS. Il servizio è ospitato su Render (USA), che garantisce adeguate misure di sicurezza.</p>
+
+        <h2>9. Modifiche</h2>
+        <p>Questa privacy policy può essere aggiornata. Le modifiche significative saranno comunicate tramite avviso sul sito.</p>
+
+    </div>
+</div>
+
+<style>
+.privacy-body h2 {
+    font-size: 1rem;
+    font-weight: 800;
+    margin: 28px 0 8px;
+    color: #93c5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.8rem;
+}
+.privacy-body p, .privacy-body li {
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: #cbd5e1;
+}
+.privacy-body ul {
+    padding-left: 20px;
+    margin: 8px 0 16px;
+}
+.privacy-body li { margin-bottom: 4px; }
+.privacy-body a { color: #93c5fd; }
+.privacy-body strong { color: var(--text); }
+</style>
+{% endblock %}

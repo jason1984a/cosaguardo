@@ -12,7 +12,8 @@
             <i data-lucide="user-circle-2" style="width:34px;height:34px;stroke:currentColor;stroke-width:1.5;"></i>
         </div>
         <div class="profilo-hero-info">
-            <div class="profilo-email">{{ user_email }}</div>
+            <div class="profilo-email">{{ user_name or user_email }}</div>
+            <div class="profilo-tagline" style="margin-bottom:1px;">{{ user_email }}</div>
             <div class="profilo-tagline">
                 {{ stats.total_searches }} ricerche · {{ stats.liked_count }} preferiti · {{ stats.seen_count }} visti
             </div>

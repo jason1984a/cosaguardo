@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Termini di Servizio — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, follow{% endblock %}
+
+{% block content %}
+<div style="max-width:720px;margin:0 auto;padding-bottom:48px;">
+
+    <h1 style="font-size:1.8rem;font-weight:900;margin-bottom:6px;">Termini di Servizio</h1>
+    <p style="color:var(--muted);font-size:0.85rem;margin-bottom:32px;">Ultimo aggiornamento: maggio 2026</p>
+
+    <div class="privacy-body">
+
+        <h2>1. Accettazione dei termini</h2>
+        <p>Utilizzando CosaGuardo accetti i presenti termini di servizio. Se non sei d'accordo, ti chiediamo di non utilizzare il servizio.</p>
+
+        <h2>2. Descrizione del servizio</h2>
+        <p>CosaGuardo è una piattaforma gratuita di raccomandazione di film e serie TV. Il servizio utilizza un algoritmo personalizzato per suggerire contenuti in base ai tuoi gusti, senza produrre né distribuire contenuti audiovisivi.</p>
+
+        <h2>3. Account utente</h2>
+        <ul>
+            <li>Devi avere almeno 16 anni per registrarti</li>
+            <li>Sei responsabile della sicurezza del tuo account</li>
+            <li>Non puoi creare account multipli o account falsi</li>
+            <li>Ci riserviamo il diritto di sospendere account che violino questi termini</li>
+        </ul>
+
+        <h2>4. Uso corretto del servizio</h2>
+        <p>È vietato:</p>
+        <ul>
+            <li>Tentare di accedere a dati di altri utenti</li>
+            <li>Sovraccaricare il servizio con richieste automatizzate (scraping, bot)</li>
+            <li>Utilizzare il servizio per attività illegali</li>
+            <li>Aggirare le misure di sicurezza</li>
+        </ul>
+
+        <h2>5. Contenuti e dati di terze parti</h2>
+        <p>Le informazioni su film e serie TV (titoli, poster, descrizioni, voti) provengono da <strong>The Movie Database (TMDb)</strong> tramite API pubblica. CosaGuardo non è affiliata né approvata da TMDb. La disponibilità dei contenuti sulle piattaforme streaming è soggetta a variazioni.</p>
+
+        <h2>6. Limitazione di responsabilità</h2>
+        <p>CosaGuardo è fornita "così com'è". Non garantiamo la disponibilità continua del servizio né l'accuratezza di tutte le informazioni. Non siamo responsabili di eventuali danni derivanti dall'uso del servizio.</p>
+
+        <h2>7. Link a piattaforme esterne</h2>
+        <p>Il sito contiene link a piattaforme di streaming (Netflix, Prime Video, ecc.) e a JustWatch. Non siamo responsabili del contenuto o delle politiche di tali siti.</p>
+
+        <h2>8. Modifiche al servizio</h2>
+        <p>Ci riserviamo il diritto di modificare, sospendere o interrompere il servizio in qualsiasi momento. In caso di modifiche significative ai termini, verrà pubblicato un avviso sul sito.</p>
+
+        <h2>9. Legge applicabile</h2>
+        <p>I presenti termini sono regolati dalla legge italiana. Per qualsiasi controversia è competente il Foro di Milano.</p>
+
+        <h2>10. Contatti</h2>
+        <p>Per qualsiasi domanda scrivi a <a href="mailto:info@cosaguardo.com">info@cosaguardo.com</a>.</p>
+
+    </div>
+</div>
+
+<style>
+.privacy-body h2 {
+    font-size: 0.8rem;
+    font-weight: 800;
+    margin: 28px 0 8px;
+    color: #93c5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.privacy-body p, .privacy-body li {
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: #cbd5e1;
+}
+.privacy-body ul {
+    padding-left: 20px;
+    margin: 8px 0 16px;
+}
+.privacy-body li { margin-bottom: 4px; }
+.privacy-body a { color: #93c5fd; }
+.privacy-body strong { color: var(--text); }
+</style>
+{% endblock %}
