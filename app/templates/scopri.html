@@ -96,6 +96,27 @@
                         {% endfor %}
                     </div>
                 </div>
+
+                <div class="scopri-filter-group">
+                    <div class="scopri-filter-label">Voto</div>
+                    <div class="scopri-chips">
+                        <label class="scopri-chip">
+                            <input type="radio" name="voto" value="7"
+                                {% if voto == "7" %}checked{% endif %}
+                                onchange="this.form.submit()">
+                            <span>⭐ 7+ Buoni</span>
+                        </label>
+                        <label class="scopri-chip">
+                            <input type="radio" name="voto" value="8"
+                                {% if voto == "8" %}checked{% endif %}
+                                onchange="this.form.submit()">
+                            <span>🏆 8+ Eccellenti</span>
+                        </label>
+                        {% if voto %}
+                        <a href="/scopri?tipo={{ tipo }}{% if genere %}&genere={{ genere }}{% endif %}{% if mood %}&mood={{ mood }}{% endif %}{% if piattaforma %}&piattaforma={{ piattaforma }}{% endif %}{% if anno %}&anno={{ anno }}{% endif %}" class="scopri-clear-chip">✕ Rimuovi</a>
+                        {% endif %}
+                    </div>
+                </div>
             </div>
 
             {% if has_filters %}
@@ -124,7 +145,7 @@
             <div class="scopri-strip-wrap">
                 <button class="trend-nav trend-nav-left scopri-nav-left" data-strip="{{ strip.id }}" type="button">‹</button>
                 <div class="scopri-strip-row" id="strip-{{ strip.id }}">
-                    {% for item in strip.items %}
+                    {% for item in strip.cards %}
                     <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
                        class="scopri-poster-card">
                         {% if item.poster_url %}

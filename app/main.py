@@ -1113,13 +1113,15 @@ def persona_detail(request: Request, person_id: int):
 
 
 # ── Titoli SEO dinamici per /scopri ──────────────────────────────────────
-def _scopri_seo(tipo, genere, mood, piattaforma, anno):
+def _scopri_seo(tipo, genere, mood, piattaforma, anno, voto=""):
     parts = []
     if genere:   parts.append(genere.capitalize())
     if mood:     parts.append(f"mood {mood}")
     if piattaforma: parts.append(piattaforma.capitalize())
     if anno == "recenti": parts.append("recenti")
     elif anno == "classici": parts.append("classici")
+    if voto == "7": parts.append("7+")
+    elif voto == "8": parts.append("8+")
 
     tipo_label = "serie TV" if tipo == "serie" else "film"
     if parts:
@@ -1139,15 +1141,16 @@ def scopri(
     mood:        str = "",
     piattaforma: str = "",
     anno:        str = "",
+    voto:        str = "",
     page:        int = 1,
 ):
-    has_filters = any([genere, mood, piattaforma, anno])
+    has_filters = any([genere, mood, piattaforma, anno, voto])
 
     if has_filters:
         # Modalità filtrata — griglia paginata
         data = get_scopri_results(
             tipo=tipo, genere=genere, mood=mood,
-            piattaforma=piattaforma, anno=anno, page=page
+            piattaforma=piattaforma, anno=anno, voto=voto, page=page
         )
         strips = []
         results = data["results"]
@@ -1159,7 +1162,7 @@ def scopri(
         results = []
         has_next = has_prev = False
 
-    seo_title, seo_desc = _scopri_seo(tipo, genere, mood, piattaforma, anno)
+    seo_title, seo_desc = _scopri_seo(tipo, genere, mood, piattaforma, anno, voto)
 
     return templates.TemplateResponse(
         request=request,
@@ -1177,6 +1180,7 @@ def scopri(
             "mood":        mood,
             "piattaforma": piattaforma,
             "anno":        anno,
+            "voto":        voto,
             "seo_title":   seo_title,
             "seo_desc":    seo_desc,
         },
@@ -1186,11 +1190,11 @@ def scopri(
 @app.get("/scopri/json", response_class=JSONResponse)
 def scopri_json(
     tipo: str = "film", genere: str = "", mood: str = "",
-    piattaforma: str = "", anno: str = "", page: int = 1,
+    piattaforma: str = "", anno: str = "", voto: str = "", page: int = 1,
 ):
     """AJAX endpoint per caricamento pagine successive."""
     return get_scopri_results(
         tipo=tipo, genere=genere, mood=mood,
-        piattaforma=piattaforma, anno=anno, page=page
+        piattaforma=piattaforma, anno=anno, voto=voto, page=page
     )
 

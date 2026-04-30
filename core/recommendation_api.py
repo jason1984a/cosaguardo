@@ -1729,6 +1729,7 @@ def get_scopri_results(
     mood: str = "",
     piattaforma: str = "",
     anno: str = "",
+    voto: str = "",
     page: int = 1,
     limit: int = 20,
 ) -> dict:
@@ -1787,6 +1788,12 @@ def get_scopri_results(
     elif anno == "classici":
         params[date_field_lte] = "2000-12-31"
         params["vote_count.gte"] = 200
+
+    # Voto minimo
+    if voto == "7":
+        params["vote_average.gte"] = 7.0
+    elif voto == "8":
+        params["vote_average.gte"] = 8.0
 
     try:
         r = requests.get(
@@ -1880,15 +1887,15 @@ def _fetch_strip(strip_cfg: dict, tipo: str, limit: int = 12) -> list:
 
 def get_scopri_strips(tipo: str = "film") -> list:
     """
-    Carica tutte le strip in parallelo.
-    Ritorna lista di {label, emoji, id, items}.
+    Carica tutte le strip in parallelo con deduplicazione globale —
+    ogni titolo appare in una sola strip (la più rilevante per popolarità).
     """
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
-    strips = []
+    # Fetch parallelo — ogni strip chiede più titoli per compensare la dedup
     with ThreadPoolExecutor(max_workers=6) as ex:
         futures = {
-            ex.submit(_fetch_strip, s, tipo): s
+            ex.submit(_fetch_strip, s, tipo, 20): s  # 20 invece di 12
             for s in SCOPRI_STRIPS
         }
         results_map = {}
@@ -1899,15 +1906,25 @@ def get_scopri_strips(tipo: str = "film") -> list:
             except Exception:
                 results_map[strip_cfg["id"]] = []
 
-    # Mantieni ordine originale
+    # Deduplicazione globale — ogni tmdb_id appare solo nella prima strip
+    seen_ids = set()
+    strips = []
     for s in SCOPRI_STRIPS:
-        items = results_map.get(s["id"], [])
-        if items:
+        raw = results_map.get(s["id"], [])
+        unique = []
+        for item in raw:
+            tid = item.get("tmdb_id")
+            if tid and tid not in seen_ids:
+                seen_ids.add(tid)
+                unique.append(item)
+            if len(unique) >= 12:
+                break
+        if unique:
             strips.append({
                 "id":    s["id"],
                 "label": s["label"],
                 "emoji": s["emoji"],
-                "items": items,
+                "cards": unique,
             })
 
     return strips
