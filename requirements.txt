@@ -7,3 +7,4 @@ Werkzeug>=3.0.0
 python-dotenv
 python-multipart
 feedparser
+httpx

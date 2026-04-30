@@ -875,3 +875,163 @@ def get_tmdb_id(title: str = "", content_type: str = "movie"):
 
     return {"tmdb_id": tmdb_id}
 
+# ─── Google OAuth ─────────────────────────────────────────────────────────
+import httpx
+
+GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_REDIRECT_URI  = os.environ.get("GOOGLE_REDIRECT_URI", "https://cosaguardo.onrender.com/auth/google/callback")
+
+
+@app.get("/auth/google")
+def google_login(request: Request):
+    """Redirect a Google per il login OAuth."""
+    import urllib.parse
+    params = {
+        "client_id":     GOOGLE_CLIENT_ID,
+        "redirect_uri":  GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope":         "openid email profile",
+        "access_type":   "online",
+        "prompt":        "select_account",
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
+    return RedirectResponse(url=url)
+
+
+@app.get("/auth/google/callback")
+def google_callback(request: Request, code: str = "", error: str = ""):
+    """Callback Google OAuth — crea o logga l'utente."""
+    if error or not code:
+        return RedirectResponse(url="/login?error=google_cancelled", status_code=302)
+
+    try:
+        # 1. Scambia il code con il token
+        token_resp = httpx.post(
+            "https://oauth2.googleapis.com/token",
+            data={
+                "code":          code,
+                "client_id":     GOOGLE_CLIENT_ID,
+                "client_secret": GOOGLE_CLIENT_SECRET,
+                "redirect_uri":  GOOGLE_REDIRECT_URI,
+                "grant_type":    "authorization_code",
+            },
+            timeout=10,
+        )
+        token_data = token_resp.json()
+        access_token = token_data.get("access_token")
+
+        if not access_token:
+            return RedirectResponse(url="/login?error=google_failed", status_code=302)
+
+        # 2. Recupera info utente da Google
+        userinfo_resp = httpx.get(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
+        userinfo = userinfo_resp.json()
+        email = userinfo.get("email", "").strip().lower()
+
+        if not email:
+            return RedirectResponse(url="/login?error=google_no_email", status_code=302)
+
+        # 3. Crea o recupera l'utente
+        user = get_user_by_email(email)
+        if not user:
+            # Nuovo utente — crea con password casuale (non usata per login Google)
+            import secrets
+            user_id = create_user(email, secrets.token_hex(32))
+        else:
+            user_id = user["id"]
+
+        # 4. Setta la sessione
+        request.session["user_id"]    = user_id
+        request.session["user_email"] = email
+
+        return RedirectResponse(url="/profilo", status_code=302)
+
+    except Exception as e:
+        return RedirectResponse(url="/login?error=google_error", status_code=302)
+# ──────────────────────────────────────────────────────────────────────────
+
+# ─── Sitemap.xml ──────────────────────────────────────────────────────────
+from fastapi.responses import Response
+
+@app.get("/sitemap.xml")
+def sitemap():
+    """
+    Sitemap dinamica con pagine statiche + top film/serie da TMDb.
+    Aggiornata ad ogni richiesta (cached dal CDN di Render/browser).
+    """
+    base = "https://cosaguardo.onrender.com"
+
+    # Pagine statiche
+    static_urls = [
+        ("",        "daily",   "1.0"),
+        ("/login",  "monthly", "0.5"),
+        ("/register","monthly","0.5"),
+    ]
+
+    # Top film popolari da TMDb (per indicizzazione schede)
+    movie_ids = []
+    tv_ids    = []
+    try:
+        r = __import__("requests").get(
+            "https://api.themoviedb.org/3/movie/popular",
+            params={"api_key": os.environ.get("TMDB_API_KEY",""), "language":"it-IT", "page":1},
+            timeout=5
+        )
+        for item in r.json().get("results",[])[:20]:
+            if item.get("id"): movie_ids.append(item["id"])
+    except Exception:
+        pass
+
+    try:
+        r = __import__("requests").get(
+            "https://api.themoviedb.org/3/tv/popular",
+            params={"api_key": os.environ.get("TMDB_API_KEY",""), "language":"it-IT", "page":1},
+            timeout=5
+        )
+        for item in r.json().get("results",[])[:20]:
+            if item.get("id"): tv_ids.append(item["id"])
+    except Exception:
+        pass
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    xml = '''<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'''
+
+    for path, freq, priority in static_urls:
+        xml += f"""
+  <url>
+    <loc>{base}{path}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>{freq}</changefreq>
+    <priority>{priority}</priority>
+  </url>"""
+
+    for mid in movie_ids:
+        xml += f"""
+  <url>
+    <loc>{base}/film/{mid}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>"""
+
+    for tid in tv_ids:
+        xml += f"""
+  <url>
+    <loc>{base}/serie/{tid}</loc>
+    <lastmod>{today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>"""
+
+    xml += "\n</urlset>"
+
+    return Response(content=xml, media_type="application/xml")
+# ──────────────────────────────────────────────────────────────────────────
+

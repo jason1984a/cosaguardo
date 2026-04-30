@@ -12,6 +12,48 @@
 {% block tw_image %}{{ detail.poster_url or "https://cosaguardo.onrender.com/static/og-default.jpg" }}{% endblock %}
 
 {% block head_extra %}
+<!-- JSON-LD Schema markup per Google rich snippets -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  {% if detail.content_type == "tv" %}
+  "@type": "TVSeries",
+  {% else %}
+  "@type": "Movie",
+  {% endif %}
+  "name": "{{ detail.title | e }}",
+  {% if detail.original_title and detail.original_title != detail.title %}
+  "alternateName": "{{ detail.original_title | e }}",
+  {% endif %}
+  {% if detail.overview %}
+  "description": "{{ detail.overview[:300] | e }}",
+  {% endif %}
+  {% if detail.poster_url %}
+  "image": "{{ detail.poster_url }}",
+  {% endif %}
+  {% if detail.release_date %}
+  "datePublished": "{{ detail.release_date }}",
+  {% endif %}
+  {% if detail.vote_average and detail.vote_average > 0 %}
+  "aggregateRating": {
+    "@type": "AggregateRating",
+    "ratingValue": "{{ detail.vote_average }}",
+    "bestRating": "10",
+    "worstRating": "1"
+    {% if detail.vote_count %}
+    ,"ratingCount": "{{ detail.vote_count }}"
+    {% endif %}
+  },
+  {% endif %}
+  {% if detail.genres %}
+  "genre": [{% for g in detail.genres %}"{{ g }}"{% if not loop.last %},{% endif %}{% endfor %}],
+  {% endif %}
+  {% if detail.directors %}
+  "director": [{% for d in detail.directors %}{"@type":"Person","name":"{{ d | e }}"}{% if not loop.last %},{% endif %}{% endfor %}],
+  {% endif %}
+  "url": "https://cosaguardo.onrender.com/{{ 'serie' if detail.content_type == 'tv' else 'film' }}/{{ detail.tmdb_id }}"
+}
+</script>
 <style>
 /* ── PAGE OVERFLOW FIX ──────────────────────────────────────────────────── */
 html, body {
