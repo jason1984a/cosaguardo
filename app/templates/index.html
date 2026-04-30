@@ -219,16 +219,16 @@
     {% if news %}
     <section class="news-strip-section">
         <div class="personal-strip-header">
-            <span class="personal-strip-label">📰 Dal mondo del cinema</span>
+            <span class="personal-strip-label">🎬 Da non perdere questa settimana</span>
         </div>
         <div class="news-grid">
             {% for item in news %}
-            <a href="{{ item.link }}" target="_blank" rel="noopener" class="news-card">
+            <a href="{{ item.link }}" {% if not item.internal %}target="_blank" rel="noopener"{% endif %} class="news-card">
                 {% if item.thumb %}
                 <div class="news-card-thumb" style="background-image:url('{{ item.thumb }}');"></div>
                 {% else %}
                 <div class="news-card-thumb news-card-thumb--empty">
-                    <i data-lucide="newspaper" style="width:28px;height:28px;opacity:.3;"></i>
+                    <i data-lucide="film" style="width:28px;height:28px;opacity:.3;"></i>
                 </div>
                 {% endif %}
                 <div class="news-card-body">

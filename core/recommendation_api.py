@@ -1484,89 +1484,77 @@ def get_detail_tv(tmdb_id: int) -> dict:
 
 def get_cinema_news(limit: int = 8) -> list:
     """
-    Aggrega news da feed RSS italiani con fallback thumbnail TMDb.
+    Contenuti editoriali dalla sezione 'Dal mondo del cinema':
+    mix di film recenti su TMDb presentati con backdrop/poster.
+    Sempre funzionante, sempre con immagini.
     """
-    feeds = [
-        ("BadTaste.it",    "https://www.badtaste.it/feed/"),
-        ("Cinematographe", "https://cinematographe.it/feed/"),
-        ("MYmovies",       "https://www.mymovies.it/rss/news/"),
-        ("ComingSoon.it",  "https://www.comingsoon.it/rss/"),
-    ]
-
-    try:
-        import feedparser
-        import re as _re
-    except ImportError:
+    if not TMDB_API_KEY:
         return []
 
-    IMG_RE = _re.compile(r'src=[\'"](https://[^\'"]+\.(?:jpg|jpeg|png|webp))[\'"]', _re.I)
-
-    def extract_thumb(entry):
-        # 1. media:thumbnail
-        mt = getattr(entry, "media_thumbnail", None)
-        if mt and mt[0].get("url"): return mt[0]["url"]
-        # 2. media:content
-        mc_list = getattr(entry, "media_content", [])
-        for mc in mc_list:
-            u = mc.get("url","")
-            if u and any(u.lower().endswith(x) for x in (".jpg",".jpeg",".png",".webp")):
-                return u
-        # 3. enclosure
-        for enc in getattr(entry, "enclosures", []):
-            if "image" in enc.get("type",""):
-                return enc.get("href","") or enc.get("url","")
-        # 4. img in summary/content
-        sources = [entry.get("summary",""), entry.get("description","")]
-        if getattr(entry, "content", None):
-            sources.append(entry.content[0].get("value",""))
-        for raw in sources:
-            if not raw: continue
-            m = IMG_RE.search(raw)
-            if m:
-                u = m.group(1)
-                if "pixel" not in u and "track" not in u:
-                    return u
-        # 5. TMDb fallback dalla prima parola del titolo
-        title = entry.get("title","").strip()
-        if title and TMDB_API_KEY:
-            try:
-                r = requests.get(
-                    "https://api.themoviedb.org/3/search/movie",
-                    params={"api_key": TMDB_API_KEY, "query": title[:40], "language": "it-IT"},
-                    timeout=3
-                )
-                res = r.json().get("results",[])
-                if res:
-                    bp = res[0].get("backdrop_path") or res[0].get("poster_path")
-                    if bp: return f"https://image.tmdb.org/t/p/w780{bp}"
-            except Exception:
-                pass
-        return ""
-
     items = []
-    for source_name, url in feeds:
-        try:
-            feed = feedparser.parse(url)
-            for entry in feed.entries[:3]:
-                title = entry.get("title","").strip()
-                link  = entry.get("link","").strip()
-                if not title or not link: continue
-                raw     = entry.get("summary","") or entry.get("description","") or ""
-                summary = _re.sub(r"<[^>]+>","", raw).strip()[:180]
-                published = entry.get("published","") or entry.get("updated","")
-                items.append({
-                    "title":     title,
-                    "link":      link,
-                    "summary":   summary,
-                    "source":    source_name,
-                    "thumb":     extract_thumb(entry),
-                    "published": published[:16] if published else "",
-                })
-                if len(items) >= limit: break
-        except Exception:
-            continue
-        if len(items) >= limit: break
 
+    # 1. Film usciti di recente (ultimi 60 giorni) — con backdrop
+    try:
+        import datetime
+        sixty_days_ago = (datetime.date.today() - datetime.timedelta(days=60)).isoformat()
+        r = requests.get(
+            "https://api.themoviedb.org/3/discover/movie",
+            params={
+                "api_key": TMDB_API_KEY,
+                "language": "it-IT",
+                "region": "IT",
+                "sort_by": "popularity.desc",
+                "primary_release_date.gte": sixty_days_ago,
+                "vote_count.gte": 50,
+            },
+            timeout=6
+        )
+        for item in r.json().get("results", [])[:4]:
+            bp = item.get("backdrop_path") or item.get("poster_path")
+            if not bp: continue
+            title = item.get("title") or item.get("original_title","")
+            if not title: continue
+            tmdb_id = item.get("id")
+            items.append({
+                "title":     title,
+                "link":      f"/film/{tmdb_id}" if tmdb_id else "/",
+                "summary":   (item.get("overview") or "")[:160],
+                "source":    "Al cinema",
+                "thumb":     f"https://image.tmdb.org/t/p/w780{bp}",
+                "tmdb_id":   tmdb_id,
+                "internal":  True,
+            })
+    except Exception:
+        pass
+
+    # 2. Serie TV popolari recenti
+    try:
+        r = requests.get(
+            "https://api.themoviedb.org/3/tv/popular",
+            params={"api_key": TMDB_API_KEY, "language": "it-IT"},
+            timeout=6
+        )
+        for item in r.json().get("results", [])[:4]:
+            bp = item.get("backdrop_path") or item.get("poster_path")
+            if not bp: continue
+            title = item.get("name") or item.get("original_name","")
+            if not title: continue
+            tmdb_id = item.get("id")
+            items.append({
+                "title":     title,
+                "link":      f"/serie/{tmdb_id}" if tmdb_id else "/",
+                "summary":   (item.get("overview") or "")[:160],
+                "source":    "Serie del momento",
+                "thumb":     f"https://image.tmdb.org/t/p/w780{bp}",
+                "tmdb_id":   tmdb_id,
+                "internal":  True,
+            })
+    except Exception:
+        pass
+
+    # Mescola film e serie
+    import random
+    random.shuffle(items)
     return items[:limit]
 
 
