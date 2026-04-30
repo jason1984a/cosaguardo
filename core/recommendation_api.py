@@ -934,7 +934,12 @@ def get_movie_keywords(movie_id: int):
     except Exception:
         return []
 
+# Cache titoli localizzati — evita chiamate TMDb ripetute per lo stesso titolo
+_localized_title_cache: dict = {}
+
 def get_tmdb_localized_title(title: str):
+    if title in _localized_title_cache:
+        return _localized_title_cache[title]
     if not TMDB_API_KEY:
         return None
 
@@ -952,16 +957,20 @@ def get_tmdb_localized_title(title: str):
         if data.get("results"):
             first = data["results"][0]
             localized_title = first.get("title")
-            original_title = first.get("original_title")
+            original_title  = first.get("original_title")
 
             if localized_title and original_title and localized_title != original_title:
-                return f"{localized_title} ({original_title})"
+                result = f"{localized_title} ({original_title})"
+            else:
+                result = localized_title or original_title
 
-            return localized_title or original_title
+            _localized_title_cache[title] = result
+            return result
 
     except Exception:
-        return None
+        pass
 
+    _localized_title_cache[title] = None
     return None
 
 def search_tmdb_movies(query: str, limit: int = 10):
@@ -1534,6 +1543,53 @@ def get_cinema_news(limit: int = 8) -> list:
             break
 
     return items[:limit]
+
+
+
+def search_movies_fast(query: str, limit: int = 8) -> list:
+    """
+    Ricerca veloce solo su DB locale — nessuna chiamata TMDb.
+    Usata dall'autocomplete per risposta immediata (<10ms).
+    """
+    query = query.strip()
+    if len(query) < 2:
+        return []
+
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT movielens_movie_id, title
+        FROM titles
+        WHERE LOWER(title) LIKE LOWER(?)
+        ORDER BY LENGTH(title) ASC
+        LIMIT ?
+    """, (f"%{query}%", limit))
+
+    rows = cursor.fetchall()
+    conn.close()
+
+    results = []
+    for row in rows:
+        title = row[1]
+        # Usa cache locale se disponibile, altrimenti mostra titolo raw
+        display = _localized_title_cache.get(title, title)
+        results.append({
+            "movie_id": row[0],
+            "title": title,
+            "display_title": display or title,
+        })
+    return results
+
+
+def search_tv_fast(query: str, limit: int = 8) -> list:
+    """Ricerca veloce serie TV su DB locale."""
+    from core.recommendation_tv import search_tv_series
+    try:
+        results = search_tv_series(query, limit=limit)
+        return results
+    except Exception:
+        return []
 
 # Mappa ID piattaforma TMDb → nome + colore brand
 PROVIDER_META = {

@@ -1,0 +1,573 @@
+{% extends "base.html" %}
+
+{% block title %}Il mio profilo — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<div class="profilo-shell">
+
+    <!-- ── HERO ─────────────────────────────────────────────────────── -->
+    <section class="profilo-hero">
+        <div class="profilo-avatar">
+            <i data-lucide="user-circle-2" style="width:34px;height:34px;stroke:currentColor;stroke-width:1.5;"></i>
+        </div>
+        <div class="profilo-hero-info">
+            <div class="profilo-email">{{ user_email }}</div>
+            <div class="profilo-tagline">
+                {{ stats.total_searches }} ricerche · {{ stats.liked_count }} preferiti · {{ stats.seen_count }} visti
+            </div>
+        </div>
+        <div class="profilo-hero-actions">
+            <a href="/" class="pact-btn pact-btn--primary">
+                <i data-lucide="search" style="width:13px;height:13px;stroke:currentColor;stroke-width:2.5;pointer-events:none;"></i>
+                Cerca
+            </a>
+            <form action="/logout" method="post" style="display:contents;">
+                <button type="submit" class="pact-btn pact-btn--ghost">
+                    <i data-lucide="log-out" style="width:13px;height:13px;stroke:currentColor;stroke-width:2.5;pointer-events:none;"></i>
+                    Esci
+                </button>
+            </form>
+        </div>
+    </section>
+
+    <!-- ── CONSIGLI OGGI (sempre visibili) ───────────────────────────── -->
+    <section class="profilo-card">
+        <div class="profilo-card-header">
+            <div class="profilo-card-title">
+                <i data-lucide="sparkles" style="width:15px;height:15px;stroke:#fcd34d;stroke-width:2;"></i>
+                I 3 consigli di oggi
+            </div>
+            <span class="profilo-card-sub">Si aggiornano ogni giorno</span>
+        </div>
+
+        {% if recommendations and recommendations|length > 0 %}
+        <div class="profilo-recs-grid">
+            {% for rec in recommendations %}
+            <div class="profilo-rec-card dashboard-pick-clickable"
+                 data-title="{{ rec.title }}"
+                 data-type="{{ rec.content_type|upper }}"
+                 data-badge="{% if loop.first %}⭐ Miglior match{% else %}🎯 Per te{% endif %}"
+                 data-reason="{{ (rec.reason if rec.reason else 'Compatibile con i tuoi gusti.')|e }}"
+                 data-poster="{{ rec.poster_url if rec.poster_url else '' }}"
+                 data-why="{{ (rec.reason if rec.reason else '')|e }}"
+                 data-match="{{ rec.match_score if rec.match_score else '' }}"
+                 data-keywords="{{ rec.matched_keywords[:2]|join(', ') if rec.matched_keywords else '' }}"
+                 data-is-liked="{{ 1 if rec.is_liked else 0 }}">
+                <div class="profilo-rec-poster">
+                    {% if rec.poster_url %}
+                    <img src="{{ rec.poster_url }}" alt="{{ rec.title }}" loading="lazy">
+                    {% else %}
+                    <div class="profilo-rec-noposter">
+                        <i data-lucide="film" style="width:24px;height:24px;opacity:.3;"></i>
+                    </div>
+                    {% endif %}
+                    <span class="profilo-rec-badge">{% if loop.first %}⭐{% else %}🎯{% endif %}</span>
+                </div>
+                <div class="profilo-rec-body">
+                    <div class="profilo-rec-type {{ 'badge-tv' if rec.content_type == 'tv' else 'badge-movie' }}">
+                        {{ "Serie" if rec.content_type == "tv" else "Film" }}
+                    </div>
+                    <div class="profilo-rec-title">{{ rec.title }}</div>
+                    <p class="profilo-rec-reason">{{ rec.reason or "Compatibile con i tuoi gusti." }}</p>
+                    <div class="feedback-actions profilo-rec-feedback"
+                         data-title="{{ rec.title }}"
+                         data-type="{{ rec.content_type }}">
+                        <button class="feedback-btn {% if rec.is_liked %}active{% endif %}" data-feedback="liked">
+                            <i data-lucide="thumbs-up" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                        </button>
+                        <button class="feedback-btn" data-feedback="disliked">
+                            <i data-lucide="thumbs-down" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                        </button>
+                        <button class="feedback-btn" data-feedback="seen">
+                            <i data-lucide="eye" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="profilo-empty-hint">
+            <i data-lucide="search" style="width:28px;height:28px;opacity:.25;"></i>
+            <p>Fai qualche ricerca e qui compariranno i tuoi consigli del giorno.</p>
+            <a href="/" class="pact-btn pact-btn--primary" style="margin-top:8px;">Inizia a cercare</a>
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- MODAL CONSIGLI -->
+    <div class="dashboard-modal" id="dashboard-rec-modal" aria-hidden="true">
+        <div class="dashboard-modal-backdrop" data-close-modal="true"></div>
+        <div class="dashboard-modal-card">
+            <button type="button" class="dashboard-modal-close" id="dashboard-modal-close" aria-label="Chiudi">✕</button>
+            <div class="dashboard-modal-poster-wrap">
+                <img id="dashboard-modal-poster" src="" alt="" class="dashboard-modal-poster">
+            </div>
+            <div class="dashboard-modal-content">
+                <div class="dashboard-editorial-badge" id="dashboard-modal-badge"></div>
+                <h3 id="dashboard-modal-title" class="modal-title-big"></h3>
+                <div class="dashboard-badge" id="dashboard-modal-type"></div>
+                <p id="dashboard-modal-reason" class="modal-reason"></p>
+                <p id="dashboard-modal-why" class="modal-reason"></p>
+                <div class="modal-actions">
+                    <div id="dashboard-modal-providers" style="margin-bottom:12px;"></div>
+                    <a href="#" id="dashboard-modal-detail" class="modal-btn primary">
+                        <i data-lucide="info" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                        Scheda completa
+                    </a>
+                    <button id="dashboard-modal-fav" class="modal-btn secondary">
+                        <i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                        Preferiti
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── PREFERITI ─────────────────────────────────────────────────── -->
+    <details class="profilo-accordion" {% if liked_titles %}open{% endif %}>
+        <summary class="profilo-accordion-header">
+            <span class="profilo-accordion-title">
+                <i data-lucide="heart" style="width:15px;height:15px;stroke:#f87171;stroke-width:2;"></i>
+                I tuoi preferiti
+            </span>
+            <span class="profilo-accordion-count">{{ stats.liked_count }}</span>
+            <i data-lucide="chevron-down" class="profilo-accordion-chevron" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;"></i>
+        </summary>
+        <div class="profilo-accordion-body">
+            {% if liked_titles %}
+            <div class="profilo-liked-grid">
+                {% for item in liked_titles %}
+                <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.get('tmdb_id', '') }}"
+                   class="profilo-liked-card"
+                   {% if not item.get('tmdb_id') %}style="pointer-events:none;"{% endif %}>
+                    {% if item.poster_url %}
+                    <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+                    {% else %}
+                    <div class="profilo-liked-noposter">
+                        <i data-lucide="film" style="width:20px;height:20px;opacity:.3;"></i>
+                    </div>
+                    {% endif %}
+                    <div class="profilo-liked-overlay">
+                        <span class="profilo-liked-type {{ 'badge-tv' if item.content_type == 'tv' else 'badge-movie' }}">
+                            {{ "Serie" if item.content_type == "tv" else "Film" }}
+                        </span>
+                        <div class="profilo-liked-title">{{ item.title }}</div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="profilo-empty-hint">
+                <p>Aggiungi un ❤️ ai contenuti che ti piacciono per trovarli qui.</p>
+            </div>
+            {% endif %}
+        </div>
+    </details>
+
+    <!-- ── GUSTI ─────────────────────────────────────────────────────── -->
+    {% if taste_profile.genres or taste_profile.vibes %}
+    <details class="profilo-accordion">
+        <summary class="profilo-accordion-header">
+            <span class="profilo-accordion-title">
+                <i data-lucide="sparkles" style="width:15px;height:15px;stroke:#c4b5fd;stroke-width:2;"></i>
+                Il tuo gusto cinematografico
+            </span>
+            <i data-lucide="chevron-down" class="profilo-accordion-chevron" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;"></i>
+        </summary>
+        <div class="profilo-accordion-body">
+            <div class="profilo-taste-grid">
+                {% if taste_profile.genres %}
+                <div class="profilo-taste-block">
+                    <div class="profilo-taste-label">Generi preferiti</div>
+                    <div class="profilo-chips">
+                        {% for g in taste_profile.genres %}
+                        <span class="profilo-chip profilo-chip--genre">{{ g }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if taste_profile.vibes %}
+                <div class="profilo-taste-block">
+                    <div class="profilo-taste-label">Il tuo stile</div>
+                    <div class="profilo-chips">
+                        {% for v in taste_profile.vibes %}
+                        <span class="profilo-chip profilo-chip--vibe">{{ v }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if taste_profile.keywords %}
+                <div class="profilo-taste-block">
+                    <div class="profilo-taste-label">Temi ricorrenti</div>
+                    <div class="profilo-chips">
+                        {% for k in taste_profile.keywords[:8] %}
+                        <span class="profilo-chip profilo-chip--kw">{{ k }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </details>
+    {% endif %}
+
+    <!-- ── RICERCHE RECENTI ───────────────────────────────────────────── -->
+    {% if searches %}
+    <details class="profilo-accordion">
+        <summary class="profilo-accordion-header">
+            <span class="profilo-accordion-title">
+                <i data-lucide="history" style="width:15px;height:15px;stroke:#93c5fd;stroke-width:2;"></i>
+                Ricerche recenti
+            </span>
+            <span class="profilo-accordion-count">{{ searches|length }}</span>
+            <i data-lucide="chevron-down" class="profilo-accordion-chevron" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;"></i>
+        </summary>
+        <div class="profilo-accordion-body">
+            <div class="profilo-searches">
+                {% for search in searches %}
+                <form method="post" action="/recommend" class="search-chip-form">
+                    {% set titles = search.seed_titles.split(", ") %}
+                    {% for title in titles %}
+                    <input type="hidden" name="movie{{ loop.index }}" value="{{ title }}">
+                    {% endfor %}
+                    <input type="hidden" name="content_type" value="{{ search.content_type }}">
+                    <button type="submit" class="search-chip">
+                        <span class="chip-label">
+                            {{ titles[0][:14] }}{% if titles[0]|length > 14 %}…{% endif %}{% if titles|length > 1 %} +{{ titles|length - 1 }}{% endif %}
+                        </span>
+                        <span class="chip-type">{{ search.content_type|upper }}</span>
+                    </button>
+                </form>
+                {% endfor %}
+            </div>
+        </div>
+    </details>
+    {% endif %}
+
+</div>
+
+<style>
+.profilo-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-bottom: 48px;
+    max-width: 680px;
+    margin: 0 auto;
+}
+
+/* Hero */
+.profilo-hero {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: rgba(22,31,61,0.7);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    backdrop-filter: blur(12px);
+}
+.profilo-avatar {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(110,168,254,0.2), rgba(139,92,246,0.2));
+    border: 2px solid rgba(255,255,255,0.1);
+    display: flex; align-items: center; justify-content: center;
+    color: #93c5fd; flex-shrink: 0;
+}
+.profilo-hero-info { flex: 1; min-width: 0; }
+.profilo-email {
+    font-size: 0.88rem; font-weight: 700; color: var(--text);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;
+}
+.profilo-tagline { font-size: 0.7rem; color: var(--muted); }
+.profilo-hero-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+.pact-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 12px; border-radius: 10px; font-size: 0.78rem;
+    font-weight: 700; cursor: pointer; border: none;
+    text-decoration: none; transition: all 0.18s ease; white-space: nowrap;
+}
+.pact-btn--primary { background: var(--primary, #6ea8fe); color: #08101f; }
+.pact-btn--primary:hover { filter: brightness(1.1); }
+.pact-btn--ghost { background: transparent; color: var(--muted); border: 1px solid rgba(255,255,255,0.1); }
+.pact-btn--ghost:hover { background: rgba(255,255,255,0.06); color: var(--text); }
+
+/* Card consigli */
+.profilo-card {
+    background: rgba(22,31,61,0.65);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px; padding: 16px;
+    backdrop-filter: blur(10px);
+}
+.profilo-card-header {
+    display: flex; align-items: baseline;
+    justify-content: space-between; margin-bottom: 14px; gap: 8px;
+}
+.profilo-card-title {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.9rem; font-weight: 800; color: var(--text);
+}
+.profilo-card-sub { font-size: 0.7rem; color: var(--muted); }
+
+/* Rec cards */
+.profilo-recs-grid { display: flex; flex-direction: column; gap: 10px; }
+.profilo-rec-card {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px; padding: 10px; cursor: pointer;
+    transition: background 0.18s ease, border-color 0.18s ease;
+}
+.profilo-rec-card:hover { background: rgba(255,255,255,0.07); border-color: rgba(96,165,250,0.25); }
+.profilo-rec-poster {
+    position: relative; width: 56px; flex-shrink: 0;
+    aspect-ratio: 2/3; border-radius: 8px; overflow: hidden;
+    background: rgba(255,255,255,0.06);
+}
+.profilo-rec-poster img { width:100%; height:100%; object-fit:cover; display:block; }
+.profilo-rec-noposter { width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+.profilo-rec-badge { position:absolute; top:3px; right:3px; font-size:10px; }
+.profilo-rec-body { flex: 1; min-width: 0; }
+.profilo-rec-type {
+    display: inline-block; font-size: 8px; font-weight: 800;
+    letter-spacing: 0.07em; text-transform: uppercase;
+    padding: 2px 6px; border-radius: 6px; margin-bottom: 4px;
+}
+.profilo-rec-title {
+    font-size: 0.88rem; font-weight: 700; color: var(--text);
+    line-height: 1.25; margin-bottom: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+}
+.profilo-rec-reason {
+    font-size: 0.75rem; color: var(--muted); line-height: 1.4;
+    margin: 0 0 8px;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+}
+.profilo-rec-feedback { display: flex; gap: 6px; }
+
+/* Accordion */
+.profilo-accordion {
+    background: rgba(22,31,61,0.65);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px; overflow: hidden;
+    backdrop-filter: blur(10px);
+}
+.profilo-accordion-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 14px 16px; cursor: pointer;
+    list-style: none; user-select: none;
+    transition: background 0.18s ease;
+}
+.profilo-accordion-header::-webkit-details-marker { display: none; }
+.profilo-accordion-header:hover { background: rgba(255,255,255,0.04); }
+.profilo-accordion-title {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.88rem; font-weight: 700; color: var(--text); flex: 1;
+}
+.profilo-accordion-count {
+    font-size: 0.72rem; font-weight: 700; color: var(--muted);
+    background: rgba(255,255,255,0.07); padding: 2px 8px; border-radius: 20px;
+}
+.profilo-accordion-chevron { transition: transform 0.25s ease; flex-shrink: 0; color: var(--muted); }
+details[open] .profilo-accordion-chevron { transform: rotate(180deg); }
+.profilo-accordion-body {
+    padding: 14px 16px 16px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Liked */
+.profilo-liked-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.profilo-liked-card {
+    position: relative; border-radius: 10px; overflow: hidden;
+    aspect-ratio: 2/3; background: rgba(255,255,255,0.04);
+    display: block; text-decoration: none; transition: transform 0.2s ease;
+}
+.profilo-liked-card:hover { transform: translateY(-2px); }
+.profilo-liked-card img { width:100%; height:100%; object-fit:cover; display:block; }
+.profilo-liked-noposter { width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:var(--muted); }
+.profilo-liked-overlay {
+    position: absolute; inset: auto 0 0 0;
+    padding: 5px 6px 6px;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+}
+.profilo-liked-type {
+    font-size: 7px; font-weight: 800; letter-spacing: 0.07em;
+    text-transform: uppercase; padding: 1px 4px; border-radius: 4px;
+    display: inline-block; margin-bottom: 2px;
+}
+.profilo-liked-title {
+    font-size: 0.65rem; font-weight: 700; color: #fff; line-height: 1.2;
+    display: -webkit-box; -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* Taste */
+.profilo-taste-grid { display: flex; flex-direction: column; gap: 14px; }
+.profilo-taste-label {
+    font-size: 0.7rem; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 7px;
+}
+.profilo-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.profilo-chip { font-size: 0.75rem; font-weight: 700; padding: 4px 11px; border-radius: 20px; }
+.profilo-chip--genre { background: rgba(59,130,246,0.15); color: #93c5fd; border: 1px solid rgba(59,130,246,0.3); }
+.profilo-chip--vibe  { background: rgba(139,92,246,0.15); color: #c4b5fd; border: 1px solid rgba(139,92,246,0.3); }
+.profilo-chip--kw    { background: rgba(255,255,255,0.06); color: var(--muted); border: 1px solid rgba(255,255,255,0.1); font-size: 0.7rem; }
+
+/* Searches */
+.profilo-searches { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Empty */
+.profilo-empty-hint {
+    display: flex; flex-direction: column; align-items: center;
+    text-align: center; padding: 20px 0; gap: 8px;
+    color: var(--muted); font-size: 0.85rem;
+}
+
+/* Desktop */
+@media (min-width: 640px) {
+    .profilo-recs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .profilo-rec-card { flex-direction: column; gap: 8px; }
+    .profilo-rec-poster { width: 100%; aspect-ratio: 2/3; }
+    .profilo-liked-grid { grid-template-columns: repeat(6, 1fr); }
+    .profilo-taste-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+}
+
+@media (max-width: 420px) {
+    .profilo-hero { flex-wrap: wrap; }
+    .profilo-hero-actions { width: 100%; }
+    .pact-btn { flex: 1; justify-content: center; }
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', path='js/feedback.js') }}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const modal     = document.getElementById("dashboard-rec-modal");
+    const closeBtn  = document.getElementById("dashboard-modal-close");
+    const posterEl  = document.getElementById("dashboard-modal-poster");
+    const badgeEl   = document.getElementById("dashboard-modal-badge");
+    const titleEl   = document.getElementById("dashboard-modal-title");
+    const typeEl    = document.getElementById("dashboard-modal-type");
+    const reasonEl  = document.getElementById("dashboard-modal-reason");
+    const whyEl     = document.getElementById("dashboard-modal-why");
+    const detailBtn = document.getElementById("dashboard-modal-detail");
+    const favBtn    = document.getElementById("dashboard-modal-fav");
+    const providersEl = document.getElementById("dashboard-modal-providers");
+
+    async function loadProviders(title, type) {
+        providersEl.innerHTML = '<p style="color:var(--muted);font-size:0.82rem;">Caricamento piattaforme...</p>';
+        try {
+            const res  = await fetch(`/watch-providers?title=${encodeURIComponent(title)}&content_type=${type.toLowerCase()}`);
+            const data = await res.json();
+            const flatrate = data.flatrate || [];
+            const rent     = data.rent     || [];
+            if (!flatrate.length && !rent.length) { providersEl.innerHTML = ""; return; }
+            const renderGroup = (items, label) => {
+                let h = `<div style="margin-bottom:10px;"><div style="font-size:0.7rem;color:var(--muted);margin-bottom:6px;font-weight:700;text-transform:uppercase;">${label}</div><div style="display:flex;gap:8px;flex-wrap:wrap;">`;
+                for (const p of items)
+                    h += `<a href="${p.link}" target="_blank" title="${p.name}" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);text-decoration:none;color:var(--text);font-size:0.8rem;font-weight:600;">${p.logo_url ? `<img src="${p.logo_url}" style="width:20px;height:20px;border-radius:4px;">` : ""}${p.name}</a>`;
+                return h + `</div></div>`;
+            };
+            providersEl.innerHTML = (flatrate.length ? renderGroup(flatrate, "Incluso in abbonamento") : "") + (rent.length ? renderGroup(rent, "Noleggio/Acquisto") : "");
+        } catch(e) { providersEl.innerHTML = ""; }
+    }
+
+    function openModal(card) {
+        const title   = card.dataset.title  || "";
+        const type    = card.dataset.type   || "";
+        const badge   = card.dataset.badge  || "";
+        const reason  = card.dataset.reason || "";
+        const poster  = card.dataset.poster || "";
+        const match   = card.dataset.match  || "";
+        const isLiked = card.dataset.isLiked === "1";
+
+        titleEl.textContent  = title;
+        typeEl.textContent   = type;
+        badgeEl.textContent  = badge;
+        reasonEl.textContent = reason;
+        whyEl.innerHTML      = match ? `<strong>Match:</strong> ${match}/10` : "";
+
+        if (poster) { posterEl.src = poster; posterEl.style.display = "block"; }
+        else { posterEl.style.display = "none"; }
+
+        // Link scheda completa — usa endpoint dedicato /tmdb-id
+        if (detailBtn) {
+            detailBtn.href = "#";
+            detailBtn.style.opacity = "0.5";
+            detailBtn.style.pointerEvents = "none";
+            const basePath = type.toLowerCase() === "tv" ? "serie" : "film";
+            fetch(`/tmdb-id?title=${encodeURIComponent(title)}&content_type=${type.toLowerCase()}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.tmdb_id) {
+                        detailBtn.href = `/${basePath}/${data.tmdb_id}`;
+                        detailBtn.target = "_self";
+                    }
+                    detailBtn.style.opacity = "";
+                    detailBtn.style.pointerEvents = "";
+                })
+                .catch(() => {
+                    detailBtn.style.opacity = "";
+                    detailBtn.style.pointerEvents = "";
+                });
+        }
+
+        favBtn.classList.toggle("active", isLiked);
+        favBtn.innerHTML = isLiked
+            ? '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;fill:currentColor;"></i> Nei preferiti'
+            : '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Preferiti';
+        lucide.createIcons();
+
+        modal.classList.add("is-open");
+        modal.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+        loadProviders(title, type);
+
+        favBtn.onclick = function () {
+            if (card.dataset.isLiked === "1") return;
+            fetch("/feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ title, content_type: type.toLowerCase(), feedback_type: "liked" })
+            }).then(r => r.json()).then(data => {
+                if (data.status === "ok") {
+                    card.dataset.isLiked = "1";
+                    favBtn.classList.add("active");
+                    favBtn.innerHTML = '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;fill:currentColor;"></i> Nei preferiti';
+                    lucide.createIcons();
+                }
+            });
+        };
+    }
+
+    function closeModal() {
+        modal.classList.remove("is-open");
+        modal.setAttribute("aria-hidden", "true");
+        document.body.style.overflow = "";
+        providersEl.innerHTML = "";
+    }
+
+    document.querySelectorAll(".dashboard-pick-clickable").forEach(card => {
+        card.addEventListener("click", function(e) {
+            if (e.target.closest(".feedback-actions")) return;
+            openModal(card);
+        });
+    });
+
+    if (closeBtn) closeBtn.addEventListener("click", closeModal);
+    if (modal) {
+        modal.addEventListener("click", e => { if (e.target.dataset.closeModal === "true") closeModal(); });
+        document.addEventListener("keydown", e => { if (e.key === "Escape" && modal.classList.contains("is-open")) closeModal(); });
+    }
+});
+</script>
+{% endblock %}

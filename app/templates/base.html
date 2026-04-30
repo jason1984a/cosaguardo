@@ -5,6 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}CosaGuardo{% endblock %}</title>
 
+    {# ── SEO & Open Graph ── #}
+    <meta name="description" content="{% block meta_description %}CosaGuardo — Scopri film e serie TV perfetti per te. Consigli personalizzati basati sui tuoi gusti.{% endblock %}">
+    <meta name="theme-color" content="#0b1020">
+    <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
+
+    {# Open Graph (WhatsApp, Telegram, Facebook) #}
+    <meta property="og:site_name" content="CosaGuardo">
+    <meta property="og:title" content="{% block og_title %}CosaGuardo — Scopri cosa guardare{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}Consigli personalizzati su film e serie TV in base ai tuoi gusti.{% endblock %}">
+    <meta property="og:image" content="{% block og_image %}https://cosaguardo.onrender.com/static/og-default.jpg{% endblock %}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+    <meta property="og:url" content="{% block og_url %}https://cosaguardo.onrender.com{% endblock %}">
+    <meta property="og:locale" content="it_IT">
+
+    {# Twitter/X Card #}
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{% block tw_title %}CosaGuardo{% endblock %}">
+    <meta name="twitter:description" content="{% block tw_description %}Consigli personalizzati su film e serie TV.{% endblock %}">
+    <meta name="twitter:image" content="{% block tw_image %}https://cosaguardo.onrender.com/static/og-default.jpg{% endblock %}">
+
     <style>
         :root {
             --bg: #0b1020;
@@ -87,6 +109,12 @@
             color: white;
             font-size: 0.95rem;
             box-shadow: var(--shadow);
+        }
+
+        .brand-icon {
+            width: 34px;
+            height: 34px;
+            flex-shrink: 0;
         }
 
         .nav {
@@ -264,6 +292,9 @@
     </style>
 
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=6">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='favicon.ico') }}">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='icon.svg') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', path='apple-touch-icon.png') }}">
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 
     {% block head_extra %}{% endblock %}
@@ -273,9 +304,22 @@
         <header class="site-header">
             <div class="container header-inner">
                 <a href="/" class="brand">
-                    <div class="brand-logo">
-                        <i data-lucide="clapperboard" style="width:17px;height:17px;stroke:white;stroke-width:2;"></i>
-                    </div>
+                    <svg viewBox="0 0 104 112" xmlns="http://www.w3.org/2000/svg" class="brand-icon" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="navGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#6ea8fe"/>
+                                <stop offset="100%" style="stop-color:#a78bfa"/>
+                            </linearGradient>
+                            <linearGradient id="navBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#1a3060"/>
+                                <stop offset="100%" style="stop-color:#28185a"/>
+                            </linearGradient>
+                        </defs>
+                        <rect x="4" y="8" width="96" height="96" rx="26" fill="url(#navBg)"/>
+                        <rect x="4" y="8" width="96" height="96" rx="26" fill="none" stroke="url(#navGrad)" stroke-width="1.5" opacity="0.45"/>
+                        <path d="M 66 24 A 30 30 0 1 0 66 88" fill="none" stroke="url(#navGrad)" stroke-width="13" stroke-linecap="round"/>
+                        <polygon points="65,38 65,74 86,56" fill="url(#navGrad)"/>
+                    </svg>
                     <span class="brand-text">CosaGuardo</span>
                 </a>
 
@@ -286,7 +330,7 @@
                             <span class="nav-text">Home</span>
                         </a>
 
-                        <a href="/dashboard" class="nav-link-item" aria-label="Dashboard">
+                        <a href="/profilo" class="nav-link-item" aria-label="Profilo">
                             <span class="nav-icon"><i data-lucide="user-circle" style="width:18px;height:18px;stroke:currentColor;stroke-width:1.75;"></i></span>
                             <span class="nav-text">Profilo</span>
                         </a>

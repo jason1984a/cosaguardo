@@ -23,6 +23,9 @@ from app.db import (
     get_disliked_titles_by_user,
     get_title_states_map,
     upsert_title_state,
+    get_user_stats,
+    get_home_picks,
+    save_home_picks,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -37,6 +40,7 @@ from core.recommendation_api import (
     get_detail_movie,
     get_detail_tv,
     get_cinema_news,
+    search_movies_fast,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
@@ -142,8 +146,9 @@ def get_news_cached(limit: int = 8) -> list:
 @app.get("/")
 def home(request: Request):
     trending = get_trending_cached(limit=12)
-    user_id = request.session.get("user_id")
-    cinema = get_cinema_cached()
+    user_id  = request.session.get("user_id")
+    cinema   = get_cinema_cached()
+
     return templates.TemplateResponse(
         request=request,
         name="index.html",
@@ -175,30 +180,50 @@ def cinema_news():
 @app.get("/home-picks", response_class=JSONResponse)
 def home_picks(request: Request):
     """
-    Consigli personalizzati per la home (carosello Netflix-style).
-    Restituisce una lista di raccomandazioni basate su preferiti e ricerche recenti.
-    Solo per utenti loggati — risponde 401 se non autenticato.
+    Consigli personalizzati per la home — calcolati una volta al giorno e salvati in DB.
+    Prima chiamata del giorno: ~2-3s. Tutte le successive: istantanee (lettura DB).
     """
     user_id = request.session.get("user_id")
     if not user_id:
         from fastapi.responses import JSONResponse as _JSONResponse
         return _JSONResponse(status_code=401, content={"error": "not_logged_in"})
 
-    searches = get_searches_by_user(user_id, limit=10)
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    # 1. Prova a leggere dal DB (già calcolato oggi)
+    cached = get_home_picks(user_id, today)
+    if cached:
+        return cached
+
+    # 2. Prima chiamata del giorno — calcola
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    searches     = get_searches_by_user(user_id, limit=10)
     liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
 
-    # Recupera poster per i liked
-    for item in liked_titles:
-        item["poster_url"] = item.get("poster_url") or ""
-        if item["content_type"] == "movie" and not item["poster_url"]:
-            tmdb_info = get_movie_tmdb_info(item["title"])
-            item["poster_url"] = tmdb_info.get("poster_url", "") if tmdb_info else ""
-        elif item["content_type"] == "tv" and not item["poster_url"]:
-            tv_info = find_tv_by_title(item["title"])
-            if tv_info and tv_info.get("poster_path"):
-                item["poster_url"] = f"https://image.tmdb.org/t/p/w342{tv_info['poster_path']}"
+    # Poster in parallelo
+    def fetch_poster(item):
+        if item["content_type"] == "movie":
+            info = get_movie_tmdb_info(item["title"])
+            item["poster_url"] = info.get("poster_url", "") if info else ""
+            item["tmdb_id"]    = info.get("tmdb_id") if info else None
+        else:
+            tv = find_tv_by_title(item["title"])
+            if tv and tv.get("poster_path"):
+                item["poster_url"] = f"https://image.tmdb.org/t/p/w342{tv['poster_path']}"
+                item["tmdb_id"]    = tv.get("id") or tv.get("tv_id")
+            else:
+                item["poster_url"] = ""
+                item["tmdb_id"]    = None
+        return item
 
-    # Usa lo stesso motore del dashboard ma con pool più ampio
+    needs = [i for i in liked_titles if not i.get("poster_url")]
+    if needs:
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            for fut in as_completed({ex.submit(fetch_poster, i): i for i in needs}):
+                try: fut.result()
+                except Exception: pass
+
     picks = build_dashboard_recommendations(
         user_id=user_id,
         searches=searches,
@@ -206,6 +231,10 @@ def home_picks(request: Request):
         per_type_pool=18,
         final_count=12,
     )
+
+    # 3. Salva in DB per tutto il resto della giornata
+    if picks:
+        save_home_picks(user_id, today, picks)
 
     return picks
 
@@ -241,6 +270,15 @@ def register_page(request: Request):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
+    """Legacy redirect — ora tutto è in /profilo."""
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse(url="/login", status_code=303)
+    return RedirectResponse(url="/profilo", status_code=302)
+
+
+@app.get("/dashboard-legacy", response_class=HTMLResponse)
+def dashboard_legacy(request: Request):
     user_id = request.session.get("user_id")
 
     if not user_id:
@@ -601,6 +639,22 @@ def recommend(
     )
 
 
+@app.get("/search-fast", response_class=JSONResponse)
+def search_fast(q: str = "", content_type: str = "movie"):
+    """
+    Autocomplete veloce:
+    - Film: solo DB locale (<10ms)
+    - TV: TMDb con cache server-side (prima call ~200ms, successive <1ms)
+    Il client ha anche una cache propria in app.js.
+    """
+    query = q.strip()
+    if len(query) < 2:
+        return []
+    if content_type == "tv":
+        return search_tv_series(query, limit=8)
+    return search_movies_fast(query, limit=8)
+
+
 @app.get("/search", response_class=JSONResponse)
 def search(q: str = "", content_type: str = "movie"):
     query = q.strip()
@@ -718,4 +772,106 @@ def serie_detail(request: Request, tmdb_id: int):
 def news_endpoint():
     """Feed RSS news cinema aggregato — cached 1h."""
     return get_news_cached(limit=8)
+
+
+@app.get("/profilo", response_class=HTMLResponse)
+def profilo(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse(url="/login", status_code=303)
+
+    user = get_user_by_id(user_id)
+    if not user:
+        request.session.clear()
+        return RedirectResponse(url="/login", status_code=303)
+
+    stats      = get_user_stats(user_id)
+    searches   = get_searches_by_user(user_id, limit=10)
+    liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
+    taste_profile = build_taste_profile(searches)
+
+    # Poster e tmdb_id per liked — recupero parallelo
+    def _enrich_liked(item):
+        item["poster_url"] = item.get("poster_url") or ""
+        if item["content_type"] == "movie":
+            tmdb_info = get_movie_tmdb_info(item["title"])
+            if tmdb_info:
+                item["poster_url"] = item["poster_url"] or tmdb_info.get("poster_url", "")
+                item["tmdb_id"]    = tmdb_info.get("tmdb_id")
+            else:
+                item["tmdb_id"] = None
+        else:
+            tv_info = find_tv_by_title(item["title"])
+            if tv_info and tv_info.get("poster_path"):
+                item["poster_url"] = item["poster_url"] or f"https://image.tmdb.org/t/p/w342{tv_info['poster_path']}"
+                item["tmdb_id"]    = tv_info.get("id") or tv_info.get("tv_id")
+            else:
+                item["tmdb_id"] = None
+        return item
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {ex.submit(_enrich_liked, item): item for item in liked_titles}
+        for fut in as_completed(futures):
+            try:
+                fut.result()
+            except Exception:
+                pass
+
+    # Consigli del giorno (stessa logica del vecchio dashboard)
+    today_key  = datetime.now().strftime("%Y-%m-%d")
+    daily_recs = get_daily_recommendations(user_id, today_key)
+
+    if daily_recs and len(daily_recs) > 0:
+        recommendations = [dict(rec) for rec in daily_recs]
+    else:
+        recommendations = build_dashboard_recommendations(
+            user_id=user_id,
+            searches=searches,
+            liked_titles=liked_titles,
+            taste_profile=taste_profile,
+        )
+        if recommendations:
+            save_daily_recommendations(user_id, today_key, recommendations)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="profilo.html",
+        context={
+            "request":         request,
+            "user_email":      user["email"],
+            "stats":           stats,
+            "taste_profile":   taste_profile,
+            "liked_titles":    liked_titles,
+            "recommendations": recommendations,
+            "searches":        searches,
+            "tmdb_api_key":    os.environ.get("TMDB_API_KEY", ""),
+        },
+    )
+
+
+@app.get("/tmdb-id", response_class=JSONResponse)
+def get_tmdb_id(title: str = "", content_type: str = "movie"):
+    """
+    Restituisce il tmdb_id per un titolo — usato dal modal del profilo
+    per costruire il link /film/{id} o /serie/{id}.
+    """
+    title = title.strip()
+    if not title:
+        return {"tmdb_id": None}
+
+    if content_type == "tv":
+        try:
+            result = find_tv_by_title(title)
+            tmdb_id = result.get("id") or result.get("tv_id") if result else None
+        except Exception:
+            tmdb_id = None
+    else:
+        try:
+            info = get_movie_tmdb_info(title)
+            tmdb_id = info.get("tmdb_id") if info else None
+        except Exception:
+            tmdb_id = None
+
+    return {"tmdb_id": tmdb_id}
 

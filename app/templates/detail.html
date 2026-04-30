@@ -1,6 +1,15 @@
 {% extends "base.html" %}
 
 {% block title %}{{ detail.title }} — CosaGuardo{% endblock %}
+{% block meta_description %}{{ detail.overview[:160] if detail.overview else detail.title + " — Scopri dove guardarlo in streaming, cast, trailer e consigli simili su CosaGuardo." }}{% endblock %}
+{% block og_title %}{{ detail.title }} {% if detail.release_date %}({{ detail.release_date[:4] }}){% endif %} — CosaGuardo{% endblock %}
+{% block og_description %}{% if detail.tagline %}"{{ detail.tagline }}" — {% endif %}{{ detail.overview[:200] if detail.overview else "Scopri dove guardarlo, cast e trailer su CosaGuardo." }}{% endblock %}
+{% block og_image %}{{ detail.poster_url or "https://cosaguardo.onrender.com/static/og-default.jpg" }}{% endblock %}
+{% block og_type %}video.movie{% endblock %}
+{% block og_url %}https://cosaguardo.onrender.com/{{ "serie" if detail.content_type == "tv" else "film" }}/{{ detail.tmdb_id }}{% endblock %}
+{% block tw_title %}{{ detail.title }} — CosaGuardo{% endblock %}
+{% block tw_description %}{{ detail.overview[:160] if detail.overview else "Scopri dove guardarlo in streaming." }}{% endblock %}
+{% block tw_image %}{{ detail.poster_url or "https://cosaguardo.onrender.com/static/og-default.jpg" }}{% endblock %}
 
 {% block head_extra %}
 <style>

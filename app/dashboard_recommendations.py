@@ -58,27 +58,24 @@ def stable_daily_pick(items, user_id, day_key, count=3):
     return [item for _, item in scored[:count]]
 
 
-def normalize_movie_rec(rec):
+def normalize_movie_rec(rec, tmdb_info=None):
     poster = rec.get("poster_path") or rec.get("poster_url")
 
     if poster and isinstance(poster, str) and poster.startswith("/"):
         poster = TMDB_IMAGE_BASE + poster
 
-    if not poster:
-        try:
-            tmdb_info = get_movie_tmdb_info(rec.get("title", ""))
-            poster = tmdb_info.get("poster_url")
-        except Exception:
-            poster = None
-
-    # Recupera tmdb_id se non già presente
     tmdb_id = rec.get("tmdb_id")
-    if not tmdb_id:
-        try:
-            info = get_movie_tmdb_info(rec.get("title", ""))
-            tmdb_id = info.get("tmdb_id") if info else None
-        except Exception:
-            tmdb_id = None
+
+    if not poster or not tmdb_id:
+        if tmdb_info is None:
+            try:
+                tmdb_info = get_movie_tmdb_info(rec.get("title", ""))
+            except Exception:
+                tmdb_info = {}
+        if not poster:
+            poster = (tmdb_info or {}).get("poster_url")
+        if not tmdb_id:
+            tmdb_id = (tmdb_info or {}).get("tmdb_id")
 
     return {
         "title": rec.get("title", ""),
@@ -144,8 +141,28 @@ def build_dashboard_recommendations(
                 top_k=per_type_pool,
                 per_seed_limit=20,
             )
-            for rec in movie_result.get("recommendations", []):
+            recs = movie_result.get("recommendations", [])
+            # Fetch TMDb info in parallel only for recs missing poster
+            needs_fetch = [r for r in recs if not (r.get("poster_path") or r.get("poster_url"))]
+            has_poster  = [r for r in recs if r.get("poster_path") or r.get("poster_url")]
+
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            tmdb_map = {}
+            if needs_fetch:
+                with ThreadPoolExecutor(max_workers=6) as ex:
+                    futures = {ex.submit(get_movie_tmdb_info, r["title"]): r["title"]
+                               for r in needs_fetch}
+                    for fut in as_completed(futures):
+                        title = futures[fut]
+                        try:
+                            tmdb_map[title] = fut.result()
+                        except Exception:
+                            tmdb_map[title] = {}
+
+            for rec in has_poster:
                 pool.append(normalize_movie_rec(rec))
+            for rec in needs_fetch:
+                pool.append(normalize_movie_rec(rec, tmdb_info=tmdb_map.get(rec["title"])))
         except Exception:
             pass
 

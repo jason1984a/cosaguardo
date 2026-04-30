@@ -486,3 +486,121 @@ def get_title_states_map(user_id: int, content_type: str):
         }
 
     return result
+
+
+
+def ensure_home_picks_table():
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS home_picks (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id      INTEGER NOT NULL,
+        pick_date    TEXT NOT NULL,
+        title        TEXT NOT NULL,
+        content_type TEXT NOT NULL,
+        reason       TEXT,
+        score        REAL,
+        poster_url   TEXT,
+        tmdb_id      INTEGER
+    )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def get_home_picks(user_id: int, pick_date: str) -> list:
+    """Restituisce i picks del carosello home per oggi. [] se non ancora calcolati."""
+    ensure_home_picks_table()
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT title, content_type, reason, score, poster_url, tmdb_id
+        FROM home_picks
+        WHERE user_id = ? AND pick_date = ?
+        ORDER BY id ASC
+    """, (user_id, pick_date))
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def save_home_picks(user_id: int, pick_date: str, picks: list):
+    """Salva i picks del carosello home. Elimina prima quelli vecchi dello stesso giorno."""
+    ensure_home_picks_table()
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM home_picks WHERE user_id = ? AND pick_date = ?",
+        (user_id, pick_date)
+    )
+    for p in picks:
+        cursor.execute("""
+            INSERT INTO home_picks
+                (user_id, pick_date, title, content_type, reason, score, poster_url, tmdb_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id, pick_date,
+            p.get("title", ""),
+            p.get("content_type", ""),
+            p.get("reason", ""),
+            p.get("score"),
+            p.get("poster_url", ""),
+            p.get("tmdb_id"),
+        ))
+    conn.commit()
+    conn.close()
+
+
+def get_user_stats(user_id: int) -> dict:
+    """
+    Calcola statistiche complete del profilo utente:
+    contatori, titoli preferiti, visti, ricerche totali.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Totale ricerche
+    cur.execute("SELECT COUNT(*) as cnt FROM searches WHERE user_id = ?", (user_id,))
+    total_searches = cur.fetchone()["cnt"]
+
+    # Titoli preferiti
+    cur.execute("""
+        SELECT title, content_type, updated_at
+        FROM user_title_state
+        WHERE user_id = ? AND preference = 'liked'
+        ORDER BY updated_at DESC
+    """, (user_id,))
+    liked = [dict(r) for r in cur.fetchall()]
+
+    # Titoli visti
+    cur.execute("""
+        SELECT title, content_type, updated_at
+        FROM user_title_state
+        WHERE user_id = ? AND seen = 1
+        ORDER BY updated_at DESC
+    """, (user_id,))
+    seen = [dict(r) for r in cur.fetchall()]
+
+    # Ricerche recenti (last 20 per stats generi)
+    cur.execute("""
+        SELECT seed_titles, content_type FROM searches
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 20
+    """, (user_id,))
+    recent_searches = [dict(r) for r in cur.fetchall()]
+
+    conn.close()
+    return {
+        "total_searches": total_searches,
+        "liked": liked,
+        "seen": seen,
+        "recent_searches": recent_searches,
+        "liked_count": len(liked),
+        "seen_count": len(seen),
+        "movie_liked": sum(1 for x in liked if x["content_type"] == "movie"),
+        "tv_liked": sum(1 for x in liked if x["content_type"] == "tv"),
+    }
+
