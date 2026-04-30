@@ -72,18 +72,17 @@
     <section class="search-panel search-panel-v2" id="search-panel">
         <div class="panel-header panel-header-v2">
             <div>
-                <span class="panel-kicker">Motore di raccomandazione</span>
+                <span class="panel-kicker">
+                    <i data-lucide="cpu" style="width:12px;height:12px;stroke:currentColor;stroke-width:2;vertical-align:middle;margin-right:4px;"></i>
+                    Il tuo algoritmo personale
+                </span>
                 <h2>Parti dai tuoi preferiti</h2>
-                <p>
-                    Inserisci almeno 2-3 titoli che ti sono piaciuti. Più sono coerenti tra loro,
-                    più i consigli diventano precisi.
-                </p>
+                <p>Inserisci 2-3 titoli che hai amato — più sono simili, più i consigli diventano precisi.</p>
             </div>
         </div>
 
         <form method="post" action="/recommend" id="recommend-form">
             <div class="mode-switch mode-switch-v2">
-                <span class="mode-label">Cosa vuoi cercare?</span>
 
                 <label class="mode-option">
                     <input type="radio" name="content_type" value="movie" checked>
