@@ -151,7 +151,7 @@ def prettify_title(title: str) -> str:
 
 # ─── Cache RSS news (TTL 1 ora) ───────────────────────────────────────────
 _news_cache: dict = {"data": None, "ts": 0.0}
-_NEWS_TTL = 3600  # 1 ora
+_NEWS_TTL = 1800  # 30 minuti
 
 
 def get_news_cached(limit: int = 8) -> list:

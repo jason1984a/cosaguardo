@@ -210,42 +210,41 @@
             left: 0;
             right: 0;
             z-index: 9999;
-            padding: 0 16px 16px;
+            padding: 0 12px 12px;
         }
 
         .cookie-banner-inner {
             max-width: 780px;
             margin: 0 auto;
-            background: rgba(17, 24, 50, 0.97);
+            background: rgba(17, 24, 50, 0.98);
             border: 1px solid rgba(110,168,254,0.25);
-            border-radius: 18px;
-            padding: 18px 20px;
-            display: flex;
-            gap: 20px;
+            border-radius: 16px;
+            padding: 14px 16px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px 16px;
             align-items: center;
-            flex-wrap: wrap;
             backdrop-filter: blur(16px);
             box-shadow: 0 -4px 32px rgba(0,0,0,0.4);
         }
 
         .cookie-banner-text {
-            flex: 1;
             min-width: 0;
         }
         .cookie-banner-text strong {
             display: block;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             color: var(--text);
-            margin-bottom: 4px;
+            margin-bottom: 3px;
         }
         .cookie-banner-text p {
-            font-size: 0.78rem;
+            font-size: 0.75rem;
             color: var(--muted);
-            margin: 0 0 4px;
-            line-height: 1.5;
+            margin: 0 0 3px;
+            line-height: 1.45;
         }
         .cookie-banner-link {
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             color: #93c5fd;
             text-decoration: none;
         }
@@ -253,18 +252,20 @@
 
         .cookie-banner-actions {
             display: flex;
-            gap: 8px;
+            flex-direction: column;
+            gap: 6px;
             flex-shrink: 0;
         }
 
         .cookie-btn {
-            padding: 9px 18px;
+            padding: 8px 16px;
             border-radius: 10px;
-            font-size: 0.82rem;
+            font-size: 0.8rem;
             font-weight: 700;
             cursor: pointer;
             border: none;
             transition: all 0.18s ease;
+            white-space: nowrap;
         }
         .cookie-btn--accept {
             background: var(--primary, #6ea8fe);
@@ -277,6 +278,19 @@
             border: 1px solid rgba(255,255,255,0.1);
         }
         .cookie-btn--decline:hover { background: rgba(255,255,255,0.12); }
+
+        @media (max-width: 500px) {
+            .cookie-banner-inner {
+                grid-template-columns: 1fr;
+            }
+            .cookie-banner-actions {
+                flex-direction: row;
+            }
+            .cookie-btn {
+                flex: 1;
+                text-align: center;
+            }
+        }
 
         .nav-icon {
             display: inline-flex;
