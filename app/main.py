@@ -42,6 +42,8 @@ from core.recommendation_api import (
     get_cinema_news,
     search_movies_fast,
     get_person_detail,
+    get_scopri_results,
+    get_scopri_strips,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
@@ -149,6 +151,22 @@ def prettify_title(title: str) -> str:
     return title
 
 
+
+# ─── Cache strips /scopri (TTL 2 ore) ────────────────────────────────────
+_strips_cache: dict = {}  # {tipo: {"data": [...], "ts": float}}
+_STRIPS_TTL = 7200
+
+
+def get_strips_cached(tipo: str) -> list:
+    now   = _time.time()
+    entry = _strips_cache.get(tipo)
+    if entry and (now - entry["ts"]) < _STRIPS_TTL:
+        return entry["data"]
+    fresh = get_scopri_strips(tipo=tipo)
+    if fresh:
+        _strips_cache[tipo] = {"data": fresh, "ts": now}
+    return fresh or (entry["data"] if entry else [])
+# ──────────────────────────────────────────────────────────────────────────
 
 # ─── Cache RSS news (TTL 1 ora) ───────────────────────────────────────────
 _news_cache: dict = {"data": None, "ts": 0.0}
@@ -1091,5 +1109,88 @@ def persona_detail(request: Request, person_id: int):
         request=request,
         name="persona.html",
         context={"request": request, "detail": detail},
+    )
+
+
+# ── Titoli SEO dinamici per /scopri ──────────────────────────────────────
+def _scopri_seo(tipo, genere, mood, piattaforma, anno):
+    parts = []
+    if genere:   parts.append(genere.capitalize())
+    if mood:     parts.append(f"mood {mood}")
+    if piattaforma: parts.append(piattaforma.capitalize())
+    if anno == "recenti": parts.append("recenti")
+    elif anno == "classici": parts.append("classici")
+
+    tipo_label = "serie TV" if tipo == "serie" else "film"
+    if parts:
+        title = f"I migliori {tipo_label} {' · '.join(parts)} — CosaGuardo"
+        desc  = f"Scopri i migliori {tipo_label} {' '.join(parts)} consigliati dall\'algoritmo di CosaGuardo."
+    else:
+        title = f"Scopri {tipo_label} — CosaGuardo"
+        desc  = f"Esplora {tipo_label} consigliati in base al tuo gusto su CosaGuardo."
+    return title, desc
+
+
+@app.get("/scopri", response_class=HTMLResponse)
+def scopri(
+    request: Request,
+    tipo:        str = "film",
+    genere:      str = "",
+    mood:        str = "",
+    piattaforma: str = "",
+    anno:        str = "",
+    page:        int = 1,
+):
+    has_filters = any([genere, mood, piattaforma, anno])
+
+    if has_filters:
+        # Modalità filtrata — griglia paginata
+        data = get_scopri_results(
+            tipo=tipo, genere=genere, mood=mood,
+            piattaforma=piattaforma, anno=anno, page=page
+        )
+        strips = []
+        results = data["results"]
+        has_next = (page * 20) < data["total"]
+        has_prev = page > 1
+    else:
+        # Modalità home — strip per genere (cached)
+        strips  = get_strips_cached(tipo=tipo)
+        results = []
+        has_next = has_prev = False
+
+    seo_title, seo_desc = _scopri_seo(tipo, genere, mood, piattaforma, anno)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="scopri.html",
+        context={
+            "request":     request,
+            "strips":      strips,
+            "results":     results,
+            "has_next":    has_next,
+            "has_prev":    has_prev,
+            "page":        page,
+            "has_filters": has_filters,
+            "tipo":        tipo,
+            "genere":      genere,
+            "mood":        mood,
+            "piattaforma": piattaforma,
+            "anno":        anno,
+            "seo_title":   seo_title,
+            "seo_desc":    seo_desc,
+        },
+    )
+
+
+@app.get("/scopri/json", response_class=JSONResponse)
+def scopri_json(
+    tipo: str = "film", genere: str = "", mood: str = "",
+    piattaforma: str = "", anno: str = "", page: int = 1,
+):
+    """AJAX endpoint per caricamento pagine successive."""
+    return get_scopri_results(
+        tipo=tipo, genere=genere, mood=mood,
+        piattaforma=piattaforma, anno=anno, page=page
     )
 

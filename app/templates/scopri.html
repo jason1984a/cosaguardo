@@ -1,0 +1,515 @@
+{% extends "base.html" %}
+
+{% block title %}{{ seo_title }}{% endblock %}
+{% block meta_description %}{{ seo_desc }}{% endblock %}
+{% block og_title %}{{ seo_title }}{% endblock %}
+{% block og_description %}{{ seo_desc }}{% endblock %}
+
+{% block content %}
+<div class="scopri-shell">
+
+    <!-- HEADER -->
+    <div class="scopri-header">
+        <div>
+            <h1 class="scopri-title">
+                {% if genere %}<span class="scopri-highlight">{{ genere.capitalize() }}</span>
+                {% elif mood %}<span class="scopri-highlight">{{ mood.capitalize() }}</span>
+                {% elif piattaforma %}<span class="scopri-highlight">{{ piattaforma.capitalize() }}</span>
+                {% else %}Scopri cosa guardare{% endif %}
+            </h1>
+        </div>
+        <div class="scopri-header-actions">
+            <!-- Toggle tipo -->
+            <div class="scopri-tipo-toggle">
+                <a href="/scopri?tipo=film{% if genere %}&genere={{ genere }}{% endif %}{% if mood %}&mood={{ mood }}{% endif %}{% if piattaforma %}&piattaforma={{ piattaforma }}{% endif %}{% if anno %}&anno={{ anno }}{% endif %}"
+                   class="tipo-btn {% if tipo == 'film' %}active{% endif %}">🎬 Film</a>
+                <a href="/scopri?tipo=serie{% if genere %}&genere={{ genere }}{% endif %}{% if mood %}&mood={{ mood }}{% endif %}{% if piattaforma %}&piattaforma={{ piattaforma }}{% endif %}{% if anno %}&anno={{ anno }}{% endif %}"
+                   class="tipo-btn {% if tipo == 'serie' %}active{% endif %}">📺 Serie</a>
+            </div>
+            <!-- Filtri toggle -->
+            <button class="scopri-filter-toggle {% if has_filters %}has-filters{% endif %}"
+                    onclick="toggleFilters()" id="filter-toggle-btn">
+                <i data-lucide="sliders-horizontal" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                Filtri{% if has_filters %} •{% endif %}
+            </button>
+        </div>
+    </div>
+
+    <!-- PANNELLO FILTRI (collassabile) -->
+    <div class="scopri-filters-panel" id="filters-panel" style="{% if not has_filters %}display:none;{% endif %}">
+        <form method="get" action="/scopri" id="scopri-form">
+            <input type="hidden" name="tipo" value="{{ tipo }}">
+
+            <div class="scopri-filter-row">
+                <div class="scopri-filter-group">
+                    <div class="scopri-filter-label">Genere</div>
+                    <div class="scopri-chips">
+                        {% for g in ["azione","thriller","horror","commedia","dramma","fantascienza","romantico","animazione","crimine","documentario","mistero","western"] %}
+                        <label class="scopri-chip">
+                            <input type="radio" name="genere" value="{{ g }}"
+                                {% if genere == g %}checked{% endif %}
+                                onchange="this.form.submit()">
+                            <span>{{ g.capitalize() }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="scopri-filter-group">
+                    <div class="scopri-filter-label">Mood</div>
+                    <div class="scopri-chips">
+                        {% for m, emoji in [("leggero","😄"),("intenso","😤"),("romantico","❤️"),("adrenalinico","⚡"),("riflessivo","🤔"),("spaventoso","👻")] %}
+                        <label class="scopri-chip">
+                            <input type="radio" name="mood" value="{{ m }}"
+                                {% if mood == m %}checked{% endif %}
+                                onchange="this.form.submit()">
+                            <span>{{ emoji }} {{ m.capitalize() }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="scopri-filter-group">
+                    <div class="scopri-filter-label">Piattaforma</div>
+                    <div class="scopri-chips">
+                        {% for p, label in [("netflix","Netflix"),("prime","Prime"),("disney","Disney+"),("apple","Apple TV+"),("paramount","Paramount+"),("now","NOW")] %}
+                        <label class="scopri-chip">
+                            <input type="radio" name="piattaforma" value="{{ p }}"
+                                {% if piattaforma == p %}checked{% endif %}
+                                onchange="this.form.submit()">
+                            <span>{{ label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="scopri-filter-group">
+                    <div class="scopri-filter-label">Periodo</div>
+                    <div class="scopri-chips">
+                        {% for a, label in [("recenti","Ultimi 6 mesi"),("anno","Ultimo anno"),("classici","Classici")] %}
+                        <label class="scopri-chip">
+                            <input type="radio" name="anno" value="{{ a }}"
+                                {% if anno == a %}checked{% endif %}
+                                onchange="this.form.submit()">
+                            <span>{{ label }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            {% if has_filters %}
+            <div style="margin-top:12px;">
+                <a href="/scopri?tipo={{ tipo }}" class="scopri-reset-all">
+                    <i data-lucide="x-circle" style="width:13px;height:13px;stroke:currentColor;stroke-width:2;"></i>
+                    Azzera filtri
+                </a>
+            </div>
+            {% endif %}
+        </form>
+    </div>
+
+    <!-- MODALITÀ STRIPS (nessun filtro attivo) -->
+    {% if not has_filters and strips %}
+    <div class="scopri-strips">
+        {% for strip in strips %}
+        <section class="scopri-strip-section">
+            <div class="scopri-strip-header">
+                <h2 class="scopri-strip-title">
+                    {{ strip.emoji }} {{ strip.label }}
+                </h2>
+                <a href="/scopri?tipo={{ tipo }}&genere={{ strip.id }}"
+                   class="scopri-strip-more">Vedi tutti →</a>
+            </div>
+            <div class="scopri-strip-wrap">
+                <button class="trend-nav trend-nav-left scopri-nav-left" data-strip="{{ strip.id }}" type="button">‹</button>
+                <div class="scopri-strip-row" id="strip-{{ strip.id }}">
+                    {% for item in strip.items %}
+                    <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
+                       class="scopri-poster-card">
+                        {% if item.poster_url %}
+                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+                        {% else %}
+                        <div class="scopri-noposter">
+                            <i data-lucide="film" style="width:24px;height:24px;opacity:.3;"></i>
+                        </div>
+                        {% endif %}
+                        <div class="scopri-poster-overlay">
+                            {% if item.vote_average and item.vote_average > 0 %}
+                            <span class="scopri-poster-score">★ {{ item.vote_average }}</span>
+                            {% endif %}
+                            <div class="scopri-poster-title">{{ item.title }}</div>
+                            {% if item.release_date %}
+                            <div class="scopri-poster-year">{{ item.release_date[:4] }}</div>
+                            {% endif %}
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                <button class="trend-nav trend-nav-right scopri-nav-right" data-strip="{{ strip.id }}" type="button">›</button>
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+
+    <!-- MODALITÀ GRIGLIA (filtri attivi) -->
+    {% elif has_filters %}
+    {% if results %}
+    <div class="scopri-grid" id="scopri-grid">
+        {% for item in results %}
+        <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
+           class="scopri-card">
+            {% if item.poster_url %}
+            <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+            {% else %}
+            <div class="scopri-card-noposter">
+                <i data-lucide="film" style="width:28px;height:28px;opacity:.3;"></i>
+            </div>
+            {% endif %}
+            <div class="scopri-card-overlay">
+                <span class="scopri-card-type {{ 'badge-tv' if item.content_type == 'tv' else 'badge-movie' }}">
+                    {{ "Serie" if item.content_type == "tv" else "Film" }}
+                </span>
+                {% if item.vote_average and item.vote_average > 0 %}
+                <span class="scopri-card-score">★ {{ item.vote_average }}</span>
+                {% endif %}
+                <div class="scopri-card-title">{{ item.title }}</div>
+                {% if item.release_date %}
+                <div class="scopri-card-year">{{ item.release_date[:4] }}</div>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    <!-- PAGINAZIONE -->
+    <div class="scopri-pagination">
+        {% if has_prev %}
+        <a href="/scopri?tipo={{ tipo }}&genere={{ genere }}&mood={{ mood }}&piattaforma={{ piattaforma }}&anno={{ anno }}&page={{ page - 1 }}"
+           class="scopri-page-btn">
+            <i data-lucide="arrow-left" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
+            Precedente
+        </a>
+        {% endif %}
+        <span class="scopri-page-info">Pagina {{ page }}</span>
+        {% if has_next %}
+        <a href="/scopri?tipo={{ tipo }}&genere={{ genere }}&mood={{ mood }}&piattaforma={{ piattaforma }}&anno={{ anno }}&page={{ page + 1 }}"
+           class="scopri-page-btn">
+            Successiva
+            <i data-lucide="arrow-right" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
+        </a>
+        {% endif %}
+    </div>
+
+    {% else %}
+    <div class="scopri-empty">
+        <i data-lucide="search-x" style="width:48px;height:48px;opacity:.25;"></i>
+        <p>Nessun risultato per questi filtri.</p>
+        <a href="/scopri?tipo={{ tipo }}" class="detail-btn detail-btn-primary" style="margin-top:12px;">Azzera filtri</a>
+    </div>
+    {% endif %}
+    {% endif %}
+
+</div>
+
+<style>
+.scopri-shell { padding-bottom: 48px; }
+
+/* Header */
+.scopri-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+.scopri-title {
+    font-size: clamp(1.4rem,4vw,2rem);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    margin: 0;
+}
+.scopri-highlight {
+    background: linear-gradient(90deg,#6ea8fe,#a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.scopri-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+/* Tipo toggle */
+.scopri-tipo-toggle {
+    display: flex;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    overflow: hidden;
+    padding: 3px;
+    gap: 2px;
+}
+.tipo-btn {
+    padding: 6px 12px;
+    border-radius: 9px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-decoration: none;
+    color: var(--muted);
+    transition: all 0.18s ease;
+    white-space: nowrap;
+}
+.tipo-btn.active {
+    background: rgba(110,168,254,0.2);
+    color: #93c5fd;
+}
+.tipo-btn:hover:not(.active) { color: var(--text); }
+
+/* Filter toggle button */
+.scopri-filter-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text);
+    font-size: 0.82rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: inherit;
+}
+.scopri-filter-toggle:hover { background: rgba(255,255,255,0.12); }
+.scopri-filter-toggle.has-filters {
+    background: rgba(110,168,254,0.15);
+    border-color: rgba(110,168,254,0.4);
+    color: #93c5fd;
+}
+
+/* Filtri panel */
+.scopri-filters-panel {
+    background: rgba(22,31,61,0.75);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    padding: 18px 20px;
+    backdrop-filter: blur(10px);
+    margin-bottom: 24px;
+    animation: slideDown 0.2s ease;
+}
+@keyframes slideDown {
+    from { opacity:0; transform:translateY(-8px); }
+    to   { opacity:1; transform:translateY(0); }
+}
+.scopri-filter-row { display:flex; flex-direction:column; gap:14px; }
+.scopri-filter-group { display:flex; align-items:flex-start; gap:12px; flex-wrap:wrap; }
+.scopri-filter-label {
+    font-size:0.7rem; font-weight:800; text-transform:uppercase;
+    letter-spacing:0.08em; color:var(--muted);
+    min-width:72px; padding-top:6px; flex-shrink:0;
+}
+.scopri-chips { display:flex; flex-wrap:wrap; gap:6px; flex:1; }
+.scopri-chip { cursor:pointer; }
+.scopri-chip input { display:none; }
+.scopri-chip span {
+    display:inline-block; padding:5px 12px; border-radius:20px;
+    border:1px solid rgba(255,255,255,0.1);
+    background:rgba(255,255,255,0.04);
+    font-size:0.78rem; font-weight:600;
+    transition:all 0.15s ease; user-select:none; white-space:nowrap;
+}
+.scopri-chip input:checked + span {
+    background:rgba(110,168,254,0.2);
+    border-color:#6ea8fe; color:#93c5fd;
+}
+.scopri-chip:hover span { background:rgba(255,255,255,0.08); }
+.scopri-reset-all {
+    display:inline-flex; align-items:center; gap:5px;
+    font-size:0.78rem; font-weight:700; color:#f87171;
+    text-decoration:none; transition:opacity 0.15s;
+}
+.scopri-reset-all:hover { opacity:0.8; }
+
+/* ── STRIPS ──────────────────────────────────────────────────────────── */
+.scopri-strips { display:flex; flex-direction:column; gap:8px; }
+
+.scopri-strip-section { }
+
+.scopri-strip-header {
+    display:flex; align-items:center;
+    justify-content:space-between; margin-bottom:10px;
+}
+.scopri-strip-title {
+    font-size:1rem; font-weight:800; margin:0;
+    display:flex; align-items:center; gap:6px;
+}
+.scopri-strip-more {
+    font-size:0.78rem; font-weight:700;
+    color:#93c5fd; text-decoration:none;
+    opacity:0.8; transition:opacity 0.15s; white-space:nowrap;
+}
+.scopri-strip-more:hover { opacity:1; }
+
+.scopri-strip-wrap { position:relative; }
+
+.scopri-strip-row {
+    display:flex; gap:8px;
+    overflow-x:auto; scroll-snap-type:x mandatory;
+    scroll-behavior:smooth; padding:4px 2px 10px;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+}
+.scopri-strip-row::-webkit-scrollbar { display:none; }
+
+.scopri-poster-card {
+    position:relative; flex-shrink:0;
+    width:130px; scroll-snap-align:start;
+    border-radius:12px; overflow:hidden;
+    display:block; text-decoration:none;
+    background:rgba(17,24,39,0.88);
+    border:1px solid rgba(255,255,255,0.07);
+    transition:transform 0.2s ease, border-color 0.2s ease;
+}
+.scopri-poster-card:hover {
+    transform:translateY(-4px) scale(1.03);
+    border-color:rgba(96,165,250,0.3);
+    z-index:2;
+}
+.scopri-poster-card img {
+    width:100%; aspect-ratio:2/3;
+    object-fit:cover; display:block;
+    transition:transform 0.35s ease;
+}
+.scopri-poster-card:hover img { transform:scale(1.05); }
+.scopri-noposter {
+    width:100%; aspect-ratio:2/3;
+    display:flex; align-items:center;
+    justify-content:center; color:var(--muted);
+}
+.scopri-poster-overlay {
+    position:absolute; inset:auto 0 0 0;
+    padding:28px 7px 7px;
+    background:linear-gradient(to top,rgba(0,0,0,0.92) 0%,transparent 100%);
+}
+.scopri-poster-score {
+    font-size:9px; font-weight:700; color:#fcd34d; display:block;
+}
+.scopri-poster-title {
+    font-size:0.7rem; font-weight:700; color:#fff;
+    line-height:1.25; margin-top:1px;
+    display:-webkit-box; -webkit-line-clamp:2;
+    -webkit-box-orient:vertical; overflow:hidden;
+}
+.scopri-poster-year {
+    font-size:0.62rem; color:rgba(255,255,255,0.5); margin-top:1px;
+}
+
+/* ── GRIGLIA (filtri attivi) ─────────────────────────────────────────── */
+.scopri-grid {
+    display:grid; grid-template-columns:repeat(4,1fr);
+    gap:10px; margin-bottom:24px;
+}
+.scopri-card {
+    position:relative; display:block; text-decoration:none;
+    border-radius:14px; overflow:hidden; aspect-ratio:2/3;
+    background:rgba(17,24,39,0.88);
+    border:1px solid rgba(255,255,255,0.07);
+    transition:transform 0.2s ease,border-color 0.2s ease,box-shadow 0.2s ease;
+}
+.scopri-card:hover {
+    transform:translateY(-4px);
+    border-color:rgba(96,165,250,0.3);
+    box-shadow:0 14px 30px rgba(0,0,0,0.35);
+}
+.scopri-card img { width:100%; height:100%; object-fit:cover; display:block; }
+.scopri-card-noposter {
+    width:100%; height:100%;
+    display:flex; align-items:center; justify-content:center; color:var(--muted);
+}
+.scopri-card-overlay {
+    position:absolute; inset:auto 0 0 0;
+    padding:32px 8px 8px;
+    background:linear-gradient(to top,rgba(0,0,0,0.92) 0%,rgba(0,0,0,0.4) 60%,transparent 100%);
+}
+.scopri-card-type {
+    font-size:8px; font-weight:800; letter-spacing:0.07em;
+    text-transform:uppercase; padding:2px 6px; border-radius:6px;
+    display:inline-block; margin-bottom:3px;
+}
+.scopri-card-score { font-size:9px; font-weight:700; color:#fcd34d; }
+.scopri-card-title {
+    font-size:0.72rem; font-weight:700; color:#fff; line-height:1.25;
+    display:-webkit-box; -webkit-line-clamp:2;
+    -webkit-box-orient:vertical; overflow:hidden;
+}
+.scopri-card-year { font-size:0.62rem; color:rgba(255,255,255,0.5); margin-top:1px; }
+
+/* Paginazione */
+.scopri-pagination {
+    display:flex; align-items:center; justify-content:center;
+    gap:16px; margin-top:8px;
+}
+.scopri-page-btn {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:9px 18px; border-radius:12px;
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.1);
+    color:var(--text); font-size:0.85rem; font-weight:700;
+    text-decoration:none; transition:background 0.18s ease;
+}
+.scopri-page-btn:hover { background:rgba(255,255,255,0.12); }
+.scopri-page-info { font-size:0.82rem; color:var(--muted); font-weight:600; }
+
+/* Empty */
+.scopri-empty {
+    display:flex; flex-direction:column; align-items:center;
+    text-align:center; padding:48px 0; gap:10px; color:var(--muted);
+}
+
+/* Mobile */
+@media (max-width:640px) {
+    .scopri-grid { grid-template-columns:repeat(3,1fr); gap:8px; }
+    .scopri-filter-group { flex-direction:column; gap:6px; }
+    .scopri-filter-label { min-width:auto; padding-top:0; }
+    .scopri-filters-panel { padding:14px; }
+    .scopri-poster-card { width:110px; }
+}
+@media (min-width:900px) {
+    .scopri-grid { grid-template-columns:repeat(5,1fr); }
+    .scopri-poster-card { width:150px; }
+}
+</style>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleFilters() {
+    const panel = document.getElementById('filters-panel');
+    const btn   = document.getElementById('filter-toggle-btn');
+    const open  = panel.style.display === 'none' || panel.style.display === '';
+    panel.style.display = open ? 'block' : 'none';
+}
+
+// Nav arrows per ogni strip
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.scopri-nav-left').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const row = document.getElementById('strip-' + this.dataset.strip);
+            if (row) row.scrollBy({ left: -440, behavior: 'smooth' });
+        });
+    });
+    document.querySelectorAll('.scopri-nav-right').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const row = document.getElementById('strip-' + this.dataset.strip);
+            if (row) row.scrollBy({ left: 440, behavior: 'smooth' });
+        });
+    });
+});
+</script>
+{% endblock %}

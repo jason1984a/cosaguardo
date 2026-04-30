@@ -1687,6 +1687,231 @@ def get_person_detail(person_id: int) -> dict:
     except Exception:
         return {}
 
+
+
+# Mappa generi TMDb
+GENRE_MAP_MOVIE = {
+    "azione": 28, "avventura": 12, "animazione": 16, "commedia": 35,
+    "crimine": 80, "documentario": 99, "dramma": 18, "fantasy": 14,
+    "horror": 27, "musica": 10402, "mistero": 9648, "romantico": 10749,
+    "fantascienza": 878, "thriller": 53, "guerra": 10752, "western": 37,
+}
+
+GENRE_MAP_TV = {
+    "azione": 10759, "animazione": 16, "commedia": 35, "crimine": 80,
+    "documentario": 99, "dramma": 18, "fantasy": 10765, "kids": 10762,
+    "mistero": 9648, "news": 10763, "reality": 10764, "fantascienza": 10765,
+    "soap": 10766, "talk": 10767, "thriller": 9648, "guerra": 10768, "western": 37,
+}
+
+MOOD_GENRES = {
+    "leggero":      {"movie": [35, 16, 10749], "tv": [35, 16, 10762]},
+    "intenso":      {"movie": [53, 28, 80],    "tv": [9648, 80, 10759]},
+    "romantico":    {"movie": [10749, 35, 18], "tv": [10749, 35, 18]},
+    "adrenalinico": {"movie": [28, 12, 53],    "tv": [10759, 10765, 80]},
+    "riflessivo":   {"movie": [18, 99, 36],    "tv": [18, 99, 10768]},
+    "spaventoso":   {"movie": [27, 53, 9648],  "tv": [9648, 80, 53]},
+}
+
+PLATFORM_MAP = {
+    "netflix":   8,
+    "prime":     9,
+    "disney":    337,
+    "apple":     350,
+    "paramount": 531,
+    "now":       39,
+}
+
+
+def get_scopri_results(
+    tipo: str = "film",
+    genere: str = "",
+    mood: str = "",
+    piattaforma: str = "",
+    anno: str = "",
+    page: int = 1,
+    limit: int = 20,
+) -> dict:
+    """
+    Risultati per la pagina /scopri con filtri combinabili.
+    Usa TMDb /discover con i parametri giusti.
+    Ritorna: {"results": [...], "total": int, "page": int}
+    """
+    if not TMDB_API_KEY:
+        return {"results": [], "total": 0, "page": 1}
+
+    import datetime
+    today = datetime.date.today()
+
+    is_tv = tipo == "serie"
+    endpoint = "tv" if is_tv else "movie"
+
+    params = {
+        "api_key":          TMDB_API_KEY,
+        "language":         "it-IT",
+        "sort_by":          "popularity.desc",
+        "vote_count.gte":   50,
+        "page":             page,
+        "watch_region":     "IT",
+    }
+
+    # Genere
+    if genere and not mood:
+        gmap = GENRE_MAP_TV if is_tv else GENRE_MAP_MOVIE
+        genre_id = gmap.get(genere.lower())
+        if genre_id:
+            params["with_genres"] = genre_id
+
+    # Mood → più generi
+    if mood:
+        mood_genres = MOOD_GENRES.get(mood.lower(), {})
+        gids = mood_genres.get("tv" if is_tv else "movie", [])
+        if gids:
+            params["with_genres"] = "|".join(str(g) for g in gids[:2])
+
+    # Piattaforma
+    if piattaforma:
+        pid = PLATFORM_MAP.get(piattaforma.lower())
+        if pid:
+            params["with_watch_providers"] = pid
+            params["with_watch_monetization_types"] = "flatrate"
+
+    # Anno
+    date_field_gte = "first_air_date.gte" if is_tv else "primary_release_date.gte"
+    date_field_lte = "first_air_date.lte" if is_tv else "primary_release_date.lte"
+
+    if anno == "recenti":
+        params[date_field_gte] = (today - datetime.timedelta(days=180)).isoformat()
+    elif anno == "anno":
+        params[date_field_gte] = (today - datetime.timedelta(days=365)).isoformat()
+    elif anno == "classici":
+        params[date_field_lte] = "2000-12-31"
+        params["vote_count.gte"] = 200
+
+    try:
+        r = requests.get(
+            f"https://api.themoviedb.org/3/discover/{endpoint}",
+            params=params,
+            timeout=8
+        )
+        data = r.json()
+        raw  = data.get("results", [])
+        total = min(data.get("total_results", 0), 500)
+
+        results = []
+        for item in raw[:limit]:
+            pp = item.get("poster_path","")
+            bp = item.get("backdrop_path","")
+            title = item.get("title") or item.get("name") or item.get("original_title") or item.get("original_name","")
+            if not title or not pp:
+                continue
+            results.append({
+                "tmdb_id":      item.get("id"),
+                "title":        title,
+                "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
+                "backdrop_url": f"https://image.tmdb.org/t/p/w780{bp}" if bp else "",
+                "vote_average": round(item.get("vote_average",0),1),
+                "vote_count":   item.get("vote_count",0),
+                "release_date": item.get("release_date","") or item.get("first_air_date",""),
+                "overview":     (item.get("overview","") or "")[:200],
+                "content_type": "tv" if is_tv else "movie",
+            })
+
+        return {"results": results, "total": total, "page": page}
+
+    except Exception:
+        return {"results": [], "total": 0, "page": page}
+
+
+
+# Configurazione strip per /scopri — ordinate per engagement
+SCOPRI_STRIPS = [
+    {"id": "thriller",     "label": "Thriller",          "emoji": "🔪", "genre_movie": 53,    "genre_tv": 9648},
+    {"id": "azione",       "label": "Azione",            "emoji": "💥", "genre_movie": 28,    "genre_tv": 10759},
+    {"id": "commedia",     "label": "Commedia",          "emoji": "😄", "genre_movie": 35,    "genre_tv": 35},
+    {"id": "horror",       "label": "Horror",            "emoji": "👻", "genre_movie": 27,    "genre_tv": 9648},
+    {"id": "dramma",       "label": "Dramma",            "emoji": "🎭", "genre_movie": 18,    "genre_tv": 18},
+    {"id": "fantascienza", "label": "Fantascienza",      "emoji": "🚀", "genre_movie": 878,   "genre_tv": 10765},
+    {"id": "romantico",    "label": "Romantico",         "emoji": "❤️", "genre_movie": 10749, "genre_tv": 10749},
+    {"id": "animazione",   "label": "Animazione",        "emoji": "🎨", "genre_movie": 16,    "genre_tv": 16},
+    {"id": "crimine",      "label": "Crimine",           "emoji": "🕵️", "genre_movie": 80,    "genre_tv": 80},
+    {"id": "documentario", "label": "Documentario",      "emoji": "🎥", "genre_movie": 99,    "genre_tv": 99},
+]
+
+
+def _fetch_strip(strip_cfg: dict, tipo: str, limit: int = 12) -> list:
+    """Carica una singola strip di contenuti da TMDb."""
+    if not TMDB_API_KEY:
+        return []
+    is_tv    = tipo == "serie"
+    endpoint = "tv" if is_tv else "movie"
+    genre_id = strip_cfg["genre_tv"] if is_tv else strip_cfg["genre_movie"]
+    try:
+        r = requests.get(
+            f"https://api.themoviedb.org/3/discover/{endpoint}",
+            params={
+                "api_key":        TMDB_API_KEY,
+                "language":       "it-IT",
+                "sort_by":        "popularity.desc",
+                "with_genres":    genre_id,
+                "vote_count.gte": 100,
+                "watch_region":   "IT",
+            },
+            timeout=6
+        )
+        results = []
+        for item in r.json().get("results", [])[:limit]:
+            pp = item.get("poster_path","")
+            title = item.get("title") or item.get("name") or ""
+            if not title or not pp:
+                continue
+            results.append({
+                "tmdb_id":      item.get("id"),
+                "title":        title,
+                "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}",
+                "vote_average": round(item.get("vote_average",0),1),
+                "release_date": item.get("release_date","") or item.get("first_air_date",""),
+                "content_type": "tv" if is_tv else "movie",
+            })
+        return results
+    except Exception:
+        return []
+
+
+def get_scopri_strips(tipo: str = "film") -> list:
+    """
+    Carica tutte le strip in parallelo.
+    Ritorna lista di {label, emoji, id, items}.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    strips = []
+    with ThreadPoolExecutor(max_workers=6) as ex:
+        futures = {
+            ex.submit(_fetch_strip, s, tipo): s
+            for s in SCOPRI_STRIPS
+        }
+        results_map = {}
+        for fut in as_completed(futures):
+            strip_cfg = futures[fut]
+            try:
+                results_map[strip_cfg["id"]] = fut.result()
+            except Exception:
+                results_map[strip_cfg["id"]] = []
+
+    # Mantieni ordine originale
+    for s in SCOPRI_STRIPS:
+        items = results_map.get(s["id"], [])
+        if items:
+            strips.append({
+                "id":    s["id"],
+                "label": s["label"],
+                "emoji": s["emoji"],
+                "items": items,
+            })
+
+    return strips
+
 # Mappa ID piattaforma TMDb → nome + colore brand
 PROVIDER_META = {
     8:   {"name": "Netflix",        "color": "#E50914"},
