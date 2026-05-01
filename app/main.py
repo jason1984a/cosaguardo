@@ -52,6 +52,8 @@ from core.recommendation_api import (
     get_scopri_strips,
     get_similar_movies_tmdb,
     get_popular_by_genre_tmdb,
+    get_franchise_key,
+    is_same_franchise,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
@@ -751,6 +753,28 @@ def recommend(
     if len(enriched_recommendations) < MIN_RESULTS:
         needed = MIN_RESULTS - len(enriched_recommendations)
         existing_titles = {r["title"].lower() for r in enriched_recommendations}
+
+        # Franchise keys già usati — per evitare sequel/prequel dello stesso seed
+        used_franchise_keys = set()
+        for r in enriched_recommendations:
+            fk = get_franchise_key(r["title"])
+            if fk: used_franchise_keys.add(fk)
+        # Aggiungi anche i seed come franchise esclusi
+        for seed in seed_titles:
+            fk = get_franchise_key(seed)
+            if fk: used_franchise_keys.add(fk)
+
+        def _is_franchise_dup(title):
+            """True se il titolo è un duplicato franchise rispetto a quelli già usati."""
+            fk = get_franchise_key(title)
+            if fk and fk in used_franchise_keys:
+                return True
+            # Controlla anche overlap diretto con i seed
+            for seed in seed_titles:
+                if is_same_franchise(seed, title):
+                    return True
+            return False
+
         fallback_recs = []
 
         # Livello 1: film simili al primo seed riconosciuto via TMDb
@@ -760,9 +784,13 @@ def recommend(
             if first_tmdb and first_tmdb.get("tmdb_id"):
                 similars = get_similar_movies_tmdb(first_tmdb["tmdb_id"], limit=needed + 3)
                 for s in similars:
-                    if s["title"].lower() not in existing_titles:
-                        existing_titles.add(s["title"].lower())
-                        fallback_recs.append(s)
+                    t = s["title"]
+                    if t.lower() in existing_titles: continue
+                    if _is_franchise_dup(t): continue
+                    existing_titles.add(t.lower())
+                    fk = get_franchise_key(t)
+                    if fk: used_franchise_keys.add(fk)
+                    fallback_recs.append(s)
                     if len(fallback_recs) >= needed: break
 
         # Livello 2: per TV — usa get_similar_tv sul primo seed
@@ -774,18 +802,20 @@ def recommend(
                     similars = get_similar_tv(tv["tv_id"], limit=needed + 3)
                     for s in similars:
                         t = s.get("title","")
-                        if t.lower() not in existing_titles:
-                            existing_titles.add(t.lower())
-                            # get_similar_tv usa poster_path, non poster_url
-                            pp = s.get("poster_path","")
-                            poster = f"https://image.tmdb.org/t/p/w342{pp}" if pp else s.get("poster_url","")
-                            fallback_recs.append({
-                                "title":       t,
-                                "poster_url":  poster,
-                                "tmdb_id":     s.get("tv_id"),
-                                "overview":    (s.get("overview","") or "")[:200],
-                                "is_fallback": True,
-                            })
+                        if not t or t.lower() in existing_titles: continue
+                        if _is_franchise_dup(t): continue
+                        existing_titles.add(t.lower())
+                        fk = get_franchise_key(t)
+                        if fk: used_franchise_keys.add(fk)
+                        pp = s.get("poster_path","")
+                        poster = f"https://image.tmdb.org/t/p/w342{pp}" if pp else s.get("poster_url","")
+                        fallback_recs.append({
+                            "title":       t,
+                            "poster_url":  poster,
+                            "tmdb_id":     s.get("tv_id"),
+                            "overview":    (s.get("overview","") or "")[:200],
+                            "is_fallback": True,
+                        })
                         if len(fallback_recs) >= needed: break
 
         # Livello 3 (garantito): popolari del genere del primo seed — sempre funziona
@@ -810,9 +840,13 @@ def recommend(
 
             pops = get_popular_by_genre_tmdb(genre_id, content_type, limit=needed + 5)
             for p in pops:
-                if p["title"].lower() not in existing_titles:
-                    existing_titles.add(p["title"].lower())
-                    fallback_recs.append(p)
+                t = p["title"]
+                if t.lower() in existing_titles: continue
+                if _is_franchise_dup(t): continue
+                existing_titles.add(t.lower())
+                fk = get_franchise_key(t)
+                if fk: used_franchise_keys.add(fk)
+                fallback_recs.append(p)
                 if len(fallback_recs) >= needed: break
 
         # Aggiungi i fallback con badge dedicato
