@@ -743,3 +743,72 @@ def get_admin_stats() -> dict:
     }
 
 
+def get_poster_cache(titles_types: list) -> dict:
+    """
+    Recupera poster e tmdb_id dalla cache DB per una lista di (title, content_type).
+    Ritorna dict: {(title, content_type): {"poster_url": ..., "tmdb_id": ...}}
+    """
+    if not titles_types:
+        return {}
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS poster_cache (
+            title        TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            poster_url   TEXT,
+            tmdb_id      INTEGER,
+            updated_at   TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (title, content_type)
+        )
+    """)
+    conn.commit()
+
+    placeholders = ",".join("(?,?)" for _ in titles_types)
+    flat = [x for pair in titles_types for x in pair]
+    cur.execute(f"""
+        SELECT title, content_type, poster_url, tmdb_id
+        FROM poster_cache
+        WHERE (title, content_type) IN ({placeholders})
+    """, flat)
+    result = {}
+    for row in cur.fetchall():
+        result[(row["title"], row["content_type"])] = {
+            "poster_url": row["poster_url"] or "",
+            "tmdb_id":    row["tmdb_id"],
+        }
+    conn.close()
+    return result
+
+
+def save_poster_cache(entries: list):
+    """
+    Salva poster e tmdb_id nella cache DB.
+    entries: [{"title": ..., "content_type": ..., "poster_url": ..., "tmdb_id": ...}]
+    """
+    if not entries:
+        return
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS poster_cache (
+            title TEXT NOT NULL, content_type TEXT NOT NULL,
+            poster_url TEXT, tmdb_id INTEGER,
+            updated_at TEXT DEFAULT (datetime('now')),
+            PRIMARY KEY (title, content_type)
+        )
+    """)
+    for e in entries:
+        cur.execute("""
+            INSERT INTO poster_cache (title, content_type, poster_url, tmdb_id)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(title, content_type) DO UPDATE SET
+                poster_url = excluded.poster_url,
+                tmdb_id    = excluded.tmdb_id,
+                updated_at = datetime('now')
+        """, (e["title"], e["content_type"], e.get("poster_url",""), e.get("tmdb_id")))
+    conn.commit()
+    conn.close()
+
+

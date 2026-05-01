@@ -28,6 +28,8 @@ from app.db import (
     save_home_picks,
     save_user_onboarding,
     get_admin_stats,
+    get_poster_cache,
+    save_poster_cache,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -861,36 +863,53 @@ def profilo(request: Request):
     liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
     taste_profile = build_taste_profile(searches)
 
-    # Poster e tmdb_id — recupero parallelo per liked e seen
-    def _enrich_item(item):
-        item["poster_url"] = item.get("poster_url") or ""
-        if item["content_type"] == "movie":
-            tmdb_info = get_movie_tmdb_info(item["title"])
-            if tmdb_info:
-                item["poster_url"] = item["poster_url"] or tmdb_info.get("poster_url", "")
-                item["tmdb_id"]    = tmdb_info.get("tmdb_id")
-            else:
-                item["tmdb_id"] = None
-        else:
-            tv_info = find_tv_by_title(item["title"])
-            if tv_info and tv_info.get("poster_path"):
-                item["poster_url"] = item["poster_url"] or f"https://image.tmdb.org/t/p/w342{tv_info['poster_path']}"
-                item["tmdb_id"]    = tv_info.get("id") or tv_info.get("tv_id")
-            else:
-                item["tmdb_id"] = None
-        return item
-
+    # Poster e tmdb_id — prima dalla cache DB, poi TMDb solo se mancanti
     seen_titles = stats.get("seen", [])
+    all_items   = liked_titles + seen_titles
 
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-    all_items = liked_titles + seen_titles
-    with ThreadPoolExecutor(max_workers=10) as ex:
-        futures = {ex.submit(_enrich_item, item): item for item in all_items}
-        for fut in as_completed(futures):
-            try:
-                fut.result()
-            except Exception:
-                pass
+    # 1. Controlla cache DB
+    keys        = [(item["title"], item["content_type"]) for item in all_items]
+    cached_map  = get_poster_cache(keys)
+
+    needs_fetch = []
+    for item in all_items:
+        key = (item["title"], item["content_type"])
+        if key in cached_map:
+            item["poster_url"] = cached_map[key]["poster_url"]
+            item["tmdb_id"]    = cached_map[key]["tmdb_id"]
+        else:
+            item["poster_url"] = ""
+            item["tmdb_id"]    = None
+            needs_fetch.append(item)
+
+    # 2. TMDb solo per quelli non in cache
+    if needs_fetch:
+        def _enrich_item(item):
+            if item["content_type"] == "movie":
+                tmdb_info = get_movie_tmdb_info(item["title"])
+                if tmdb_info:
+                    item["poster_url"] = tmdb_info.get("poster_url", "")
+                    item["tmdb_id"]    = tmdb_info.get("tmdb_id")
+            else:
+                tv_info = find_tv_by_title(item["title"])
+                if tv_info and tv_info.get("poster_path"):
+                    item["poster_url"] = f"https://image.tmdb.org/t/p/w342{tv_info['poster_path']}"
+                    item["tmdb_id"]    = tv_info.get("id") or tv_info.get("tv_id")
+            return item
+
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=10) as ex:
+            futures = {ex.submit(_enrich_item, item): item for item in needs_fetch}
+            for fut in as_completed(futures):
+                try: fut.result()
+                except Exception: pass
+
+        # 3. Salva nuovi risultati in cache
+        save_poster_cache([
+            {"title": i["title"], "content_type": i["content_type"],
+             "poster_url": i.get("poster_url",""), "tmdb_id": i.get("tmdb_id")}
+            for i in needs_fetch
+        ])
 
     # Consigli del giorno (stessa logica del vecchio dashboard)
     today_key  = datetime.now().strftime("%Y-%m-%d")
