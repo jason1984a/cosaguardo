@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Admin — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<div style="max-width:360px;margin:60px auto 0;">
+    <div class="page-card" style="padding:28px;">
+        <h1 style="font-size:1.4rem;font-weight:900;margin-bottom:4px;">
+            🔐 Area Admin
+        </h1>
+        <p style="color:var(--muted);font-size:0.85rem;margin-bottom:24px;">
+            Accesso riservato
+        </p>
+
+        {% if error %}
+        <div style="margin-bottom:16px;padding:10px 14px;border-radius:12px;
+                    background:rgba(255,107,107,0.12);border:1px solid rgba(255,107,107,0.25);
+                    color:#ffd1d1;font-weight:600;font-size:0.85rem;">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="post" action="/admin" style="display:grid;gap:14px;">
+            <div>
+                <label style="display:block;margin-bottom:6px;font-weight:700;font-size:0.88rem;">
+                    Password
+                </label>
+                <input type="password" name="password" required autofocus
+                    placeholder="••••••••"
+                    style="width:100%;padding:11px 14px;border-radius:12px;
+                           border:1px solid var(--border);background:rgba(255,255,255,0.04);
+                           color:var(--text);outline:none;font-size:0.9rem;box-sizing:border-box;">
+            </div>
+            <button type="submit" class="btn btn-primary">Accedi</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

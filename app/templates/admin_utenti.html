@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Admin Utenti — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<div style="padding-bottom:48px;">
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#93c5fd;margin-bottom:4px;">
+                🔐 Area Admin
+            </div>
+            <h1 style="font-size:1.6rem;font-weight:900;margin:0;">Utenti registrati</h1>
+        </div>
+        <form action="/admin/logout" method="post">
+            <button type="submit" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);font-family:inherit;">
+                Esci dall'admin
+            </button>
+        </form>
+    </div>
+
+    <!-- STATISTICHE -->
+    <div class="admin-stats-grid">
+        <div class="admin-stat">
+            <div class="admin-stat-val">{{ stats.total_users }}</div>
+            <div class="admin-stat-label">Utenti totali</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#4ade80;">+{{ stats.new_users_7d }}</div>
+            <div class="admin-stat-label">Nuovi (7 giorni)</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val">{{ stats.total_searches }}</div>
+            <div class="admin-stat-label">Ricerche totali</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val">{{ stats.total_liked }}</div>
+            <div class="admin-stat-label">Preferiti aggiunti</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val">{{ stats.total_seen }}</div>
+            <div class="admin-stat-label">Titoli visti</div>
+        </div>
+    </div>
+
+    <!-- TABELLA UTENTI -->
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Email</th>
+                    <th>Nome</th>
+                    <th>Nato</th>
+                    <th>Registrato</th>
+                    <th>Ricerche</th>
+                    <th>Preferiti</th>
+                    <th>Visti</th>
+                    <th>Preferenze</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in stats.users %}
+                <tr>
+                    <td style="color:var(--muted);font-size:0.75rem;">{{ u.id }}</td>
+                    <td>
+                        <div style="font-weight:600;font-size:0.82rem;">{{ u.email }}</div>
+                    </td>
+                    <td>
+                        {% if u.first_name or u.last_name %}
+                        <span style="font-size:0.82rem;">{{ u.first_name or '' }} {{ u.last_name or '' }}</span>
+                        {% else %}
+                        <span style="color:var(--muted);font-size:0.75rem;">—</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:0.78rem;color:var(--muted);">
+                        {{ u.birth_date[:7] if u.birth_date else '—' }}
+                    </td>
+                    <td style="font-size:0.78rem;color:var(--muted);white-space:nowrap;">
+                        {{ u.created_at[:10] if u.created_at else '—' }}
+                    </td>
+                    <td class="admin-num">{{ u.n_searches }}</td>
+                    <td class="admin-num">{{ u.n_liked }}</td>
+                    <td class="admin-num">{{ u.n_seen }}</td>
+                    <td>
+                        {% if u.content_pref %}
+                        <span class="admin-badge">
+                            {{ "🎬" if u.content_pref == "movie" else "📺" if u.content_pref == "tv" else "✨" }}
+                            {{ u.content_pref }}
+                        </span>
+                        {% endif %}
+                        {% if u.platforms %}
+                        {% set plats = u.platforms | replace('[','') | replace(']','') | replace('"','') %}
+                        <span style="font-size:0.7rem;color:var(--muted);">{{ plats[:30] }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<style>
+/* Stats */
+.admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 24px;
+}
+.admin-stat {
+    background: rgba(22,31,61,0.7);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+    backdrop-filter: blur(8px);
+}
+.admin-stat-val {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #93c5fd;
+    line-height: 1;
+    margin-bottom: 4px;
+    letter-spacing: -0.03em;
+}
+.admin-stat-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+}
+
+/* Table */
+.admin-table-wrap {
+    background: rgba(22,31,61,0.65);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 18px;
+    overflow: auto;
+    backdrop-filter: blur(8px);
+}
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    min-width: 700px;
+}
+.admin-table th {
+    padding: 12px 14px;
+    text-align: left;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    white-space: nowrap;
+}
+.admin-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+}
+.admin-table tr:last-child td { border-bottom: none; }
+.admin-table tr:hover td { background: rgba(255,255,255,0.03); }
+.admin-num {
+    text-align: center;
+    font-weight: 700;
+    color: #93c5fd;
+}
+.admin-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: rgba(110,168,254,0.12);
+    border: 1px solid rgba(110,168,254,0.2);
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #93c5fd;
+    margin-right: 4px;
+}
+
+@media (min-width: 640px) {
+    .admin-stats-grid { grid-template-columns: repeat(5, 1fr); }
+}
+</style>
+{% endblock %}

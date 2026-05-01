@@ -673,3 +673,67 @@ def get_user_preferences(user_id: int) -> dict:
         "platforms":    json.loads(row["platforms"] or "[]"),
     }
 
+
+def get_admin_stats() -> dict:
+    """Statistiche aggregate per la pagina admin."""
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+
+    # Totale utenti
+    cur.execute("SELECT COUNT(*) as n FROM users")
+    total_users = cur.fetchone()["n"]
+
+    # Nuovi utenti ultimi 7 giorni
+    cur.execute("""
+        SELECT COUNT(*) as n FROM users
+        WHERE created_at >= datetime('now', '-7 days')
+    """)
+    new_users_7d = cur.fetchone()["n"]
+
+    # Totale ricerche
+    cur.execute("SELECT COUNT(*) as n FROM searches")
+    total_searches = cur.fetchone()["n"]
+
+    # Totale preferiti
+    cur.execute("SELECT COUNT(*) as n FROM user_title_state WHERE preference = 'liked'")
+    total_liked = cur.fetchone()["n"]
+
+    # Totale visti
+    cur.execute("SELECT COUNT(*) as n FROM user_title_state WHERE seen = 1")
+    total_seen = cur.fetchone()["n"]
+
+    # Lista utenti con stats
+    cur.execute("""
+        SELECT
+            u.id,
+            u.email,
+            u.first_name,
+            u.last_name,
+            u.birth_date,
+            u.created_at,
+            COUNT(DISTINCT s.id)  as n_searches,
+            COUNT(DISTINCT CASE WHEN ts.preference = 'liked' THEN ts.id END) as n_liked,
+            COUNT(DISTINCT CASE WHEN ts.seen = 1 THEN ts.id END) as n_seen,
+            p.content_pref,
+            p.platforms
+        FROM users u
+        LEFT JOIN searches s ON s.user_id = u.id
+        LEFT JOIN user_title_state ts ON ts.user_id = u.id
+        LEFT JOIN user_preferences p ON p.user_id = u.id
+        GROUP BY u.id
+        ORDER BY u.created_at DESC
+    """)
+    users = [dict(r) for r in cur.fetchall()]
+    conn.close()
+
+    return {
+        "total_users":    total_users,
+        "new_users_7d":   new_users_7d,
+        "total_searches": total_searches,
+        "total_liked":    total_liked,
+        "total_seen":     total_seen,
+        "users":          users,
+    }
+
+

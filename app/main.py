@@ -1198,3 +1198,51 @@ def scopri_json(
         piattaforma=piattaforma, anno=anno, voto=voto, page=page
     )
 
+
+# ── Admin ─────────────────────────────────────────────────────────────────
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
+
+def _check_admin(request: Request) -> bool:
+    """Verifica sessione admin."""
+    return request.session.get("is_admin") is True
+
+
+@app.get("/admin", response_class=HTMLResponse)
+def admin_login_page(request: Request):
+    if _check_admin(request):
+        return RedirectResponse(url="/admin/utenti", status_code=302)
+    return templates.TemplateResponse(
+        request=request, name="admin_login.html",
+        context={"request": request, "error": ""}
+    )
+
+
+@app.post("/admin", response_class=HTMLResponse)
+def admin_login_submit(request: Request, password: str = Form(...)):
+    if ADMIN_PASSWORD and password == ADMIN_PASSWORD:
+        request.session["is_admin"] = True
+        return RedirectResponse(url="/admin/utenti", status_code=303)
+    return templates.TemplateResponse(
+        request=request, name="admin_login.html",
+        context={"request": request, "error": "Password errata."}
+    )
+
+
+@app.get("/admin/utenti", response_class=HTMLResponse)
+def admin_utenti(request: Request):
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+    stats = get_admin_stats()
+    return templates.TemplateResponse(
+        request=request, name="admin_utenti.html",
+        context={"request": request, "stats": stats}
+    )
+
+
+@app.post("/admin/logout")
+def admin_logout(request: Request):
+    request.session.pop("is_admin", None)
+    return RedirectResponse(url="/admin", status_code=303)
+# ──────────────────────────────────────────────────────────────────────────
+
