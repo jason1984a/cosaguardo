@@ -384,61 +384,89 @@ def register_submit(
     request: Request,
     email: str = Form(...),
     password: str = Form(...),
-    confirm_password: str = Form(...)
+    confirm_password: str = Form(...),
+    first_name: str = Form(default=""),
+    last_name: str = Form(default=""),
+    birth_date: str = Form(default=""),
+    accept_privacy: str = Form(default=""),
+    accept_terms: str = Form(default=""),
+    accept_age: str = Form(default=""),
+    content_pref: str = Form(default="both"),
+    platforms: list = Form(default=[]),
 ):
+    import re
     email = email.strip().lower()
 
-    if not email:
+    def err(msg):
         return templates.TemplateResponse(
             request=request,
             name="register.html",
             context={
-                "request": request,
-                "error": "Inserisci una email valida.",
-                "email": email
+                "request": request, "error": msg, "email": email,
+                "first_name": first_name, "last_name": last_name,
+                "birth_date": birth_date,
+                "content_pref": content_pref, "platforms": platforms,
+                "now": datetime.now().isoformat(),
             },
         )
 
-    if len(password) < 6:
-        return templates.TemplateResponse(
-            request=request,
-            name="register.html",
-            context={
-                "request": request,
-                "error": "La password deve avere almeno 6 caratteri.",
-                "email": email
-            },
-        )
+    if not email:
+        return err("Inserisci una email valida.")
+    if not first_name.strip():
+        return err("Inserisci il tuo nome.")
+    if not last_name.strip():
+        return err("Inserisci il tuo cognome.")
+
+    # Validazione età 16+
+    if birth_date.strip():
+        from datetime import date
+        try:
+            bd = date.fromisoformat(birth_date.strip())
+            today = date.today()
+            age = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+            if age < 16:
+                return err("Devi avere almeno 16 anni per registrarti.")
+        except ValueError:
+            return err("Data di nascita non valida.")
+
+    # Password: min 8 char + almeno 1 numero o simbolo
+    if len(password) < 8:
+        return err("La password deve avere almeno 8 caratteri.")
+    if not re.search(r"[0-9!@#$%^&*()+_=;:,.<>?@]", password):
+        return err("La password deve contenere almeno un numero o un carattere speciale.")
 
     if password != confirm_password:
-        return templates.TemplateResponse(
-            request=request,
-            name="register.html",
-            context={
-                "request": request,
-                "error": "Le password non coincidono.",
-                "email": email
-            },
-        )
+        return err("Le password non coincidono.")
+
+    # Spunte legali obbligatorie
+    if not accept_privacy:
+        return err("Devi accettare la Privacy Policy per registrarti.")
+    if not accept_terms:
+        return err("Devi accettare i Termini di Servizio per registrarti.")
+    if not accept_age:
+        return err("Devi dichiarare di avere almeno 16 anni.")
 
     existing_user = get_user_by_email(email)
     if existing_user:
-        return templates.TemplateResponse(
-            request=request,
-            name="register.html",
-            context={
-                "request": request,
-                "error": "Esiste già un account con questa email.",
-                "email": email
-            },
-        )
+        return err("Esiste già un account con questa email.")
 
-    user_id = create_user(email, password, first_name=first_name, last_name=last_name, birth_date=birth_date)
-
-    request.session["user_id"] = user_id
+    user_id = create_user(
+        email, password,
+        first_name=first_name.strip(),
+        last_name=last_name.strip(),
+        birth_date=birth_date.strip()
+    )
+    request.session["user_id"]    = user_id
     request.session["user_email"] = email
 
-    return RedirectResponse(url="/dashboard", status_code=303)
+    # Salva preferenze onboarding
+    if content_pref or platforms:
+        save_user_onboarding(
+            user_id, content_pref,
+            platforms if isinstance(platforms, list) else [platforms]
+        )
+
+    return RedirectResponse(url="/profilo", status_code=303)
 
 @app.post("/feedback")
 def save_feedback(request: Request, data: dict = Body(...)):
