@@ -52,6 +52,8 @@
         <div class="results-scroll-wrap">
             <div class="results-scroll-row" id="results-scroll-row">
                 {% for rec in recommendations %}
+                {% set base_path = "serie" if content_type == "tv" else "film" %}
+                {% set detail_url = "/" ~ base_path ~ "/" ~ rec.tmdb_id if rec.tmdb_id else "" %}
                     <article
                         class="result-scroll-card"
                         data-title="{{ rec.title }}"
@@ -65,6 +67,8 @@
                         data-is-seen="{{ 1 if rec.is_seen else 0 }}"
                         data-is-disliked="{{ 1 if rec.is_disliked else 0 }}"
                         data-tmdb-id="{{ rec.tmdb_id or '' }}"
+                        data-detail-url="{{ detail_url }}"
+                        style="cursor:pointer;"
                     >
                         <div class="result-scroll-poster">
                             <div class="result-scroll-rank">{{ loop.index }}</div>
@@ -95,7 +99,11 @@
                                 <button class="feedback-btn {% if rec.is_seen %}active{% endif %}" data-feedback="seen"><i data-lucide="eye" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i></button>
                             </div>
 
+                            {% if detail_url %}
+                            <a href="{{ detail_url }}" class="result-scroll-more" onclick="event.stopPropagation();">→ Scheda completa</a>
+                            {% else %}
                             <div class="result-scroll-more">→ Scheda completa</div>
+                            {% endif %}
                         </div>
                     </article>
                 {% endfor %}
@@ -288,7 +296,9 @@ document.addEventListener("DOMContentLoaded", function () {
     document.querySelectorAll(".result-scroll-card").forEach(card => {
         card.addEventListener("click", function (e) {
             if (e.target.closest(".feedback-actions")) return;
-            openModal(card);
+            if (e.target.closest(".result-scroll-more")) return;
+            const url = card.dataset.detailUrl;
+            if (url) window.location.href = url;
         });
     });
 
