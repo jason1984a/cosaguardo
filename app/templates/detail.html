@@ -654,10 +654,22 @@ html, body {
     <div class="detail-backdrop-gradient"></div>
 
     <div class="container">
-        <button class="detail-back-btn" onclick="window.location.href = document.referrer && !document.referrer.includes(window.location.pathname) ? document.referrer : '/'">
+        <button class="detail-back-btn" onclick="goBack()">
             <i data-lucide="arrow-left" style="width:14px;height:14px;stroke:currentColor;stroke-width:2.5;pointer-events:none;"></i>
             Indietro
         </button>
+        <script>
+        function goBack() {
+            const ref = document.referrer;
+            // Se la pagina precedente è /recommend (POST), torna alla home
+            // Se è una pagina interna valida, torna lì
+            if (!ref || ref.includes('/recommend') || ref === window.location.href) {
+                window.location.href = '/';
+            } else {
+                history.back();
+            }
+        }
+        </script>
     </div>
     <div class="container detail-hero-content">
         {# POSTER #}
