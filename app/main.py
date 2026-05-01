@@ -30,6 +30,8 @@ from app.db import (
     get_admin_stats,
     get_poster_cache,
     save_poster_cache,
+    get_search_cache,
+    save_search_cache,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -571,6 +573,33 @@ def recommend(
         if m.strip()
     ]
 
+    # ── Cache check ────────────────────────────────────────────────────────
+    import hashlib as _hl
+    _cache_key = _hl.md5(
+        ("|".join(sorted(t.lower() for t in seed_titles)) + content_type).encode()
+    ).hexdigest()
+    _cached = get_search_cache(_cache_key)
+    if _cached:
+        # Hit cache — risposta istantanea
+        user_id = request.session.get("user_id")
+        if user_id and seed_titles:
+            create_search(user_id=user_id, seed_titles=", ".join(seed_titles), content_type=content_type)
+        # Aggiorna is_seen/is_liked in base allo stato utente corrente
+        if user_id:
+            title_states = get_title_states_map(user_id, content_type)
+            for rec in _cached.get("recommendations", []):
+                state_key = rec.get("title","").strip().lower()
+                rec_state = title_states.get(state_key, {})
+                rec["is_seen"]     = rec_state.get("seen", 0) == 1
+                rec["is_liked"]    = rec_state.get("preference") == "liked"
+                rec["is_disliked"] = rec_state.get("preference") == "disliked"
+        return templates.TemplateResponse(
+            request=request, name="results.html",
+            context={**_cached, "request": request,
+                     "tmdb_api_key": os.environ.get("TMDB_API_KEY","")},
+        )
+    # ──────────────────────────────────────────────────────────────────────
+
     user_id = request.session.get("user_id")
     if user_id and seed_titles:
         create_search(
@@ -618,9 +647,24 @@ def recommend(
         })
 
     enriched_recommendations = []
+    if content_type == "movie":
+        # Fetch TMDb in parallelo per tutti i risultati
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        def _fetch_tmdb(rec):
+            return rec, get_movie_tmdb_info(rec["title"])
+        tmdb_results = {}
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            futures = {ex.submit(_fetch_tmdb, rec): rec for rec in recommendations}
+            for fut in as_completed(futures):
+                try:
+                    rec, tmdb_info = fut.result()
+                    tmdb_results[rec["title"]] = tmdb_info
+                except Exception:
+                    pass
+
     for rec in recommendations:
         if content_type == "movie":
-            tmdb_info = get_movie_tmdb_info(rec["title"])
+            tmdb_info = tmdb_results.get(rec["title"]) or {}
         else:
             tmdb_info = {
                 "display_title": rec["title"],
@@ -700,6 +744,16 @@ def recommend(
                 "tmdb_id": rec.get("tv_id"),
             })
 
+    # Salva in cache per ricerche future identiche
+    _cache_data = {
+        "resolved_seeds":  pretty_resolved_seeds,
+        "missing_titles":  missing_titles,
+        "recommendations": enriched_recommendations,
+        "content_type":    content_type,
+    }
+    if enriched_recommendations:
+        save_search_cache(_cache_key, _cache_data)
+
     return templates.TemplateResponse(
         request=request,
         name="results.html",
@@ -708,6 +762,7 @@ def recommend(
             "missing_titles": missing_titles,
             "recommendations": enriched_recommendations,
             "content_type": content_type,
+            "tmdb_api_key": os.environ.get("TMDB_API_KEY",""),
         },
     )
 

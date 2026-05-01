@@ -812,3 +812,56 @@ def save_poster_cache(entries: list):
     conn.close()
 
 
+def get_search_cache(cache_key: str) -> list | None:
+    """
+    Recupera risultati ricerca dalla cache DB.
+    cache_key = hash(sorted seed titles + content_type).
+    Valida per 24 ore.
+    """
+    conn = get_connection()
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS search_cache (
+            cache_key  TEXT PRIMARY KEY,
+            results    TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    conn.commit()
+    cur.execute("""
+        SELECT results FROM search_cache
+        WHERE cache_key = ?
+          AND created_at >= datetime('now', '-24 hours')
+    """, (cache_key,))
+    row = cur.fetchone()
+    conn.close()
+    if row:
+        import json
+        return json.loads(row["results"])
+    return None
+
+
+def save_search_cache(cache_key: str, results: list):
+    """Salva risultati ricerca in cache DB."""
+    import json
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS search_cache (
+            cache_key TEXT PRIMARY KEY,
+            results TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+        )
+    """)
+    cur.execute("""
+        INSERT INTO search_cache (cache_key, results)
+        VALUES (?, ?)
+        ON CONFLICT(cache_key) DO UPDATE SET
+            results    = excluded.results,
+            created_at = datetime('now')
+    """, (cache_key, json.dumps(results, ensure_ascii=False)))
+    conn.commit()
+    conn.close()
+
+

@@ -85,12 +85,14 @@
             <div class="mode-switch mode-switch-v2">
 
                 <label class="mode-option">
-                    <input type="radio" name="content_type" value="movie" checked>
+                    <input type="radio" name="content_type" value="movie" checked
+                           onchange="updatePlaceholders('movie')">
                     <span>Film</span>
                 </label>
 
                 <label class="mode-option">
-                    <input type="radio" name="content_type" value="tv">
+                    <input type="radio" name="content_type" value="tv"
+                           onchange="updatePlaceholders('tv')">
                     <span>Serie TV</span>
                 </label>
             </div>
@@ -136,8 +138,12 @@
             </div>
 
             <div class="form-actions-v2">
-                <button type="submit" class="primary-submit-btn">
-                    Trova consigli
+                <button type="submit" class="primary-submit-btn" id="submit-btn">
+                    <span class="btn-text">Trova consigli</span>
+                    <span class="btn-loading" style="display:none;">
+                        <span class="btn-spinner"></span>
+                        L'algoritmo ragiona…
+                    </span>
                 </button>
 
                 <button type="button" class="add-title-btn" title="Aggiungi altri titoli">
@@ -296,6 +302,33 @@
 {% block scripts %}
 <script src="/static/app.js"></script>
 <script>
+function updatePlaceholders(type) {
+    const film = ["Es. Interstellar", "Es. Drive", "Es. Inglourious Basterds", "Opzionale", "Opzionale", "Opzionale"];
+    const tv   = ["Es. Breaking Bad", "Es. Narcos", "Es. The Wire", "Opzionale", "Opzionale", "Opzionale"];
+    const list = type === "tv" ? tv : film;
+    ["movie1","movie2","movie3","movie4","movie5","movie6"].forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) el.placeholder = list[i];
+    });
+}
+
+// Loading state per la ricerca
+document.getElementById("recommend-form")?.addEventListener("submit", function(e) {
+    const btn     = document.getElementById("submit-btn");
+    const btnText = btn?.querySelector(".btn-text");
+    const btnLoad = btn?.querySelector(".btn-loading");
+    // Valida che almeno un campo sia compilato
+    const inputs = this.querySelectorAll('input[name^="movie"]');
+    const filled = [...inputs].some(i => i.value.trim().length > 1);
+    if (!filled) return; // lascia che la validazione nativa gestisca
+    if (btn) {
+        btn.disabled = true;
+        btn.classList.add("is-loading");
+        if (btnText) btnText.style.display = "none";
+        if (btnLoad) btnLoad.style.display = "inline-flex";
+    }
+});
+
 document.addEventListener("DOMContentLoaded", function () {
     // ── Nav fascia principale "I più apprezzati" ────────────────────────────
     const row      = document.getElementById("hero-trending-row");
