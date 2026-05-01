@@ -680,53 +680,59 @@ def get_admin_stats() -> dict:
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
 
-    # Totale utenti
-    cur.execute("SELECT COUNT(*) as n FROM users")
-    total_users = cur.fetchone()["n"]
+    # Assicura tabelle opzionali esistano
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id INTEGER PRIMARY KEY, content_pref TEXT,
+        platforms TEXT, updated_at TEXT DEFAULT (datetime('now'))
+    )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS searches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER, seed_titles TEXT,
+        content_type TEXT, created_at TEXT DEFAULT (datetime('now'))
+    )""")
+    cur.execute("""CREATE TABLE IF NOT EXISTS user_title_state (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER, title TEXT, content_type TEXT,
+        seen INTEGER DEFAULT 0, preference TEXT,
+        updated_at TEXT DEFAULT (datetime('now'))
+    )""")
+    conn.commit()
 
-    # Nuovi utenti ultimi 7 giorni
-    cur.execute("""
-        SELECT COUNT(*) as n FROM users
-        WHERE created_at >= datetime('now', '-7 days')
-    """)
-    new_users_7d = cur.fetchone()["n"]
+    def count(sql, params=()):
+        try:
+            cur.execute(sql, params)
+            row = cur.fetchone()
+            return row[0] if row else 0
+        except Exception:
+            return 0
 
-    # Totale ricerche
-    cur.execute("SELECT COUNT(*) as n FROM searches")
-    total_searches = cur.fetchone()["n"]
+    total_users    = count("SELECT COUNT(*) FROM users")
+    new_users_7d   = count("SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-7 days')")
+    total_searches = count("SELECT COUNT(*) FROM searches")
+    total_liked    = count("SELECT COUNT(*) FROM user_title_state WHERE preference = 'liked'")
+    total_seen     = count("SELECT COUNT(*) FROM user_title_state WHERE seen = 1")
 
-    # Totale preferiti
-    cur.execute("SELECT COUNT(*) as n FROM user_title_state WHERE preference = 'liked'")
-    total_liked = cur.fetchone()["n"]
+    try:
+        cur.execute("""
+            SELECT
+                u.id, u.email, u.first_name, u.last_name,
+                u.birth_date, u.created_at,
+                COUNT(DISTINCT s.id) as n_searches,
+                COUNT(DISTINCT CASE WHEN ts.preference = 'liked' THEN ts.id END) as n_liked,
+                COUNT(DISTINCT CASE WHEN ts.seen = 1 THEN ts.id END) as n_seen,
+                p.content_pref, p.platforms
+            FROM users u
+            LEFT JOIN searches s ON s.user_id = u.id
+            LEFT JOIN user_title_state ts ON ts.user_id = u.id
+            LEFT JOIN user_preferences p ON p.user_id = u.id
+            GROUP BY u.id
+            ORDER BY u.created_at DESC
+        """)
+        users = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        users = []
 
-    # Totale visti
-    cur.execute("SELECT COUNT(*) as n FROM user_title_state WHERE seen = 1")
-    total_seen = cur.fetchone()["n"]
-
-    # Lista utenti con stats
-    cur.execute("""
-        SELECT
-            u.id,
-            u.email,
-            u.first_name,
-            u.last_name,
-            u.birth_date,
-            u.created_at,
-            COUNT(DISTINCT s.id)  as n_searches,
-            COUNT(DISTINCT CASE WHEN ts.preference = 'liked' THEN ts.id END) as n_liked,
-            COUNT(DISTINCT CASE WHEN ts.seen = 1 THEN ts.id END) as n_seen,
-            p.content_pref,
-            p.platforms
-        FROM users u
-        LEFT JOIN searches s ON s.user_id = u.id
-        LEFT JOIN user_title_state ts ON ts.user_id = u.id
-        LEFT JOIN user_preferences p ON p.user_id = u.id
-        GROUP BY u.id
-        ORDER BY u.created_at DESC
-    """)
-    users = [dict(r) for r in cur.fetchall()]
     conn.close()
-
     return {
         "total_users":    total_users,
         "new_users_7d":   new_users_7d,

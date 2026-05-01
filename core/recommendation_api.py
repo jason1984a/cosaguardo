@@ -1805,12 +1805,18 @@ def get_scopri_results(
         raw  = data.get("results", [])
         total = min(data.get("total_results", 0), 500)
 
+        import re as _re
+        _non_latin = _re.compile(r'[\u0400-\u04FF\u0600-\u06FF\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF]')
+
         results = []
         for item in raw[:limit]:
             pp = item.get("poster_path","")
             bp = item.get("backdrop_path","")
             title = item.get("title") or item.get("name") or item.get("original_title") or item.get("original_name","")
             if not title or not pp:
+                continue
+            # Salta titoli con caratteri non latini (cirillico, arabo, cinese, giapponese)
+            if _non_latin.search(title):
                 continue
             results.append({
                 "tmdb_id":      item.get("id"),
