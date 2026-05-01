@@ -50,6 +50,8 @@ from core.recommendation_api import (
     get_person_detail,
     get_scopri_results,
     get_scopri_strips,
+    get_similar_movies_tmdb,
+    get_popular_by_genre_tmdb,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
@@ -743,6 +745,102 @@ def recommend(
                 "matched_keywords": rec.get("matched_keywords", []),
                 "tmdb_id": rec.get("tv_id"),
             })
+
+    # ── Fallback garantito: minimo 3 risultati ───────────────────────────
+    MIN_RESULTS = 3
+    if len(enriched_recommendations) < MIN_RESULTS:
+        needed = MIN_RESULTS - len(enriched_recommendations)
+        existing_titles = {r["title"].lower() for r in enriched_recommendations}
+        fallback_recs = []
+
+        # Livello 1: film simili al primo seed riconosciuto via TMDb
+        first_resolved = resolved_seeds[0] if resolved_seeds else None
+        if first_resolved and content_type == "movie":
+            first_tmdb = get_movie_tmdb_info(first_resolved.get("title",""))
+            if first_tmdb and first_tmdb.get("tmdb_id"):
+                similars = get_similar_movies_tmdb(first_tmdb["tmdb_id"], limit=needed + 3)
+                for s in similars:
+                    if s["title"].lower() not in existing_titles:
+                        existing_titles.add(s["title"].lower())
+                        fallback_recs.append(s)
+                    if len(fallback_recs) >= needed: break
+
+        # Livello 2: per TV — usa get_similar_tv sul primo seed
+        if content_type == "tv" and len(fallback_recs) < needed:
+            from core.recommendation_tv import find_tv_by_title, get_similar_tv
+            if seed_titles:
+                tv = find_tv_by_title(seed_titles[0])
+                if tv and tv.get("tv_id"):
+                    similars = get_similar_tv(tv["tv_id"], limit=needed + 3)
+                    for s in similars:
+                        t = s.get("title","")
+                        if t.lower() not in existing_titles:
+                            existing_titles.add(t.lower())
+                            # get_similar_tv usa poster_path, non poster_url
+                            pp = s.get("poster_path","")
+                            poster = f"https://image.tmdb.org/t/p/w342{pp}" if pp else s.get("poster_url","")
+                            fallback_recs.append({
+                                "title":       t,
+                                "poster_url":  poster,
+                                "tmdb_id":     s.get("tv_id"),
+                                "overview":    (s.get("overview","") or "")[:200],
+                                "is_fallback": True,
+                            })
+                        if len(fallback_recs) >= needed: break
+
+        # Livello 3 (garantito): popolari del genere del primo seed — sempre funziona
+        if len(fallback_recs) < needed:
+            # Prova a ricavare il genere dal primo seed riconosciuto
+            genre_id = 18  # dramma come default
+            if resolved_seeds and content_type == "movie":
+                try:
+                    from core.recommendation_api import get_movie_genres
+                    genres = get_movie_genres(resolved_seeds[0].get("title",""))
+                    if genres:
+                        # Mappa nome genere → ID TMDb
+                        g_map = {"azione":28,"commedia":35,"thriller":53,"horror":27,
+                                 "dramma":18,"fantascienza":878,"animazione":16,"crimine":80}
+                        for g in genres:
+                            gid = g_map.get(g.lower())
+                            if gid: genre_id = gid; break
+                except Exception:
+                    pass
+            elif content_type == "tv":
+                genre_id = 18  # dramma TV
+
+            pops = get_popular_by_genre_tmdb(genre_id, content_type, limit=needed + 5)
+            for p in pops:
+                if p["title"].lower() not in existing_titles:
+                    existing_titles.add(p["title"].lower())
+                    fallback_recs.append(p)
+                if len(fallback_recs) >= needed: break
+
+        # Aggiungi i fallback con badge dedicato
+        for fb in fallback_recs[:needed]:
+            enriched_recommendations.append({
+                "title":           fb.get("title",""),
+                "poster_url":      fb.get("poster_url",""),
+                "overview":        fb.get("overview",""),
+                "tmdb_id":         fb.get("tmdb_id"),
+                "appearances":     1,
+                "avg_score":       0,
+                "why_recommended": "",
+                "explanation":     "Potrebbe piacerti in base al tuo stile.",
+                "badge":           "💡 Potrebbe piacerti",
+                "ui_signals":      [],
+                "match_score":     0,
+                "genre_score_ui":  0,
+                "vibe_score_ui":   0,
+                "genre_score":     0,
+                "tag_score":       0,
+                "collab_score":    0,
+                "keyword_score":   0,
+                "matched_keywords": [],
+                "is_seen":         False,
+                "is_liked":        False,
+                "is_disliked":     False,
+            })
+    # ──────────────────────────────────────────────────────────────────────
 
     # Salva in cache per ricerche future identiche
     _cache_data = {

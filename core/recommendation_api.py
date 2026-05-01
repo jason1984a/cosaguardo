@@ -1984,6 +1984,77 @@ def get_scopri_strips(tipo: str = "film") -> list:
 
     return strips
 
+
+
+def get_similar_movies_tmdb(tmdb_id: int, limit: int = 6) -> list:
+    """
+    Recupera film simili via TMDb /movie/{id}/similar.
+    Usato come fallback quando l'algoritmo principale non trova risultati.
+    """
+    if not TMDB_API_KEY or not tmdb_id:
+        return []
+    try:
+        r = requests.get(
+            f"https://api.themoviedb.org/3/movie/{tmdb_id}/similar",
+            params={"api_key": TMDB_API_KEY, "language": "it-IT"},
+            timeout=5
+        )
+        results = []
+        for item in r.json().get("results", [])[:limit]:
+            pp = item.get("poster_path","")
+            title = item.get("title") or item.get("original_title","")
+            if not title: continue
+            results.append({
+                "title":        title,
+                "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
+                "tmdb_id":      item.get("id"),
+                "vote_average": round(item.get("vote_average",0),1),
+                "overview":     (item.get("overview","") or "")[:200],
+                "is_fallback":  True,
+            })
+        return results
+    except Exception:
+        return []
+
+
+def get_popular_by_genre_tmdb(genre_id: int, content_type: str = "movie", limit: int = 6) -> list:
+    """
+    Recupera titoli popolari di un genere via TMDb /discover.
+    Usato come fallback finale garantito.
+    """
+    if not TMDB_API_KEY:
+        return []
+    endpoint = "tv" if content_type == "tv" else "movie"
+    try:
+        r = requests.get(
+            f"https://api.themoviedb.org/3/discover/{endpoint}",
+            params={
+                "api_key":        TMDB_API_KEY,
+                "language":       "it-IT",
+                "sort_by":        "popularity.desc",
+                "with_genres":    genre_id,
+                "vote_count.gte": 500,
+                "watch_region":   "IT",
+            },
+            timeout=5
+        )
+        results = []
+        for item in r.json().get("results", [])[:limit]:
+            pp = item.get("poster_path","")
+            title = item.get("title") or item.get("name") or ""
+            if not title: continue
+            results.append({
+                "title":        title,
+                "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
+                "tmdb_id":      item.get("id"),
+                "vote_average": round(item.get("vote_average",0),1),
+                "overview":     (item.get("overview","") or "")[:200],
+                "is_fallback":  True,
+            })
+        return results
+    except Exception:
+        return []
+
 # Mappa ID piattaforma TMDb → nome + colore brand
 PROVIDER_META = {
     8:   {"name": "Netflix",        "color": "#E50914"},
