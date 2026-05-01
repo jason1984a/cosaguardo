@@ -71,17 +71,76 @@ def get_franchise_key(title: str) -> str:
         "two towers": "tolkien",
         "return of the king": "tolkien",
         "hobbit": "tolkien",
+        "il signore degli anelli": "tolkien",
+        "lo hobbit": "tolkien",
 
         "harry potter": "wizarding_world",
         "fantastic beasts": "wizarding_world",
+        "animali fantastici": "wizarding_world",
 
         "batman": "batman",
         "dark knight": "batman",
 
         "spider man": "spiderman",
         "amazing spider man": "spiderman",
+        "spiderman": "spiderman",
 
         "superman": "superman",
+        "man of steel": "superman",
+
+        "pirates of the caribbean": "pirati_caraibi",
+        "pirati dei caraibi": "pirati_caraibi",
+        "maledizione della prima luna": "pirati_caraibi",
+        "forziere fantasma": "pirati_caraibi",
+        "ai confini del mondo": "pirati_caraibi",
+        "oltre i confini": "pirati_caraibi",
+
+        "avengers": "mcu_avengers",
+        "infinity war": "mcu_avengers",
+        "endgame": "mcu_avengers",
+        "iron man": "mcu_iron_man",
+        "captain america": "mcu_cap",
+        "thor": "mcu_thor",
+        "guardians of the galaxy": "mcu_guardians",
+        "guardiani della galassia": "mcu_guardians",
+
+        "fast and furious": "fast_furious",
+        "fast furious": "fast_furious",
+        "veloce e furioso": "fast_furious",
+
+        "mission impossible": "mission_impossible",
+        "mission impossibile": "mission_impossible",
+
+        "star wars": "star_wars",
+        "guerre stellari": "star_wars",
+        "jedi": "star_wars",
+        "sith": "star_wars",
+        "mandalorian": "star_wars",
+
+        "john wick": "john_wick",
+
+        "matrix": "matrix",
+
+        "indiana jones": "indiana_jones",
+
+        "jurassic": "jurassic",
+
+        "transformers": "transformers",
+
+        "alien": "alien_franchise",
+        "aliens": "alien_franchise",
+        "prometheus": "alien_franchise",
+        "covenant": "alien_franchise",
+
+        "terminator": "terminator",
+
+        "rocky": "rocky",
+        "creed": "rocky",
+
+        "oceans eleven": "oceans",
+        "ocean eleven": "oceans",
+        "ocean twelve": "oceans",
+        "ocean thirteen": "oceans",
     }
 
     for pattern, key in franchise_aliases.items():

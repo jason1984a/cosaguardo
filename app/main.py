@@ -765,13 +765,22 @@ def recommend(
             if fk: used_franchise_keys.add(fk)
 
         def _is_franchise_dup(title):
-            """True se il titolo è un duplicato franchise rispetto a quelli già usati."""
+            """
+            True se il titolo è franchise-dup rispetto a:
+            - candidati già accettati (evita sequel tra i fallback)
+            - seed originali
+            """
             fk = get_franchise_key(title)
+            # 1. Franchise key già visto tra i candidati accettati
             if fk and fk in used_franchise_keys:
                 return True
-            # Controlla anche overlap diretto con i seed
+            # 2. Overlap diretto con i seed
             for seed in seed_titles:
                 if is_same_franchise(seed, title):
+                    return True
+            # 3. Overlap diretto con titoli già accettati nel fallback
+            for accepted in existing_titles:
+                if is_same_franchise(accepted, title):
                     return True
             return False
 
