@@ -1563,9 +1563,8 @@ def get_cinema_news(limit: int = 8) -> list:
 
 def search_movies_fast(query: str, limit: int = 8) -> list:
     """
-    Ricerca veloce su DB locale con matching fuzzy:
-    - Normalizza query e titoli (rimuove trattini, spazi multipli)
-    - Cerca sia sul titolo originale che su quello normalizzato
+    Ricerca veloce film con matching fuzzy.
+    Prima prova il DB locale (velocissimo), poi fallback su TMDb.
     """
     query = query.strip()
     if len(query) < 2:
@@ -1573,53 +1572,78 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
 
     import re as _re
     def normalize(s):
-        """Rimuove trattini, apostrofi e spazi multipli per matching fuzzy."""
-        return _re.sub(r"[\-\'\s]+", " ", s).strip().lower()
+        return _re.sub(r"[-\'\s]+", " ", s).strip().lower()
 
     q_norm = normalize(query)
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    # Prima cerca match diretto
-    cursor.execute("""
-        SELECT movielens_movie_id, title
-        FROM titles
-        WHERE LOWER(title) LIKE LOWER(?)
-        ORDER BY LENGTH(title) ASC
-        LIMIT ?
-    """, (f"%{query}%", limit * 2))
-    rows_direct = cursor.fetchall()
-
-    # Poi cerca con query normalizzata (cattura "spiderm" → "Spider-Man")
-    cursor.execute("""
-        SELECT movielens_movie_id, title
-        FROM titles
-        WHERE LOWER(REPLACE(REPLACE(title, '-', ' '), '\'', ' ')) LIKE ?
-        ORDER BY LENGTH(title) ASC
-        LIMIT ?
-    """, (f"%{q_norm}%", limit * 2))
-    rows_fuzzy = cursor.fetchall()
-    conn.close()
-
-    # Unisce e deduplica, direct ha priorità
-    seen_ids = set()
     results = []
-    for row in rows_direct + rows_fuzzy:
-        if row[0] in seen_ids:
-            continue
-        seen_ids.add(row[0])
-        title = row[1]
-        display = _localized_title_cache.get(title, title)
-        results.append({
-            "movie_id":     row[0],
-            "title":        title,
-            "display_title": display or title,
-        })
-        if len(results) >= limit:
-            break
 
-    return results
+    # 1. Prova DB locale
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        # Verifica che la tabella titles esista
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='titles'")
+        if cursor.fetchone():
+            cursor.execute("""
+                SELECT movielens_movie_id, title
+                FROM titles
+                WHERE LOWER(title) LIKE LOWER(?)
+                ORDER BY LENGTH(title) ASC
+                LIMIT ?
+            """, (f"%{query}%", limit * 2))
+            rows_direct = cursor.fetchall()
+
+            cursor.execute("""
+                SELECT movielens_movie_id, title
+                FROM titles
+                WHERE LOWER(REPLACE(REPLACE(title, '-', ' '), chr(39), ' ')) LIKE ?
+                ORDER BY LENGTH(title) ASC
+                LIMIT ?
+            """, (f"%{q_norm}%", limit * 2))
+            rows_fuzzy = cursor.fetchall()
+            conn.close()
+
+            seen_ids = set()
+            for row in rows_direct + rows_fuzzy:
+                if row[0] in seen_ids: continue
+                seen_ids.add(row[0])
+                title = row[1]
+                display = _localized_title_cache.get(title, title)
+                results.append({
+                    "movie_id":      row[0],
+                    "title":         title,
+                    "display_title": display or title,
+                })
+                if len(results) >= limit: break
+        else:
+            conn.close()
+    except Exception:
+        pass
+
+    # 2. Fallback TMDb se DB non disponibile o pochi risultati
+    if len(results) < 3 and TMDB_API_KEY:
+        try:
+            r = requests.get(
+                "https://api.themoviedb.org/3/search/movie",
+                params={"api_key": TMDB_API_KEY, "query": query, "language": "it-IT"},
+                timeout=4
+            )
+            seen_titles = {res["title"].lower() for res in results}
+            for item in r.json().get("results", [])[:limit]:
+                t = item.get("title") or item.get("original_title","")
+                if not t or t.lower() in seen_titles: continue
+                seen_titles.add(t.lower())
+                results.append({
+                    "movie_id":      item.get("id"),
+                    "title":         item.get("original_title") or t,
+                    "display_title": t,
+                })
+                if len(results) >= limit: break
+        except Exception:
+            pass
+
+    return results[:limit]
 
 
 def search_tv_fast(query: str, limit: int = 8) -> list:
