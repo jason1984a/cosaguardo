@@ -70,7 +70,7 @@
                         <div class="result-scroll-body">
                             <div class="result-scroll-title">{{ rec.title }}</div>
 
-                            {% if rec.explanation %}
+                            {% if rec.explanation and rec.explanation != "Potrebbe piacerti in base al tuo stile." %}
                                 <p class="result-scroll-why">{{ rec.explanation }}</p>
                             {% endif %}
 
@@ -82,11 +82,7 @@
                                 <button class="feedback-btn {% if rec.is_seen %}active{% endif %}" data-feedback="seen"><i data-lucide="eye" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i></button>
                             </div>
 
-                            {% if detail_url %}
-                            <a href="{{ detail_url }}" class="result-scroll-more" onclick="event.stopPropagation();">→ Scheda completa</a>
-                            {% else %}
-                            <div class="result-scroll-more">→ Scheda completa</div>
-                            {% endif %}
+
                         </div>
                     </article>
                 {% endfor %}
@@ -146,6 +142,9 @@
 <script src="{{ url_for('static', path='js/feedback.js') }}"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    // Salva URL risultati per il bottone "Indietro" nelle schede
+    sessionStorage.setItem("cg_results_url", window.location.href);
+
 
     const modal      = document.getElementById("results-modal");
     const closeBtn   = document.getElementById("results-modal-close");
@@ -350,37 +349,46 @@ document.addEventListener("DOMContentLoaded", function () {
     flex-shrink: 0;
 }
 
-/* ── MOBILE: card orizzontali compatte ──────────────────────────────── */
-.results-scroll-wrap { }
+/* ── CARD RISULTATI ──────────────────────────────────────────────────── */
+.results-scroll-wrap {
+    margin: 0 -16px;
+    padding: 0 16px;
+    overflow: hidden;
+}
 
 .results-scroll-row {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+    scrollbar-width: none;
 }
+.results-scroll-row::-webkit-scrollbar { display: none; }
 
 .result-scroll-card {
-    display: flex;
-    flex-direction: row;
-    align-items: stretch;
+    flex: 0 0 58vw;
+    max-width: 220px;
+    min-width: 160px;
+    scroll-snap-align: start;
     background: rgba(255,255,255,0.04);
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 14px;
     overflow: hidden;
     cursor: pointer;
-    transition: border-color 0.18s ease, background 0.18s ease;
-    min-height: 0;
+    transition: transform 0.18s ease, border-color 0.18s ease;
 }
 
 .result-scroll-card:hover {
-    background: rgba(255,255,255,0.07);
+    transform: translateY(-3px);
     border-color: rgba(96,165,250,0.3);
 }
 
 .result-scroll-poster {
     position: relative;
-    width: 90px;
-    flex-shrink: 0;
+    width: 100%;
+    aspect-ratio: 2/3;
     background: #1e293b;
     overflow: hidden;
 }
@@ -394,16 +402,16 @@ document.addEventListener("DOMContentLoaded", function () {
 
 .result-scroll-rank {
     position: absolute;
-    top: 6px;
-    left: 6px;
-    width: 22px;
-    height: 22px;
+    top: 8px;
+    left: 8px;
+    width: 24px;
+    height: 24px;
     background: #2563eb;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     font-weight: 700;
     z-index: 2;
 }
@@ -413,9 +421,9 @@ document.addEventListener("DOMContentLoaded", function () {
     bottom: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(to top, rgba(0,0,0,0.85), transparent);
-    padding: 16px 6px 5px;
-    font-size: 0.65rem;
+    background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+    padding: 20px 8px 6px;
+    font-size: 0.66rem;
     font-weight: 600;
     color: #fbbf24;
     z-index: 2;
@@ -423,16 +431,11 @@ document.addEventListener("DOMContentLoaded", function () {
 }
 
 .result-scroll-body {
-    padding: 10px 12px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    flex: 1;
-    min-width: 0;
+    padding: 8px 10px 10px;
 }
 
 .result-scroll-title {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 700;
     margin-bottom: 4px;
     line-height: 1.25;
@@ -443,10 +446,10 @@ document.addEventListener("DOMContentLoaded", function () {
 }
 
 .result-scroll-why {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: #93c5fd;
-    margin: 0 0 8px;
-    line-height: 1.4;
+    margin: 0 0 6px;
+    line-height: 1.35;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -454,39 +457,25 @@ document.addEventListener("DOMContentLoaded", function () {
 }
 
 .result-scroll-feedback {
-    margin-bottom: 6px;
+    margin-bottom: 0;
 }
 
-.result-scroll-more {
-    font-size: 0.72rem;
-    color: #64748b;
-    margin-top: 2px;
-}
+.result-scroll-more { display: none; }
 
-/* DESKTOP: griglia 3-4 colonne con card verticali */
+/* DESKTOP: griglia */
 @media (min-width: 768px) {
+    .results-scroll-wrap { margin: 0; padding: 0; overflow: visible; }
     .results-scroll-row {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 14px;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        overflow-x: visible;
+        scroll-snap-type: none;
+        padding-bottom: 0;
     }
     .result-scroll-card {
-        flex-direction: column;
-    }
-    .result-scroll-poster {
-        width: 100%;
-        aspect-ratio: 2/3;
-        height: auto;
-    }
-    .result-scroll-badge {
-        bottom: 10px;
-        left: 10px;
-        right: 10px;
-        background: rgba(0,0,0,0.72);
-        backdrop-filter: blur(6px);
-        border-radius: 8px;
-        padding: 5px 9px;
-        font-size: 0.75rem;
+        flex: none;
+        max-width: none;
+        min-width: 0;
     }
     .result-scroll-card {
         flex: none;

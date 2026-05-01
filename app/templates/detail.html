@@ -660,13 +660,15 @@ html, body {
         </button>
         <script>
         function goBack() {
+            // Prova sessionStorage (torna ai risultati)
+            const resultsUrl = sessionStorage.getItem("cg_results_url");
             const ref = document.referrer;
-            // Se la pagina precedente è /recommend (POST), torna alla home
-            // Se è una pagina interna valida, torna lì
-            if (!ref || ref.includes('/recommend') || ref === window.location.href) {
-                window.location.href = '/';
-            } else {
+            if (resultsUrl && ref && ref.includes("/recommend")) {
+                window.location.href = resultsUrl;
+            } else if (ref && !ref.includes("/recommend") && ref !== window.location.href) {
                 history.back();
+            } else {
+                window.location.href = "/";
             }
         }
         </script>
