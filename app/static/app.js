@@ -21,14 +21,24 @@ function highlightMatch(text, query) {
     return escapedText.replace(regex, "<mark>$1</mark>");
 }
 
+function normalizeStr(s) {
+    return s.toLowerCase().replace(/[-\'\s]+/g, " ").trim();
+}
+
 function scoreMovie(movie, query) {
-    const q = query.toLowerCase().trim();
+    const q      = query.toLowerCase().trim();
+    const qNorm  = normalizeStr(query);
     const display = (movie.display_title || movie.title || "").toLowerCase();
-    const raw = (movie.title || "").toLowerCase();
+    const raw     = (movie.title || "").toLowerCase();
+    const dispN   = normalizeStr(display);
+    const rawN    = normalizeStr(raw);
     if (!q) return 0;
     if (display === q || raw === q) return 100;
+    if (dispN === qNorm || rawN === qNorm) return 95;
     if (display.startsWith(q) || raw.startsWith(q)) return 80;
+    if (dispN.startsWith(qNorm) || rawN.startsWith(qNorm)) return 75;
     if (display.includes(q) || raw.includes(q)) return 60;
+    if (dispN.includes(qNorm) || rawN.includes(qNorm)) return 55;
     if (display.split(/\s+/).some(w => w.startsWith(q))) return 40;
     return 10;
 }

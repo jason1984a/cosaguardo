@@ -1008,69 +1008,93 @@ def build_badge(rec):
         "type": "default"
     }
 
-# Cache server-side per search TV (TTL 1 ora — i titoli non cambiano spesso)
+# Cache server-side per search TV
 _tv_search_cache: dict = {}
 _TV_SEARCH_CACHE_MAX = 200
+
+# Cache find_tv_by_title — evita chiamate TMDb ripetute
+_tv_find_cache: dict = {}
+_TV_FIND_CACHE_MAX = 500
+
+# Cache titoli localizzati IT (come recommendation_api)
+_tv_localized_cache: dict = {}
+
+
+def _normalize_tv_query(s: str) -> str:
+    """Normalizza query: lowercase, rimuove trattini e apostrofi."""
+    import re as _re
+    return _re.sub(r"[-\'\s]+", " ", s).strip().lower()
 
 
 def search_tv_series(query: str, limit: int = 8):
     """
-    Autocomplete Serie TV via TMDb con cache server-side.
-    Prima chiamata: ~200ms (rete TMDb). Successive per stessa query: <1ms.
+    Autocomplete Serie TV via TMDb con:
+    - Cache server-side (prima call ~200ms, successive <1ms)
+    - Fuzzy matching: normalizza trattini/apostrofi
+    - Titoli italiani quando disponibili
     """
     query = query.strip()
     if not query or not TMDB_API_KEY:
         return []
 
+    # Prova prima con query originale, poi normalizzata
     cache_key = query.lower()
+    q_norm    = _normalize_tv_query(query)
+    norm_key  = q_norm
+
     if cache_key in _tv_search_cache:
         return _tv_search_cache[cache_key][:limit]
+    if norm_key in _tv_search_cache and norm_key != cache_key:
+        return _tv_search_cache[norm_key][:limit]
 
-    try:
-        url = "https://api.themoviedb.org/3/search/tv"
-        params = {
-            "api_key": TMDB_API_KEY,
-            "query": query,
-            "language": "it-IT"
-        }
+    def _fetch(q):
+        try:
+            r = requests.get(
+                "https://api.themoviedb.org/3/search/tv",
+                params={"api_key": TMDB_API_KEY, "query": q, "language": "it-IT"},
+                timeout=5
+            )
+            return r.json().get("results", [])
+        except Exception:
+            return []
 
-        response = requests.get(url, params=params, timeout=5)
-        data = response.json()
+    raw = _fetch(query)
+    # Se pochi risultati prova con query normalizzata
+    if len(raw) < 3 and q_norm != query.lower():
+        raw2 = _fetch(q_norm)
+        seen_ids = {r.get("id") for r in raw}
+        raw += [r for r in raw2 if r.get("id") not in seen_ids]
 
-        results = []
-        seen_titles = set()
+    results = []
+    seen_titles = set()
+    for item in raw[:limit * 2]:
+        it_name  = item.get("name","")        # titolo italiano (lingua richiesta)
+        orig_name = item.get("original_name","")
 
-        for item in data.get("results", [])[:limit]:
-            name          = item.get("name")
-            original_name = item.get("original_name")
+        if not it_name and not orig_name:
+            continue
 
-            if not name and not original_name:
-                continue
+        # Usa il titolo italiano se diverso dall'originale, altrimenti originale
+        display_title = it_name or orig_name
+        base_title    = orig_name or it_name   # chiave interna = originale
 
-            display_title = name or original_name
-            base_title    = original_name or name
+        key = base_title.lower().strip()
+        if key in seen_titles:
+            continue
+        seen_titles.add(key)
 
-            if not base_title:
-                continue
+        results.append({
+            "title":         base_title,
+            "display_title": display_title,
+            "id":            item.get("id"),
+        })
+        if len(results) >= limit:
+            break
 
-            key = base_title.lower().strip()
-            if key in seen_titles:
-                continue
-
-            results.append({
-                "title":         base_title,
-                "display_title": display_title,
-                "id":            item.get("id"),
-            })
-            seen_titles.add(key)
-
-        # Salva in cache (evict se troppo grande)
+    # Salva in cache
+    for k in [cache_key, norm_key]:
         if len(_tv_search_cache) >= _TV_SEARCH_CACHE_MAX:
-            oldest = next(iter(_tv_search_cache))
-            del _tv_search_cache[oldest]
-        _tv_search_cache[cache_key] = results
+            _tv_search_cache.pop(next(iter(_tv_search_cache)))
+        _tv_search_cache[k] = results
 
-        return results[:limit]
-
-    except Exception:
-        return []
+    return results[:limit]

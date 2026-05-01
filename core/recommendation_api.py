@@ -1563,37 +1563,62 @@ def get_cinema_news(limit: int = 8) -> list:
 
 def search_movies_fast(query: str, limit: int = 8) -> list:
     """
-    Ricerca veloce solo su DB locale — nessuna chiamata TMDb.
-    Usata dall'autocomplete per risposta immediata (<10ms).
+    Ricerca veloce su DB locale con matching fuzzy:
+    - Normalizza query e titoli (rimuove trattini, spazi multipli)
+    - Cerca sia sul titolo originale che su quello normalizzato
     """
     query = query.strip()
     if len(query) < 2:
         return []
 
+    import re as _re
+    def normalize(s):
+        """Rimuove trattini, apostrofi e spazi multipli per matching fuzzy."""
+        return _re.sub(r"[\-\'\s]+", " ", s).strip().lower()
+
+    q_norm = normalize(query)
+
     conn = get_connection()
     cursor = conn.cursor()
 
+    # Prima cerca match diretto
     cursor.execute("""
         SELECT movielens_movie_id, title
         FROM titles
         WHERE LOWER(title) LIKE LOWER(?)
         ORDER BY LENGTH(title) ASC
         LIMIT ?
-    """, (f"%{query}%", limit))
+    """, (f"%{query}%", limit * 2))
+    rows_direct = cursor.fetchall()
 
-    rows = cursor.fetchall()
+    # Poi cerca con query normalizzata (cattura "spiderm" → "Spider-Man")
+    cursor.execute("""
+        SELECT movielens_movie_id, title
+        FROM titles
+        WHERE LOWER(REPLACE(REPLACE(title, '-', ' '), '\'', ' ')) LIKE ?
+        ORDER BY LENGTH(title) ASC
+        LIMIT ?
+    """, (f"%{q_norm}%", limit * 2))
+    rows_fuzzy = cursor.fetchall()
     conn.close()
 
+    # Unisce e deduplica, direct ha priorità
+    seen_ids = set()
     results = []
-    for row in rows:
+    for row in rows_direct + rows_fuzzy:
+        if row[0] in seen_ids:
+            continue
+        seen_ids.add(row[0])
         title = row[1]
-        # Usa cache locale se disponibile, altrimenti mostra titolo raw
         display = _localized_title_cache.get(title, title)
         results.append({
-            "movie_id": row[0],
-            "title": title,
+            "movie_id":     row[0],
+            "title":        title,
             "display_title": display or title,
         })
+        if len(results) >= limit:
+            break
+
     return results
 
 
