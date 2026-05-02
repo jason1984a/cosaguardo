@@ -293,7 +293,7 @@ def home_picks(request: Request):
 @app.get("/login", response_class=HTMLResponse)
 def login_page(request: Request):
     if request.session.get("user_id"):
-        return RedirectResponse(url="/dashboard", status_code=303)
+        return RedirectResponse(url="/profilo", status_code=303)
 
     return templates.TemplateResponse(
         request=request,
@@ -307,7 +307,7 @@ def login_page(request: Request):
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
     if request.session.get("user_id"):
-        return RedirectResponse(url="/dashboard", status_code=303)
+        return RedirectResponse(url="/profilo", status_code=303)
 
     return templates.TemplateResponse(
         request=request,
@@ -327,65 +327,6 @@ def dashboard(request: Request):
         return RedirectResponse(url="/login", status_code=303)
     return RedirectResponse(url="/profilo", status_code=302)
 
-
-@app.get("/dashboard-legacy", response_class=HTMLResponse)
-def dashboard_legacy(request: Request):
-    user_id = request.session.get("user_id")
-
-    if not user_id:
-        return RedirectResponse(url="/login", status_code=303)
-
-    user = get_user_by_id(user_id)
-    if not user:
-        request.session.clear()
-        return RedirectResponse(url="/login", status_code=303)
-
-    searches = get_searches_by_user(user_id, limit=10)
-    liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
-
-    for item in liked_titles:
-        item["poster_url"] = item.get("poster_url") or ""
-
-        if item["content_type"] == "movie" and not item["poster_url"]:
-            tmdb_info = get_movie_tmdb_info(item["title"])
-            item["poster_url"] = tmdb_info.get("poster_url", "") if tmdb_info else ""
-
-        elif item["content_type"] == "tv" and not item["poster_url"]:
-            tv_info = find_tv_by_title(item["title"])
-            if tv_info and tv_info.get("poster_path"):
-                item["poster_url"] = f"https://image.tmdb.org/t/p/w342{tv_info['poster_path']}"
-
-    taste_profile = build_taste_profile(searches)
-
-    today_key = datetime.now().strftime("%Y-%m-%d")
-    daily_recs = get_daily_recommendations(user_id, today_key)
-
-    if daily_recs and len(daily_recs) > 0:
-        recommendations = [dict(rec) for rec in daily_recs]
-    else:
-        recommendations = build_dashboard_recommendations(
-            user_id=user_id,
-            searches=searches,
-            liked_titles=liked_titles,
-            taste_profile=taste_profile,
-        )
-
-        if recommendations:
-            save_daily_recommendations(user_id, today_key, recommendations)
-
-    return templates.TemplateResponse(
-        request=request,
-        name="dashboard.html",
-        context={
-            "request": request,
-            "user_email": user["email"],
-            "searches": searches,
-            "liked_titles": liked_titles,
-            "taste_profile": taste_profile,
-            "recommendations": recommendations,
-            "tmdb_api_key": os.environ.get("TMDB_API_KEY", ""),
-        },
-    )
 
 @app.post("/register", response_class=HTMLResponse)
 def register_submit(
@@ -558,7 +499,7 @@ def login_submit(
     request.session["user_id"] = user["id"]
     request.session["user_email"] = user["email"]
 
-    return RedirectResponse(url="/dashboard", status_code=303)
+    return RedirectResponse(url="/profilo", status_code=303)
 
 @app.post("/recommend")
 def recommend(
@@ -599,8 +540,7 @@ def recommend(
                 rec["is_disliked"] = rec_state.get("preference") == "disliked"
         return templates.TemplateResponse(
             request=request, name="results.html",
-            context={**_cached, "request": request,
-                     "tmdb_api_key": os.environ.get("TMDB_API_KEY","")},
+            context={**_cached, "request": request},
         )
     # ──────────────────────────────────────────────────────────────────────
 
@@ -903,7 +843,6 @@ def recommend(
             "missing_titles": missing_titles,
             "recommendations": enriched_recommendations,
             "content_type": content_type,
-            "tmdb_api_key": os.environ.get("TMDB_API_KEY",""),
         },
     )
 
@@ -1136,7 +1075,6 @@ def profilo(request: Request):
             "seen_titles":     seen_titles,
             "recommendations": recommendations,
             "searches":        searches,
-            "tmdb_api_key":    os.environ.get("TMDB_API_KEY", ""),
         },
     )
 

@@ -1408,14 +1408,18 @@ def get_detail_movie(tmdb_id: int) -> dict:
                 if name in seen:
                     continue
                 seen.add(name)
-                pid  = p.get("provider_id")
-                logo = p.get("logo_path", "")
-                meta = PROVIDER_META.get(pid, {})
+                pid        = p.get("provider_id")
+                logo       = p.get("logo_path", "")
+                meta       = PROVIDER_META.get(pid, {})
+                prov_name  = meta.get("name", name)
+                # Usa link affiliato se disponibile, altrimenti JustWatch
+                aff_link   = _build_affiliate_link(prov_name, title=d.get("title",""), tmdb_id=tmdb_id)
                 out.append({
-                    "name":     meta.get("name", name),
-                    "logo_url": f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
-                    "color":    meta.get("color", "#444"),
-                    "link":     jw_link,
+                    "name":       prov_name,
+                    "logo_url":   f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
+                    "color":      meta.get("color", "#444"),
+                    "link":       aff_link or jw_link,
+                    "is_affiliate": bool(aff_link),
                 })
             return out
 
@@ -1496,14 +1500,18 @@ def get_detail_tv(tmdb_id: int) -> dict:
                 if name in seen:
                     continue
                 seen.add(name)
-                pid  = p.get("provider_id")
-                logo = p.get("logo_path", "")
-                meta = PROVIDER_META.get(pid, {})
+                pid        = p.get("provider_id")
+                logo       = p.get("logo_path", "")
+                meta       = PROVIDER_META.get(pid, {})
+                prov_name  = meta.get("name", name)
+                # Usa link affiliato se disponibile, altrimenti JustWatch
+                aff_link   = _build_affiliate_link(prov_name, title=d.get("title",""), tmdb_id=tmdb_id)
                 out.append({
-                    "name":     meta.get("name", name),
-                    "logo_url": f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
-                    "color":    meta.get("color", "#444"),
-                    "link":     jw_link,
+                    "name":       prov_name,
+                    "logo_url":   f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
+                    "color":      meta.get("color", "#444"),
+                    "link":       aff_link or jw_link,
+                    "is_affiliate": bool(aff_link),
                 })
             return out
 
@@ -2111,22 +2119,69 @@ def get_popular_by_genre_tmdb(genre_id: int, content_type: str = "movie", limit:
         return []
 
 # Mappa ID piattaforma TMDb → nome + colore brand
+# ── Configurazione affiliati ──────────────────────────────────────────────
+# Inserisci i tuoi tag/ID affiliazione nelle variabili d'ambiente su Render:
+#   AFFILIATE_AMAZON   = il_tuo_tag (es. cosaguardo-21)
+#   AFFILIATE_AWIN_ID  = il_tuo_id_awin (es. 123456)
+#   AFFILIATE_APPLE    = il_tuo_token_apple
+# Se non configurati, i link puntano direttamente alle piattaforme (no commissione).
+
+def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = None) -> str:
+    """
+    Costruisce link affiliato per la piattaforma.
+    Se il tag affiliato non è configurato, restituisce stringa vuota
+    (in quel caso si usa il link JustWatch di default).
+    """
+    import urllib.parse
+
+    title_enc = urllib.parse.quote_plus(title) if title else ""
+
+    # Amazon Associates — Prime Video
+    amazon_tag = os.environ.get("AFFILIATE_AMAZON", "")
+    if provider_name in ("Prime Video", "Amazon Video") and amazon_tag:
+        # Link di ricerca Amazon con tag affiliato
+        search = f"https://www.amazon.it/s?k={title_enc}&i=instant-video&tag={amazon_tag}"
+        return search
+
+    # Apple TV+ — Apple Performance Partners
+    apple_token = os.environ.get("AFFILIATE_APPLE", "")
+    if provider_name == "Apple TV+" and apple_token:
+        return f"https://tv.apple.com/it/search?term={title_enc}&at={apple_token}"
+
+    # Awin — Disney+, Paramount+, NOW, Netflix IT
+    awin_id = os.environ.get("AFFILIATE_AWIN_ID", "")
+    awin_advertiser = {
+        "Disney+":    "14805",   # ID advertiser Disney+ IT su Awin
+        "Paramount+": "26376",   # ID advertiser Paramount+ IT su Awin
+        "NOW":        "12445",   # ID advertiser NOW IT su Awin
+        "NOW TV":     "12445",
+        "Netflix":    "14728",   # ID advertiser Netflix IT su Awin
+    }
+    if awin_id and provider_name in awin_advertiser:
+        adv_id = awin_advertiser[provider_name]
+        dest = urllib.parse.quote_plus(f"https://www.{provider_name.lower().replace('+','plus').replace(' ','')}.com/it/")
+        return f"https://www.awin1.com/cread.php?awinmid={adv_id}&awinaffid={awin_id}&ued={dest}"
+
+    return ""  # Nessun affiliato configurato → usa JustWatch
+
+
 PROVIDER_META = {
     8:   {"name": "Netflix",        "color": "#E50914"},
     9:   {"name": "Prime Video",    "color": "#00A8E0"},
     10:  {"name": "Amazon Video",   "color": "#00A8E0"},
     35:  {"name": "Rakuten TV",     "color": "#BF0000"},
-    39:  {"name": "NOW TV",         "color": "#00BCD4"},
+    39:  {"name": "NOW",            "color": "#00BCD4"},
     40:  {"name": "Chili",          "color": "#FF6600"},
     119: {"name": "Prime Video",    "color": "#00A8E0"},
     149: {"name": "Rakuten TV",     "color": "#BF0000"},
     337: {"name": "Disney+",        "color": "#113CCF"},
-    341: {"name": "Apple TV+",      "color": "#000000"},
-    350: {"name": "Apple TV+",      "color": "#000000"},
+    341: {"name": "Apple TV+",      "color": "#555555"},
+    350: {"name": "Apple TV+",      "color": "#555555"},
     381: {"name": "Canal+",         "color": "#000000"},
     531: {"name": "Paramount+",     "color": "#0064FF"},
     619: {"name": "Disney+",        "color": "#113CCF"},
 }
+# ──────────────────────────────────────────────────────────────────────────
 
 
 def get_watch_providers(title: str, content_type: str = "movie", country: str = "IT") -> dict:
@@ -2180,14 +2235,17 @@ def get_watch_providers(title: str, content_type: str = "movie", country: str = 
                 if name in seen:
                     continue
                 seen.add(name)
-                pid = p.get("provider_id")
+                pid       = p.get("provider_id")
                 logo_path = p.get("logo_path", "")
-                meta = PROVIDER_META.get(pid, {})
+                meta      = PROVIDER_META.get(pid, {})
+                prov_name = meta.get("name", name)
+                aff_link  = _build_affiliate_link(prov_name, title=title)
                 out.append({
-                    "name":     meta.get("name", name),
-                    "logo_url": f"https://image.tmdb.org/t/p/w45{logo_path}" if logo_path else "",
-                    "color":    meta.get("color", "#444"),
-                    "link":     justwatch_link,
+                    "name":         prov_name,
+                    "logo_url":     f"https://image.tmdb.org/t/p/w45{logo_path}" if logo_path else "",
+                    "color":        meta.get("color", "#444"),
+                    "link":         aff_link or justwatch_link,
+                    "is_affiliate": bool(aff_link),
                 })
             return out
 
