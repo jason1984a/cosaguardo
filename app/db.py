@@ -218,6 +218,49 @@ def init_db():
         )
     """)
 
+    # home_picks creata qui (anche se ensure_home_picks_table la ricrea idempotentemente)
+    # così l'indice qui sotto può essere creato in init_db senza dipendere da chiamate lazy.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS home_picks (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id      INTEGER NOT NULL,
+            pick_date    TEXT NOT NULL,
+            title        TEXT NOT NULL,
+            content_type TEXT NOT NULL,
+            reason       TEXT,
+            score        REAL,
+            poster_url   TEXT,
+            tmdb_id      INTEGER
+        )
+    """)
+
+    # ─── Indici per performance query frequenti ────────────────────────────
+    # Profilo utente: SELECT ... FROM searches WHERE user_id = ? ORDER BY created_at DESC
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_searches_user_created
+        ON searches (user_id, created_at DESC)
+    """)
+
+    # Profilo: SELECT ... FROM daily_recommendations WHERE user_id = ? AND rec_date = ?
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_daily_recs_user_date
+        ON daily_recommendations (user_id, rec_date)
+    """)
+
+    # Home loggata: SELECT ... FROM home_picks WHERE user_id = ? AND pick_date = ?
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_home_picks_user_date
+        ON home_picks (user_id, pick_date)
+    """)
+
+    # Profilo: SELECT ... FROM user_title_state WHERE user_id = ? AND content_type = ?
+    # (l'UNIQUE su user_id+title+content_type non aiuta perché title è in mezzo)
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_uts_user_ctype
+        ON user_title_state (user_id, content_type)
+    """)
+    # ───────────────────────────────────────────────────────────────────────
+
     conn.commit()
     conn.close()
 

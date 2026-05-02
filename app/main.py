@@ -1106,6 +1106,10 @@ def get_tmdb_id(title: str = "", content_type: str = "movie"):
 
 # ─── Google OAuth ─────────────────────────────────────────────────────────
 import httpx
+import secrets
+import logging
+
+logger = logging.getLogger("cosaguardo.oauth")
 
 GOOGLE_CLIENT_ID     = os.environ.get("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
@@ -1114,8 +1118,14 @@ GOOGLE_REDIRECT_URI  = os.environ.get("GOOGLE_REDIRECT_URI", "https://cosaguardo
 
 @app.get("/auth/google")
 def google_login(request: Request):
-    """Redirect a Google per il login OAuth."""
+    """Redirect a Google per il login OAuth.
+    Genera uno state CSRF token e lo salva in sessione per verifica al callback."""
     import urllib.parse
+
+    # CSRF protection — genera state token e salva in sessione
+    state = secrets.token_urlsafe(32)
+    request.session["oauth_state"] = state
+
     params = {
         "client_id":     GOOGLE_CLIENT_ID,
         "redirect_uri":  GOOGLE_REDIRECT_URI,
@@ -1123,16 +1133,23 @@ def google_login(request: Request):
         "scope":         "openid email profile",
         "access_type":   "online",
         "prompt":        "select_account",
+        "state":         state,
     }
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
     return RedirectResponse(url=url)
 
 
 @app.get("/auth/google/callback")
-def google_callback(request: Request, code: str = "", error: str = ""):
+def google_callback(request: Request, code: str = "", state: str = "", error: str = ""):
     """Callback Google OAuth — crea o logga l'utente."""
     if error or not code:
         return RedirectResponse(url="/login?error=google_cancelled", status_code=302)
+
+    # CSRF check — verifica state e consuma il token (one-shot)
+    expected_state = request.session.pop("oauth_state", None)
+    if not expected_state or not state or not secrets.compare_digest(state, expected_state):
+        logger.warning("OAuth state mismatch o assente — possibile CSRF attempt")
+        return RedirectResponse(url="/login?error=google_state", status_code=302)
 
     try:
         # 1. Scambia il code con il token
@@ -1151,6 +1168,7 @@ def google_callback(request: Request, code: str = "", error: str = ""):
         access_token = token_data.get("access_token")
 
         if not access_token:
+            logger.warning("OAuth token exchange failed: %s", token_data.get("error", "unknown"))
             return RedirectResponse(url="/login?error=google_failed", status_code=302)
 
         # 2. Recupera info utente da Google
@@ -1161,15 +1179,22 @@ def google_callback(request: Request, code: str = "", error: str = ""):
         )
         userinfo = userinfo_resp.json()
         email = userinfo.get("email", "").strip().lower()
+        email_verified = userinfo.get("verified_email", False)
 
         if not email:
             return RedirectResponse(url="/login?error=google_no_email", status_code=302)
+
+        # Account takeover protection: rifiuta email non verificate da Google.
+        # Senza questo check, chiunque potrebbe rivendicare un account altrui
+        # registrando una Google identity non-verificata con la stessa email.
+        if not email_verified:
+            logger.warning("OAuth: email %s rifiutata, non verificata da Google", email)
+            return RedirectResponse(url="/login?error=google_unverified", status_code=302)
 
         # 3. Crea o recupera l'utente
         user = get_user_by_email(email)
         if not user:
             # Nuovo utente — crea con password casuale (non usata per login Google)
-            import secrets
             user_id = create_user(email, secrets.token_hex(32))
         else:
             user_id = user["id"]
@@ -1181,6 +1206,7 @@ def google_callback(request: Request, code: str = "", error: str = ""):
         return RedirectResponse(url="/profilo", status_code=302)
 
     except Exception as e:
+        logger.exception("OAuth callback error: %s", e)
         return RedirectResponse(url="/login?error=google_error", status_code=302)
 # ──────────────────────────────────────────────────────────────────────────
 

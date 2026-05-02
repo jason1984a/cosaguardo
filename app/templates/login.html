@@ -20,6 +20,14 @@
         <div style="margin-bottom:18px;padding:12px 14px;border-radius:12px;background:rgba(255,200,0,0.10);border:1px solid rgba(255,200,0,0.2);color:#fde68a;font-weight:600;">
             Accesso con Google annullato.
         </div>
+    {% elif request.query_params.get('error') == 'google_unverified' %}
+        <div style="margin-bottom:18px;padding:12px 14px;border-radius:12px;background:rgba(255,107,107,0.12);border:1px solid rgba(255,107,107,0.25);color:#ffd1d1;font-weight:600;">
+            La tua email Google non è verificata. Verificala sul tuo account Google e riprova.
+        </div>
+    {% elif request.query_params.get('error') == 'google_state' %}
+        <div style="margin-bottom:18px;padding:12px 14px;border-radius:12px;background:rgba(255,107,107,0.12);border:1px solid rgba(255,107,107,0.25);color:#ffd1d1;font-weight:600;">
+            Sessione di accesso scaduta o non valida. Riprova ad accedere con Google.
+        </div>
     {% elif request.query_params.get('error') %}
         <div style="margin-bottom:18px;padding:12px 14px;border-radius:12px;background:rgba(255,107,107,0.12);border:1px solid rgba(255,107,107,0.25);color:#ffd1d1;font-weight:600;">
             Errore durante l'accesso con Google. Riprova.
