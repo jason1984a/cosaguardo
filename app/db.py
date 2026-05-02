@@ -3,7 +3,20 @@ import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "cosaguardo.db")
+
+# Path del DB utenti — su Render è /data/cosaguardo.db (disco persistente),
+# in locale è app/cosaguardo.db (default fallback).
+# Su Render basta impostare DATABASE_PATH=/data/cosaguardo.db come env var.
+DB_PATH = os.environ.get("DATABASE_PATH") or os.path.join(BASE_DIR, "cosaguardo.db")
+
+# Crea la directory parent se non esiste (es. /data/ esiste già su Render
+# ma in caso di path custom annidato lo creiamo).
+_parent = os.path.dirname(DB_PATH)
+if _parent and not os.path.exists(_parent):
+    try:
+        os.makedirs(_parent, exist_ok=True)
+    except OSError:
+        pass
 
 def ensure_daily_recommendations_table():
     conn = get_connection()
