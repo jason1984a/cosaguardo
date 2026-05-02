@@ -4,6 +4,7 @@
 
 {% block head_extra %}
 <link rel="stylesheet" href="/static/css/style.css">
+<meta name="cg-content-type" content="{{ content_type }}">
 {% endblock %}
 
 {% block content %}
@@ -142,8 +143,15 @@
 <script src="{{ url_for('static', path='js/feedback.js') }}"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    // Salva URL risultati per il bottone "Indietro" nelle schede
-    sessionStorage.setItem("cg_results_url", window.location.href);
+    // Salva parametri ricerca per ricostruire i risultati (non l'URL che è POST)
+    // Leggiamo i seed dalla pagina
+    const seedTags = document.querySelectorAll(".seed-tag");
+    const seeds = [...seedTags].map(t => t.textContent.trim());
+    const contentType = document.querySelector('meta[name="cg-content-type"]')?.content || "movie";
+    if (seeds.length > 0) {
+        sessionStorage.setItem("cg_last_seeds", JSON.stringify(seeds));
+        sessionStorage.setItem("cg_last_type", contentType);
+    }
 
 
     const modal      = document.getElementById("results-modal");

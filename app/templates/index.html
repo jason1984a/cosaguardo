@@ -312,6 +312,21 @@ function updatePlaceholders(type) {
     });
 }
 
+// Reset bottone se la pagina viene ripristinata da bfcache (es. tasto Indietro browser)
+window.addEventListener("pageshow", function(e) {
+    if (e.persisted) {
+        const btn     = document.getElementById("submit-btn");
+        const btnText = btn?.querySelector(".btn-text");
+        const btnLoad = btn?.querySelector(".btn-loading");
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove("is-loading");
+            if (btnText) btnText.style.display = "";
+            if (btnLoad) btnLoad.style.display = "none";
+        }
+    }
+});
+
 // Loading state per la ricerca
 document.getElementById("recommend-form")?.addEventListener("submit", function(e) {
     const btn     = document.getElementById("submit-btn");

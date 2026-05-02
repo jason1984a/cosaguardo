@@ -179,20 +179,55 @@ def _build_explanation(rec, index: int, all_recs: list) -> str:
 # ---------------------------------------------------------------------------
 
 def build_badge(rec):
-    genres = set(rec.get("genres", []))
+    """
+    Badge basato su generi + keyword + seed title.
+    Priorità: seed > keyword > genere.
+    """
+    genres   = set(rec.get("genres", []))
+    keywords = [k.lower() for k in rec.get("matched_keywords", [])]
+    why      = rec.get("why_titles", [])
+    seed     = rec.get("best_seed_title", "")
 
-    if "Comedy" in genres:
-        return "🎭 Più leggero"
-    if "Crime" in genres and "Thriller" in genres:
-        return "🔥 Più intenso"
-    if "Drama" in genres:
-        return "🧠 Più psicologico"
-    if "Sci-Fi" in genres or "Science Fiction" in genres or "Sci-Fi & Fantasy" in genres:
-        return "🚀 Sci-fi"
-    if "Horror" in genres:
-        return "😱 Più oscuro"
-    if "Action" in genres or "Action & Adventure" in genres:
-        return "💥 Più action"
+    # 1. Badge basato su seed title (più specifico)
+    if seed:
+        return f"🎯 Simile a {seed}"
+
+    # 2. Badge basato su keyword dominante
+    kw_badges = {
+        "friendship":    "❤️ Amicizia",
+        "love":          "❤️ Romantico",
+        "war":           "⚔️ Guerra",
+        "crime":         "🕵️ Crime",
+        "survival":      "💪 Sopravvivenza",
+        "mystery":       "🔍 Mistero",
+        "family":        "👨‍👩‍👧 Famiglia",
+        "revenge":       "🔥 Vendetta",
+        "conspiracy":    "🕵️ Complotto",
+        "heist":         "💰 Colpo grosso",
+        "road trip":     "🚗 On the road",
+        "coming of age": "🌱 Crescita",
+        "redemption":    "✨ Redenzione",
+        "dystopia":      "🌑 Distopia",
+        "space":         "🚀 Spazio",
+        "time travel":   "⏱️ Viaggio nel tempo",
+    }
+    for kw, badge in kw_badges.items():
+        if any(kw in k for k in keywords):
+            return badge
+
+    # 3. Badge basato su genere (fallback)
+    if "Comedy" in genres:                          return "😄 Più leggero"
+    if "Horror" in genres:                          return "😱 Più oscuro"
+    if "Crime" in genres and "Thriller" in genres:  return "🔥 Più intenso"
+    if "Thriller" in genres:                        return "⚡ Più adrenalinico"
+    if "Action" in genres:                          return "💥 Più action"
+    if "Sci-Fi" in genres or "Science Fiction" in genres: return "🚀 Sci-fi"
+    if "Romance" in genres:                         return "❤️ Romantico"
+    if "Animation" in genres:                       return "🎨 Animazione"
+    if "Documentary" in genres:                     return "🎥 Documentario"
+    if "Drama" in genres and why:
+        return f"🎭 Stile {why[0]}"
+    if "Drama" in genres:                           return "🎭 Dramma"
 
     return "✨ Consiglio"
 
@@ -202,8 +237,69 @@ def build_badge(rec):
 # ---------------------------------------------------------------------------
 
 def enrich_with_explanations(recommendations, seeds=None):
+    used_badges = {}      # badge_text -> count
+    seed_badge_count = {} # seed_title -> count (max 2 per seed)
+
     for i, rec in enumerate(recommendations):
         rec["explanation"] = _build_explanation(rec, i, recommendations)
-        rec["badge"] = build_badge(rec)
+        badge = build_badge(rec)
+
+        # Limita badge "Simile a X" a max 2 per seed
+        if "Simile a" in badge:
+            seed_name = badge.replace("🎯 Simile a ", "")
+            seed_badge_count[seed_name] = seed_badge_count.get(seed_name, 0) + 1
+            if seed_badge_count[seed_name] > 2:
+                # Usa badge tematico invece
+                badge = _theme_badge(rec)
+
+        # Evita badge identici oltre la 3a volta
+        badge_count = used_badges.get(badge, 0)
+        if badge_count >= 3 and "Simile a" not in badge:
+            alt = _theme_badge(rec, exclude=badge)
+            if alt: badge = alt
+
+        used_badges[badge] = used_badges.get(badge, 0) + 1
+        rec["badge"] = badge
 
     return recommendations
+
+
+def _theme_badge(rec, exclude=None):
+    """Badge tematico basato su generi e keyword."""
+    genres   = set(rec.get("genres", []))
+    keywords = [k.lower() for k in rec.get("matched_keywords", [])]
+
+    kw_map = {
+        "friendship": "❤️ Amicizia",
+        "love":       "❤️ Romantico",
+        "war":        "⚔️ Guerra",
+        "crime":      "🕵️ Crime",
+        "survival":   "💪 Sopravvivenza",
+        "mystery":    "🔍 Mistero",
+        "family":     "👨‍👩‍👧 Famiglia",
+        "revenge":    "🔥 Vendetta",
+        "heist":      "💰 Colpo grosso",
+        "space":      "🚀 Spazio",
+        "dystopia":   "🌑 Distopia",
+    }
+    for kw, b in kw_map.items():
+        if b != exclude and any(kw in k for k in keywords):
+            return b
+
+    genre_map = [
+        ({"Comedy"},                            "😄 Più leggero"),
+        ({"Horror"},                            "😱 Più oscuro"),
+        ({"Crime","Thriller"},                  "🔥 Più intenso"),
+        ({"Thriller"},                          "⚡ Adrenalinico"),
+        ({"Action"},                            "💥 Azione"),
+        ({"Science Fiction","Sci-Fi"},          "🚀 Sci-fi"),
+        ({"Romance"},                           "❤️ Romantico"),
+        ({"Animation"},                         "🎨 Animazione"),
+        ({"Documentary"},                       "🎥 Documentario"),
+        ({"Drama"},                             "🎭 Dramma"),
+    ]
+    for genre_set, b in genre_map:
+        if b != exclude and genre_set & genres:
+            return b
+
+    return "✨ Consiglio"

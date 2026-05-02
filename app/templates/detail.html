@@ -660,16 +660,41 @@ html, body {
         </button>
         <script>
         function goBack() {
-            // Prova sessionStorage (torna ai risultati)
-            const resultsUrl = sessionStorage.getItem("cg_results_url");
-            const ref = document.referrer;
-            if (resultsUrl && ref && ref.includes("/recommend")) {
-                window.location.href = resultsUrl;
-            } else if (ref && !ref.includes("/recommend") && ref !== window.location.href) {
+            const seeds      = JSON.parse(sessionStorage.getItem("cg_last_seeds") || "null");
+            const type       = sessionStorage.getItem("cg_last_type") || "movie";
+            const ref        = document.referrer || "";
+            const fromDetail = ref.includes("/film/") || ref.includes("/serie/");
+
+            // Se arriviamo da un'altra scheda (non dai risultati), usa history.back
+            if (!seeds && !fromDetail) {
                 history.back();
-            } else {
-                window.location.href = "/";
+                return;
             }
+
+            // Se abbiamo i seed salvati → ricostruisci la POST verso /recommend
+            if (seeds && seeds.length > 0) {
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = "/recommend";
+                seeds.forEach((s, i) => {
+                    const inp = document.createElement("input");
+                    inp.type  = "hidden";
+                    inp.name  = "movie" + (i + 1);
+                    inp.value = s;
+                    form.appendChild(inp);
+                });
+                const ct = document.createElement("input");
+                ct.type  = "hidden";
+                ct.name  = "content_type";
+                ct.value = type;
+                form.appendChild(ct);
+                document.body.appendChild(form);
+                form.submit();
+                return;
+            }
+
+            // Fallback
+            window.location.href = "/";
         }
         </script>
     </div>

@@ -853,10 +853,8 @@ def search_movies(query: str, limit: int = 10):
             if db_title.lower() in seen_titles:
                 continue
 
-            if title_it and title_it != db_title:
-                display_title = f"{title_it} ({db_title})"
-            else:
-                display_title = db_title
+            # Usa solo il titolo italiano se disponibile, senza AKA
+            display_title = title_it if title_it else db_title
 
             results.append({
                 "movie_id": movie_id,
@@ -1018,10 +1016,8 @@ def get_tmdb_localized_title(title: str):
             localized_title = first.get("title")
             original_title  = first.get("original_title")
 
-            if localized_title and original_title and localized_title != original_title:
-                result = f"{localized_title} ({original_title})"
-            else:
-                result = localized_title or original_title
+            # Usa solo il titolo localizzato — niente AKA che allunga inutilmente
+            result = localized_title or original_title
 
             _localized_title_cache[title] = result
             return result
