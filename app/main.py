@@ -1211,7 +1211,27 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
 # ──────────────────────────────────────────────────────────────────────────
 
 # ─── Sitemap.xml ──────────────────────────────────────────────────────────
-from fastapi.responses import Response
+from fastapi.responses import Response, FileResponse
+
+
+@app.get("/sw.js")
+def service_worker():
+    """
+    Serve il service worker dalla root del sito.
+    DEVE essere servito da / e non da /static/ perché il suo scope
+    altrimenti sarebbe limitato a /static/*. Richiesto per le PWA.
+    """
+    sw_path = os.path.join(os.path.dirname(__file__), "static", "sw.js")
+    return FileResponse(
+        sw_path,
+        media_type="application/javascript",
+        headers={
+            # No-cache sul SW stesso, così quando deployi il browser scarica subito la nuova versione
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Service-Worker-Allowed": "/",
+        },
+    )
+
 
 @app.get("/sitemap.xml")
 def sitemap():

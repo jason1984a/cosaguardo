@@ -54,6 +54,15 @@
     <meta name="twitter:description" content="{% block tw_description %}Consigli personalizzati su film e serie TV.{% endblock %}">
     <meta name="twitter:image" content="{% block tw_image %}https://cosaguardo.com/static/og-default.jpg{% endblock %}">
 
+    {# ── PWA — Progressive Web App ── #}
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <meta name="application-name" content="CosaGuardo">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CosaGuardo">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="msapplication-TileColor" content="#0b1020">
+
     <style>
         :root {
             --bg: #0b1020;
@@ -563,6 +572,35 @@
         function resetCookieConsent() {
             localStorage.removeItem('cg_cookie_consent');
             document.getElementById('cookie-banner').style.display = 'block';
+        }
+    </script>
+
+    {# ── PWA Service Worker registration ── #}
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .then(function(reg) {
+                        // Quando viene trovata una nuova versione del SW,
+                        // notifichiamo all'utente che c'è un aggiornamento.
+                        // Il SW si attiva subito grazie a skipWaiting() interno.
+                        reg.addEventListener('updatefound', function() {
+                            var newSW = reg.installing;
+                            if (!newSW) return;
+                            newSW.addEventListener('statechange', function() {
+                                if (newSW.state === 'activated' && navigator.serviceWorker.controller) {
+                                    // SW nuovo attivo + esiste già un SW controller
+                                    // = stiamo aggiornando, ricarica per vedere nuova versione
+                                    // (commentato di default per non infastidire — abilita se serve)
+                                    // window.location.reload();
+                                }
+                            });
+                        });
+                    })
+                    .catch(function(err) {
+                        console.warn('SW registration failed:', err);
+                    });
+            });
         }
     </script>
 </body>

@@ -2136,31 +2136,36 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
 
     title_enc = urllib.parse.quote_plus(title) if title else ""
 
-    # Amazon Associates — Prime Video
+    # ── Amazon Associates — Prime Video ────────────────────────────────────
     amazon_tag = os.environ.get("AFFILIATE_AMAZON", "")
     if provider_name in ("Prime Video", "Amazon Video") and amazon_tag:
         # Link di ricerca Amazon con tag affiliato
         search = f"https://www.amazon.it/s?k={title_enc}&i=instant-video&tag={amazon_tag}"
         return search
 
-    # Apple TV+ — Apple Performance Partners
+    # ── Apple TV+ — Apple Performance Partners ─────────────────────────────
     apple_token = os.environ.get("AFFILIATE_APPLE", "")
     if provider_name == "Apple TV+" and apple_token:
         return f"https://tv.apple.com/it/search?term={title_enc}&at={apple_token}"
 
-    # Awin — Disney+, Paramount+, NOW, Netflix IT
+    # ── Awin — solo programmi davvero disponibili su Awin Italia ───────────
+    # Nota: Disney+, Paramount+ e Netflix NON hanno programma Awin IT,
+    # per quei provider si usa JustWatch come fallback automatico.
     awin_id = os.environ.get("AFFILIATE_AWIN_ID", "")
-    awin_advertiser = {
-        "Disney+":    "14805",   # ID advertiser Disney+ IT su Awin
-        "Paramount+": "26376",   # ID advertiser Paramount+ IT su Awin
-        "NOW":        "12445",   # ID advertiser NOW IT su Awin
-        "NOW TV":     "12445",
-        "Netflix":    "14728",   # ID advertiser Netflix IT su Awin
-    }
-    if awin_id and provider_name in awin_advertiser:
-        adv_id = awin_advertiser[provider_name]
-        dest = urllib.parse.quote_plus(f"https://www.{provider_name.lower().replace('+','plus').replace(' ','')}.com/it/")
-        return f"https://www.awin1.com/cread.php?awinmid={adv_id}&awinaffid={awin_id}&ued={dest}"
+    if awin_id:
+        # Mappa provider → (env var con merchant ID, URL destinazione)
+        # I merchant ID si trovano sul pannello Awin dopo l'approvazione
+        # del programma (vedi anche env vars AWIN_MID_NOW / AWIN_MID_TIMVISION).
+        awin_programs = {
+            "NOW":       (os.environ.get("AWIN_MID_NOW", ""),       "https://www.nowtv.it/"),
+            "NOW TV":    (os.environ.get("AWIN_MID_NOW", ""),       "https://www.nowtv.it/"),
+            "TIMVISION": (os.environ.get("AWIN_MID_TIMVISION", ""), "https://www.timvision.it/"),
+        }
+        if provider_name in awin_programs:
+            mid, dest_url = awin_programs[provider_name]
+            if mid:
+                dest_enc = urllib.parse.quote_plus(dest_url)
+                return f"https://www.awin1.com/cread.php?awinmid={mid}&awinaffid={awin_id}&ued={dest_enc}"
 
     return ""  # Nessun affiliato configurato → usa JustWatch
 
@@ -2174,6 +2179,7 @@ PROVIDER_META = {
     40:  {"name": "Chili",          "color": "#FF6600"},
     119: {"name": "Prime Video",    "color": "#00A8E0"},
     149: {"name": "Rakuten TV",     "color": "#BF0000"},
+    235: {"name": "TIMVISION",      "color": "#E60000"},
     337: {"name": "Disney+",        "color": "#113CCF"},
     341: {"name": "Apple TV+",      "color": "#555555"},
     350: {"name": "Apple TV+",      "color": "#555555"},
