@@ -1275,12 +1275,32 @@ def termini(request: Request):
     return templates.TemplateResponse(request=request, name="termini.html", context={"request": request})
 
 
-@app.get("/flush-news")
-def flush_news():
-    """Svuota la cache news — solo per admin/debug."""
-    _news_cache["data"] = None
-    _news_cache["ts"]   = 0.0
-    return {"status": "cache cleared"}
+@app.get("/admin/flush-cache")
+def admin_flush_cache(request: Request):
+    """Svuota tutte le cache in-memory. Solo admin loggato."""
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    cleared = []
+
+    for cache, label in [
+        (_trending_cache, "trending"),
+        (_news_cache,     "news"),
+        (_toprated_cache, "top_rated"),
+    ]:
+        cache["data"] = None
+        cache["ts"]   = 0.0
+        cleared.append(label)
+
+    _cinema_cache["now_playing"] = None
+    _cinema_cache["upcoming"]    = None
+    _cinema_cache["ts"]          = 0.0
+    cleared.append("cinema")
+
+    _strips_cache.clear()
+    cleared.append("strips")
+
+    return {"status": "ok", "cleared": cleared}
 
 
 @app.get("/persona/{person_id}", response_class=HTMLResponse)
