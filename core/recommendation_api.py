@@ -2202,10 +2202,16 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
         search = f"https://www.amazon.it/s?k={title_enc}&i=instant-video&tag={amazon_tag}"
         return search
 
-    # ── Apple TV+ — Apple Performance Partners ─────────────────────────────
+    # ── Apple TV+ — Apple Performance Partners (Partnerize) ────────────────
+    # Formato ufficiale: https://geo.tv.apple.com/<region>/<path>?at=<token>&ct=<campaign>
+    # Il dominio geo.tv.apple.com fa redirect automatico al market dell'utente.
+    # ct = campaign token (max 40 char, no '?', '!', '&') — utile per tracking.
     apple_token = os.environ.get("AFFILIATE_APPLE", "")
     if provider_name == "Apple TV+" and apple_token:
-        return f"https://tv.apple.com/it/search?term={title_enc}&at={apple_token}"
+        return (
+            f"https://geo.tv.apple.com/it/search?term={title_enc}"
+            f"&at={apple_token}&ct=cosaguardo_recs"
+        )
 
     # ── Awin — solo programmi davvero disponibili su Awin Italia ───────────
     # Nota: Disney+, Paramount+ e Netflix NON hanno programma Awin IT,

@@ -888,7 +888,7 @@ html, body {
             <div class="providers-group-label">Incluso in abbonamento</div>
             <div class="providers-list">
                 {% for p in prov.flatrate %}
-                <a href="{{ p.link or prov.link or '#' }}" target="_blank" class="provider-item">
+                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="provider-item">
                     {% if p.logo_url %}
                     <img src="{{ p.logo_url }}" alt="{{ p.name }}" class="provider-logo">
                     {% endif %}
@@ -903,7 +903,7 @@ html, body {
             <div class="providers-group-label">Noleggio</div>
             <div class="providers-list">
                 {% for p in prov.rent[:3] %}
-                <a href="{{ p.link or prov.link or '#' }}" target="_blank" class="provider-item">
+                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="provider-item">
                     {% if p.logo_url %}
                     <img src="{{ p.logo_url }}" alt="{{ p.name }}" class="provider-logo">
                     {% endif %}

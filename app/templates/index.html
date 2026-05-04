@@ -605,7 +605,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         html += '<div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Incluso in abbonamento</div>';
                         html += '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">';
                         flatrate.forEach(p => {
-                            html += `<a href="${p.link || link}" target="_blank" title="${p.name}"
+                            html += `<a href="${p.link || link}" target="_blank" rel="nofollow noopener noreferrer" title="${p.name}"
                                 style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;
                                 background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);
                                 text-decoration:none;color:#fff;font-size:0.78rem;font-weight:600;transition:background 0.15s;">
@@ -619,7 +619,7 @@ document.addEventListener("DOMContentLoaded", function () {
                         html += '<div style="font-size:0.72rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:6px;">Noleggio/Acquisto</div>';
                         html += '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
                         rent.slice(0, 4).forEach(p => {
-                            html += `<a href="${p.link || link}" target="_blank" title="${p.name}"
+                            html += `<a href="${p.link || link}" target="_blank" rel="nofollow noopener noreferrer" title="${p.name}"
                                 style="display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;
                                 background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);
                                 text-decoration:none;color:#94a3b8;font-size:0.78rem;font-weight:600;">
