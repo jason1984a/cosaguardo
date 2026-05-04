@@ -57,6 +57,10 @@ from core.recommendation_api import (
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
+from core.seo_pages import (
+    get_title_by_slug, list_seo_titles, list_all_slugs_for_sitemap,
+    populate_seo_titles_db, seo_titles_count, slugify
+)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
@@ -1283,22 +1287,155 @@ def installa(request: Request):
     )
 
 
+@app.get("/dove-vedere", response_class=HTMLResponse)
+def dove_vedere_hub(request: Request, tipo: str = "", p: int = 1):
+    """Hub paginato di tutti i titoli con pagine SEO /dove-vedere/{slug}."""
+    content_type = None
+    if tipo == "film":
+        content_type = "movie"
+    elif tipo == "serie":
+        content_type = "tv"
+
+    page = max(1, p)
+    per_page = 36
+
+    items, total = list_seo_titles(content_type=content_type, page=page, per_page=per_page)
+    total_pages = max(1, (total + per_page - 1) // per_page)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dove_vedere_hub.html",
+        context={
+            "request": request,
+            "items": items,
+            "content_type": content_type,
+            "page": page,
+            "total_pages": total_pages,
+            "total": total,
+        },
+    )
+
+
+@app.get("/dove-vedere/{slug}", response_class=HTMLResponse)
+def dove_vedere_detail(request: Request, slug: str):
+    """Pagina SEO dedicata: dove vedere {titolo} in streaming."""
+    item = get_title_by_slug(slug)
+    if not item:
+        # 404 esplicito invece di redirect: meglio per SEO
+        return templates.TemplateResponse(
+            request=request,
+            name="dove_vedere_hub.html",
+            context={
+                "request": request,
+                "items": [],
+                "content_type": None,
+                "page": 1,
+                "total_pages": 1,
+                "total": 0,
+                "_not_found_slug": slug,
+            },
+            status_code=404,
+        )
+
+    # Costruisci poster URL (se in DB c'è solo il path)
+    if item.get("poster_path"):
+        poster_url = f"https://image.tmdb.org/t/p/w500{item['poster_path']}"
+    else:
+        poster_url = None
+
+    # Detail completo da TMDb (cache 24h memoria + 7gg DB già attiva)
+    if item["content_type"] == "tv":
+        detail = get_detail_tv(item["tmdb_id"]) or {}
+    else:
+        detail = get_detail_movie(item["tmdb_id"]) or {}
+
+    # Se TMDb ha info migliori per poster, usa quelle
+    if not detail.get("poster_url") and poster_url:
+        detail["poster_url"] = poster_url
+
+    # Trova titoli simili dal DB SEO (da raccomandare con link interno)
+    similar_titles = []
+    try:
+        # Strategia semplice: stesso content_type, alta popolarità, escluso self
+        candidates, _ = list_seo_titles(
+            content_type=item["content_type"],
+            page=1,
+            per_page=20
+        )
+        # Filtra fuori se stesso e prendi i primi 8 (non è raccomandazione algoritmica
+        # ma copre il caso generale ed è utile per internal linking SEO)
+        similar_titles = [c for c in candidates if c["slug"] != item["slug"]][:8]
+    except Exception:
+        pass
+
+    return templates.TemplateResponse(
+        request=request,
+        name="dove_vedere.html",
+        context={
+            "request": request,
+            "item": item,
+            "detail": detail,
+            "similar_titles": similar_titles,
+        },
+    )
+
+
+@app.get("/admin/refresh-seo")
+def admin_refresh_seo(request: Request):
+    """Rigenera le 800 pagine SEO da TMDb. Solo admin loggato.
+    Da chiamare manualmente o via cron settimanale."""
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    try:
+        result = populate_seo_titles_db()
+        return {"status": "ok", **result}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/admin/seo-stats")
+def admin_seo_stats(request: Request):
+    """Quante pagine SEO sono attualmente in DB."""
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    return {
+        "total": seo_titles_count(),
+        "movies": list_seo_titles(content_type="movie", page=1, per_page=1)[1],
+        "tv": list_seo_titles(content_type="tv", page=1, per_page=1)[1],
+    }
+
+
 @app.get("/sitemap.xml")
 def sitemap():
     """
-    Sitemap dinamica con pagine statiche + top film/serie da TMDb.
-    Aggiornata ad ogni richiesta (cached dal CDN di Render/browser).
+    Sitemap dinamica con:
+    - Pagine statiche
+    - Hub /dove-vedere (alta priorità per crawl)
+    - Tutti gli slug /dove-vedere/* dal DB SEO (~800 titoli)
+    - Top 20 film/serie come /film/{id} e /serie/{id} per indicizzazione schede
+
+    Aggiornata ad ogni richiesta. Per limitare carico TMDb, gli slug SEO
+    vengono dal DB locale (popolato via /admin/refresh-seo).
     """
     base = "https://cosaguardo.com"
+    today = datetime.now().strftime("%Y-%m-%d")
 
     # Pagine statiche
     static_urls = [
-        ("",        "daily",   "1.0"),
-        ("/login",  "monthly", "0.5"),
-        ("/register","monthly","0.5"),
+        ("",                 "daily",   "1.0"),
+        ("/dove-vedere",     "daily",   "0.9"),
+        ("/dove-vedere?tipo=film",  "daily", "0.7"),
+        ("/dove-vedere?tipo=serie", "daily", "0.7"),
+        ("/installa",        "monthly", "0.5"),
+        ("/login",           "monthly", "0.4"),
+        ("/register",        "monthly", "0.4"),
+        ("/privacy",         "yearly",  "0.3"),
+        ("/termini",         "yearly",  "0.3"),
     ]
 
-    # Top film popolari da TMDb (per indicizzazione schede)
+    # Top film/serie attuali da TMDb (mantengo le entry /film/{id} esistenti)
     movie_ids = []
     tv_ids    = []
     try:
@@ -1323,39 +1460,48 @@ def sitemap():
     except Exception:
         pass
 
-    today = datetime.now().strftime("%Y-%m-%d")
+    # Tutti gli slug /dove-vedere/* dal DB (~800 entry)
+    seo_entries = []
+    try:
+        seo_entries = list_all_slugs_for_sitemap()
+    except Exception:
+        pass
 
-    xml = '''<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'''
+    xml_parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+                 '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 
+    # 1. Pagine statiche (massima priorità)
     for path, freq, priority in static_urls:
-        xml += f"""
-  <url>
-    <loc>{base}{path}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>{freq}</changefreq>
-    <priority>{priority}</priority>
-  </url>"""
+        xml_parts.append(
+            f"  <url><loc>{base}{path}</loc><lastmod>{today}</lastmod>"
+            f"<changefreq>{freq}</changefreq><priority>{priority}</priority></url>"
+        )
 
+    # 2. Pagine SEO /dove-vedere/{slug} (queste sono il vero contenuto SEO)
+    for slug, ctype, updated_at in seo_entries:
+        try:
+            lastmod = datetime.fromtimestamp(updated_at).strftime("%Y-%m-%d") if updated_at else today
+        except Exception:
+            lastmod = today
+        xml_parts.append(
+            f"  <url><loc>{base}/dove-vedere/{slug}</loc><lastmod>{lastmod}</lastmod>"
+            f"<changefreq>weekly</changefreq><priority>0.7</priority></url>"
+        )
+
+    # 3. Top film/serie diretti per indicizzazione delle schede /film/{id}
     for mid in movie_ids:
-        xml += f"""
-  <url>
-    <loc>{base}/film/{mid}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>"""
-
+        xml_parts.append(
+            f"  <url><loc>{base}/film/{mid}</loc><lastmod>{today}</lastmod>"
+            f"<changefreq>weekly</changefreq><priority>0.6</priority></url>"
+        )
     for tid in tv_ids:
-        xml += f"""
-  <url>
-    <loc>{base}/serie/{tid}</loc>
-    <lastmod>{today}</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.8</priority>
-  </url>"""
+        xml_parts.append(
+            f"  <url><loc>{base}/serie/{tid}</loc><lastmod>{today}</lastmod>"
+            f"<changefreq>weekly</changefreq><priority>0.6</priority></url>"
+        )
 
-    xml += "\n</urlset>"
+    xml_parts.append("</urlset>")
+    xml = "\n".join(xml_parts)
 
     return Response(content=xml, media_type="application/xml")
 # ──────────────────────────────────────────────────────────────────────────

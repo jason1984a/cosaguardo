@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}Dove vedere film e serie TV in streaming — CosaGuardo{% endblock %}
+{% block meta_description %}La guida completa per scoprire dove guardare film e serie TV in streaming in Italia. Netflix, Disney+, Prime Video, NOW, Paramount+ e altre piattaforme.{% endblock %}
+{% block og_title %}Dove vedere film e serie TV in streaming{% endblock %}
+{% block og_description %}Scopri dove guardare i tuoi film e serie preferiti su Netflix, Disney+, Prime Video e altre piattaforme italiane.{% endblock %}
+
+{% block content %}
+<style>
+.dvh-page { max-width: 1200px; margin: 24px auto 60px; padding: 0 16px; }
+.dvh-hero {
+    text-align: center;
+    margin-bottom: 28px;
+    padding: 28px 16px;
+    background: linear-gradient(135deg, rgba(110,168,254,0.08), rgba(167,139,250,0.08));
+    border: 1px solid rgba(110,168,254,0.15);
+    border-radius: 18px;
+}
+.dvh-hero h1 {
+    font-size: clamp(1.6rem, 4vw, 2.2rem);
+    margin: 0 0 10px;
+}
+.dvh-hero p {
+    color: var(--muted);
+    margin: 0 auto;
+    max-width: 640px;
+    line-height: 1.5;
+}
+
+.dvh-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+}
+.dvh-tab {
+    padding: 8px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 999px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.18s ease;
+}
+.dvh-tab:hover { background: rgba(255,255,255,0.08); }
+.dvh-tab.active {
+    background: linear-gradient(135deg, #6ea8fe, #a78bfa);
+    color: #08101f;
+    border-color: transparent;
+}
+
+.dvh-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+}
+.dvh-card {
+    text-decoration: none;
+    color: inherit;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.18s ease;
+}
+.dvh-card:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(110,168,254,0.25);
+    transform: translateY(-2px);
+}
+.dvh-card-poster {
+    position: relative;
+    aspect-ratio: 2/3;
+    background: rgba(255,255,255,0.05);
+}
+.dvh-card-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.dvh-card-badge {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    backdrop-filter: blur(8px);
+}
+.dvh-card-info {
+    padding: 10px 12px 12px;
+}
+.dvh-card-title {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.25;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-bottom: 4px;
+}
+.dvh-card-meta {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.dvh-pagination {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 24px;
+}
+.dvh-pagination a, .dvh-pagination span {
+    padding: 8px 14px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    text-decoration: none;
+    font-size: 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+.dvh-pagination a:hover { background: rgba(255,255,255,0.1); }
+.dvh-pagination .current {
+    background: linear-gradient(135deg, #6ea8fe, #a78bfa);
+    color: #08101f;
+    font-weight: 700;
+    border-color: transparent;
+}
+.dvh-pagination .disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+</style>
+
+<div class="dvh-page">
+
+    <header class="dvh-hero">
+        <h1>Dove vedere film e serie TV in streaming</h1>
+        <p>Scopri su quale piattaforma guardare il tuo film o serie preferita: Netflix, Disney+, Prime Video, NOW, Paramount+, Apple TV+ e altre. Aggiornato regolarmente.</p>
+    </header>
+
+    <div class="dvh-tabs">
+        <a href="/dove-vedere"        class="dvh-tab {% if not content_type %}active{% endif %}">Tutti</a>
+        <a href="/dove-vedere?tipo=film"  class="dvh-tab {% if content_type == 'movie' %}active{% endif %}">🎬 Film</a>
+        <a href="/dove-vedere?tipo=serie" class="dvh-tab {% if content_type == 'tv' %}active{% endif %}">📺 Serie TV</a>
+    </div>
+
+    {% if items %}
+    <div class="dvh-grid">
+        {% for it in items %}
+        <a href="/dove-vedere/{{ it.slug }}" class="dvh-card">
+            <div class="dvh-card-poster">
+                {% if it.poster_path %}
+                <img src="https://image.tmdb.org/t/p/w300{{ it.poster_path }}" alt="{{ it.title }}" loading="lazy">
+                {% endif %}
+                <span class="dvh-card-badge">{{ "Serie" if it.content_type == "tv" else "Film" }}</span>
+            </div>
+            <div class="dvh-card-info">
+                <div class="dvh-card-title">{{ it.title }}</div>
+                <div class="dvh-card-meta">
+                    {% if it.year %}{{ it.year }}{% endif %}
+                    {% if it.vote_average and it.vote_average > 0 %} • ★ {{ "%.1f"|format(it.vote_average) }}{% endif %}
+                </div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    {% if total_pages > 1 %}
+    <nav class="dvh-pagination" aria-label="Paginazione">
+        {% if page > 1 %}
+        <a href="?{% if content_type == 'movie' %}tipo=film&{% elif content_type == 'tv' %}tipo=serie&{% endif %}p={{ page - 1 }}" rel="prev">‹ Precedente</a>
+        {% else %}
+        <span class="disabled">‹ Precedente</span>
+        {% endif %}
+
+        {% set start_page = [page - 2, 1]|max %}
+        {% set end_page = [start_page + 4, total_pages]|min %}
+        {% set start_page = [end_page - 4, 1]|max %}
+
+        {% if start_page > 1 %}
+        <a href="?{% if content_type == 'movie' %}tipo=film&{% elif content_type == 'tv' %}tipo=serie&{% endif %}p=1">1</a>
+        {% if start_page > 2 %}<span>…</span>{% endif %}
+        {% endif %}
+
+        {% for p in range(start_page, end_page + 1) %}
+            {% if p == page %}
+            <span class="current">{{ p }}</span>
+            {% else %}
+            <a href="?{% if content_type == 'movie' %}tipo=film&{% elif content_type == 'tv' %}tipo=serie&{% endif %}p={{ p }}">{{ p }}</a>
+            {% endif %}
+        {% endfor %}
+
+        {% if end_page < total_pages %}
+        {% if end_page < total_pages - 1 %}<span>…</span>{% endif %}
+        <a href="?{% if content_type == 'movie' %}tipo=film&{% elif content_type == 'tv' %}tipo=serie&{% endif %}p={{ total_pages }}">{{ total_pages }}</a>
+        {% endif %}
+
+        {% if page < total_pages %}
+        <a href="?{% if content_type == 'movie' %}tipo=film&{% elif content_type == 'tv' %}tipo=serie&{% endif %}p={{ page + 1 }}" rel="next">Successivo ›</a>
+        {% else %}
+        <span class="disabled">Successivo ›</span>
+        {% endif %}
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <p style="text-align:center;color:var(--muted);padding:40px 0;">
+        Nessun titolo disponibile al momento. Torna a trovarci tra qualche minuto!
+    </p>
+    {% endif %}
+
+</div>
+
+{# Schema.org BreadcrumbList #}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://cosaguardo.com/"},
+        {"@type": "ListItem", "position": 2, "name": "Dove vedere", "item": "https://cosaguardo.com/dove-vedere"}
+    ]
+}
+</script>
+{% endblock %}
