@@ -11,7 +11,7 @@
  * dal timestamp di build, ma puoi anche bumpare manualmente.
  */
 
-const CACHE_VERSION = "v2026.05.02-1";
+const CACHE_VERSION = "v2026.05.04-1";
 const STATIC_CACHE = `cosaguardo-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `cosaguardo-runtime-${CACHE_VERSION}`;
 
@@ -76,6 +76,18 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // Pagine detail (film/serie/persona) → SEMPRE dalla rete, mai cache.
+  // Motivo: cachare HTML semi-completo o di film diversi causa "schede vuote"
+  // o contenuto sbagliato al back-navigation. Meglio aspettare la rete.
+  if (url.pathname.startsWith("/film/") ||
+      url.pathname.startsWith("/serie/") ||
+      url.pathname.startsWith("/persona/") ||
+      url.pathname.startsWith("/results") ||
+      url.pathname === "/recommend") {
+    event.respondWith(networkOnly(req));
+    return;
+  }
+
   // Static files (CSS, JS, immagini, font, manifest, icone) → cache-first
   if (url.pathname.startsWith("/static/") ||
       url.pathname === "/favicon.ico" ||
@@ -123,6 +135,24 @@ async function cacheFirst(req) {
   }
 }
 
+// Network-only: sempre dalla rete, non cacha mai. Per pagine dinamiche
+// (detail film/serie, risultati ricerca) dove servire HTML stale è peggio
+// che mostrare un breve loader del browser.
+async function networkOnly(req) {
+  try {
+    return await fetch(req);
+  } catch (err) {
+    // Se davvero offline, mostra pagina cortesia
+    if (req.mode === "navigate") {
+      return offlinePage();
+    }
+    return new Response(JSON.stringify({ error: "offline" }), {
+      status: 503,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
 async function networkFirst(req) {
   const cache = await caches.open(RUNTIME_CACHE);
 
@@ -140,26 +170,7 @@ async function networkFirst(req) {
 
     // Niente in cache: per HTML mostra una pagina offline minimale
     if (req.mode === "navigate") {
-      return new Response(
-        `<!DOCTYPE html><html lang="it"><head><meta charset="utf-8">
-         <title>Offline — CosaGuardo</title>
-         <meta name="viewport" content="width=device-width,initial-scale=1">
-         <style>
-           body{font-family:system-ui,sans-serif;background:#0b1020;color:#f5f7ff;
-                display:flex;align-items:center;justify-content:center;
-                min-height:100vh;margin:0;padding:20px;text-align:center;}
-           .box{max-width:380px;}
-           h1{font-size:1.4rem;margin:0 0 12px;}
-           p{color:#aab3d1;line-height:1.5;}
-           button{margin-top:18px;padding:10px 20px;border:none;border-radius:10px;
-                  background:#6ea8fe;color:#0b1020;font-weight:700;cursor:pointer;}
-         </style></head><body><div class="box">
-         <h1>📡 Sei offline</h1>
-         <p>CosaGuardo ha bisogno di una connessione per mostrarti consigli aggiornati.</p>
-         <button onclick="location.reload()">Riprova</button>
-         </div></body></html>`,
-        { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } }
-      );
+      return offlinePage();
     }
 
     // Per JSON: response vuota
@@ -168,6 +179,30 @@ async function networkFirst(req) {
       headers: { "Content-Type": "application/json" },
     });
   }
+}
+
+// Pagina HTML mostrata quando l'utente è offline
+function offlinePage() {
+  return new Response(
+    `<!DOCTYPE html><html lang="it"><head><meta charset="utf-8">
+     <title>Offline — CosaGuardo</title>
+     <meta name="viewport" content="width=device-width,initial-scale=1">
+     <style>
+       body{font-family:system-ui,sans-serif;background:#0b1020;color:#f5f7ff;
+            display:flex;align-items:center;justify-content:center;
+            min-height:100vh;margin:0;padding:20px;text-align:center;}
+       .box{max-width:380px;}
+       h1{font-size:1.4rem;margin:0 0 12px;}
+       p{color:#aab3d1;line-height:1.5;}
+       button{margin-top:18px;padding:10px 20px;border:none;border-radius:10px;
+              background:#6ea8fe;color:#0b1020;font-weight:700;cursor:pointer;}
+     </style></head><body><div class="box">
+     <h1>📡 Sei offline</h1>
+     <p>CosaGuardo ha bisogno di una connessione per mostrarti consigli aggiornati.</p>
+     <button onclick="location.reload()">Riprova</button>
+     </div></body></html>`,
+    { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } }
+  );
 }
 
 // ─── MESSAGE HANDLER (per skip-waiting forzato lato client) ──────────────

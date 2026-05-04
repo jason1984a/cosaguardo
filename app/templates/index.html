@@ -167,9 +167,14 @@
             <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-np" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="personal-strip-row cinema-strip-row" id="cinema-now-row">
                 {% for item in now_playing %}
+                {% if item.tmdb_id %}
                 <a href="/film/{{ item.tmdb_id }}"
                     class="personal-card cinema-card"
                     style="display:flex;flex-direction:column;text-decoration:none;">
+                {% else %}
+                <div class="personal-card cinema-card"
+                    style="display:flex;flex-direction:column;cursor:default;">
+                {% endif %}
                     <div class="personal-card-poster">
                         <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
                         <span class="personal-card-type badge-movie">Film</span>
@@ -183,7 +188,11 @@
                         <div class="cinema-card-date">{{ item.release_date[:7] }}</div>
                         {% endif %}
                     </div>
+                {% if item.tmdb_id %}
                 </a>
+                {% else %}
+                </div>
+                {% endif %}
                 {% endfor %}
             </div>
             <button class="trend-nav trend-nav-right cinema-nav-right cinema-nav-right-np" type="button" aria-label="Scorri a destra">›</button>
@@ -200,10 +209,14 @@
             <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-up" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="personal-strip-row cinema-strip-row" id="cinema-upcoming-row">
                 {% for item in upcoming %}
+                {% if item.tmdb_id %}
                 <a href="/film/{{ item.tmdb_id }}"
                     class="personal-card cinema-card cinema-card--upcoming"
-                    style="display:flex;flex-direction:column;text-decoration:none;"
-                    {% if not item.tmdb_id %}onclick="return false;"{% endif %}>
+                    style="display:flex;flex-direction:column;text-decoration:none;">
+                {% else %}
+                <div class="personal-card cinema-card cinema-card--upcoming"
+                    style="display:flex;flex-direction:column;cursor:default;">
+                {% endif %}
                     <div class="personal-card-poster">
                         <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
                         <span class="personal-card-type badge-upcoming">Prossimamente</span>
@@ -214,7 +227,11 @@
                     <div class="personal-card-body">
                         <div class="personal-card-title">{{ item.title }}</div>
                     </div>
+                {% if item.tmdb_id %}
                 </a>
+                {% else %}
+                </div>
+                {% endif %}
                 {% endfor %}
             </div>
             <button class="trend-nav trend-nav-right cinema-nav-right cinema-nav-right-up" type="button" aria-label="Scorri a destra">›</button>
