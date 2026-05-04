@@ -1481,8 +1481,8 @@ def _build_movie_detail(tmdb_id: int, d: dict) -> dict:
             for p in (items or []):
                 pid        = p.get("provider_id")
                 logo       = p.get("logo_path", "")
-                meta       = PROVIDER_META.get(pid, {})
-                prov_name  = meta.get("name", p.get("provider_name", ""))
+                raw_name   = p.get("provider_name", "")
+                prov_name, prov_color = _normalize_provider_name(raw_name, pid)
                 # Dedup sul nome FINALE (post-mapping)
                 if prov_name in seen:
                     continue
@@ -1492,7 +1492,7 @@ def _build_movie_detail(tmdb_id: int, d: dict) -> dict:
                 out.append({
                     "name":       prov_name,
                     "logo_url":   f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
-                    "color":      meta.get("color", "#444"),
+                    "color":      prov_color,
                     "link":       aff_link or jw_link,
                     "is_affiliate": bool(aff_link),
                 })
@@ -1603,8 +1603,8 @@ def _build_tv_detail(tmdb_id: int, d: dict) -> dict:
             for p in (items or []):
                 pid        = p.get("provider_id")
                 logo       = p.get("logo_path", "")
-                meta       = PROVIDER_META.get(pid, {})
-                prov_name  = meta.get("name", p.get("provider_name", ""))
+                raw_name   = p.get("provider_name", "")
+                prov_name, prov_color = _normalize_provider_name(raw_name, pid)
                 # Dedup sul nome FINALE (post-mapping)
                 if prov_name in seen:
                     continue
@@ -1614,7 +1614,7 @@ def _build_tv_detail(tmdb_id: int, d: dict) -> dict:
                 out.append({
                     "name":       prov_name,
                     "logo_url":   f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
-                    "color":      meta.get("color", "#444"),
+                    "color":      prov_color,
                     "link":       aff_link or jw_link,
                     "is_affiliate": bool(aff_link),
                 })
@@ -2305,8 +2305,52 @@ PROVIDER_META = {
     381:  {"name": "Canal+",         "color": "#000000"},
     531:  {"name": "Paramount+",     "color": "#0064FF"},
     619:  {"name": "Disney+",        "color": "#113CCF"},
-    1796: {"name": "Prime Video",    "color": "#00A8E0"},  # Amazon Prime Video with Ads → mostriamo come Prime Video
+    1796: {"name": "Prime Video",    "color": "#00A8E0"},  # Amazon Prime Video with Ads
 }
+
+
+def _normalize_provider_name(raw_name: str, pid: int = None) -> tuple[str, str]:
+    """
+    Restituisce (nome_canonico, colore) per un provider TMDb.
+
+    Strategia robusta:
+    1. Se il provider_id è in PROVIDER_META → usa quello (path veloce)
+    2. Altrimenti, pattern matching sul nome per varianti note
+       (es. "Amazon Prime Video with Ads" → "Prime Video")
+
+    Questo evita che ogni nuova variante TMDb (es. "Apple TV+ con pubblicità",
+    "Disney+ Standard with Ads") sfugga al raggruppamento.
+    """
+    # 1. Lookup esplicito (path veloce)
+    if pid and pid in PROVIDER_META:
+        meta = PROVIDER_META[pid]
+        return (meta["name"], meta.get("color", "#444"))
+
+    # 2. Pattern matching sul nome (case-insensitive)
+    name_lower = (raw_name or "").lower()
+
+    # Amazon (tutte le varianti: with Ads, Prime, Channels, ...)
+    if "amazon" in name_lower or "prime video" in name_lower:
+        return ("Prime Video", "#00A8E0")
+
+    # Apple (qualunque variante)
+    if "apple tv" in name_lower:
+        return ("Apple TV+", "#555555")
+
+    # Disney
+    if "disney" in name_lower:
+        return ("Disney+", "#113CCF")
+
+    # Netflix (sometimes "Netflix Standard with Ads")
+    if "netflix" in name_lower:
+        return ("Netflix", "#E50914")
+
+    # Paramount
+    if "paramount" in name_lower:
+        return ("Paramount+", "#0064FF")
+
+    # Default: usa il nome originale TMDb
+    return (raw_name or "", "#444")
 # ──────────────────────────────────────────────────────────────────────────
 
 
@@ -2359,10 +2403,8 @@ def get_watch_providers(title: str, content_type: str = "movie", country: str = 
             for p in (items or []):
                 pid       = p.get("provider_id")
                 logo_path = p.get("logo_path", "")
-                meta      = PROVIDER_META.get(pid, {})
-                # Nome post-mapping: usa quello in PROVIDER_META se conosciuto,
-                # altrimenti il nome originale TMDb
-                prov_name = meta.get("name", p.get("provider_name", ""))
+                raw_name  = p.get("provider_name", "")
+                prov_name, prov_color = _normalize_provider_name(raw_name, pid)
                 # Dedup sul nome FINALE: così "Amazon Prime Video with Ads" e
                 # "Amazon Prime Video" entrambi mappati a "Prime Video" non si duplicano
                 if prov_name in seen:
@@ -2372,7 +2414,7 @@ def get_watch_providers(title: str, content_type: str = "movie", country: str = 
                 out.append({
                     "name":         prov_name,
                     "logo_url":     f"https://image.tmdb.org/t/p/w45{logo_path}" if logo_path else "",
-                    "color":        meta.get("color", "#444"),
+                    "color":        prov_color,
                     "link":         aff_link or justwatch_link,
                     "is_affiliate": bool(aff_link),
                 })
