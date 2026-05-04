@@ -756,15 +756,15 @@
                 <h3 class="ios-guide-title">Installa CosaGuardo sul tuo iPhone</h3>
                 <div class="ios-guide-step">
                     <div class="ios-guide-step-num">1</div>
-                    <div>Tocca <span class="ios-guide-share">⬆</span> in fondo alla pagina</div>
+                    <div>Tocca il bottone <span class="ios-guide-share">⬆</span> <strong>Condividi</strong> (il quadrato con la freccia in alto, in fondo alla schermata)</div>
                 </div>
                 <div class="ios-guide-step">
                     <div class="ios-guide-step-num">2</div>
-                    <div>Scorri e seleziona <strong>"Aggiungi a Home"</strong></div>
+                    <div>Nel menu che si apre, scorri verso il basso e tocca <strong>"Aggiungi a Home"</strong></div>
                 </div>
                 <div class="ios-guide-step">
                     <div class="ios-guide-step-num">3</div>
-                    <div>Tocca <strong>"Aggiungi"</strong> in alto a destra</div>
+                    <div>Tocca <strong>"Aggiungi"</strong> in alto a destra per confermare</div>
                 </div>
                 <div class="ios-guide-arrow">⬇️</div>
             </div>
@@ -1012,7 +1012,7 @@
                         return;
                     }
 
-                    // Android/Desktop con prompt nativo disponibile
+                    // Android/Desktop con prompt nativo disponibile (caso ideale)
                     if (deferredPrompt) {
                         deferredPrompt.prompt();
                         deferredPrompt.userChoice.then(function(choice) {
@@ -1029,9 +1029,16 @@
                         return;
                     }
 
-                    // Fallback: nessun prompt nativo (es. Firefox desktop)
-                    // → mandalo alla pagina /installa con istruzioni
-                    window.location.href = '/installa';
+                    // Niente prompt disponibile su Chromium-based browser:
+                    // di solito significa modalità incognito o requisiti non soddisfatti.
+                    // Dirigliamolo alla pagina /installa con istruzioni manuali.
+                    if (isAndroid()) {
+                        // Android Chrome senza prompt → istruzione menu 3 puntini
+                        showFallbackHint('android');
+                    } else {
+                        // Desktop senza prompt → suggerisci icona barra indirizzi o /installa
+                        showFallbackHint('desktop');
+                    }
                 });
             }
 
@@ -1064,6 +1071,55 @@
             track('install_banner_dismissed', { reason: reason });
         }
 
+        // ─── Hint quando manca deferredPrompt (es. incognito) ───────────
+        function showFallbackHint(platform) {
+            hideBanner();
+            // Riusa l'overlay iOS riadattando il contenuto al volo
+            var guide = document.getElementById('ios-install-guide');
+            if (!guide) return;
+            var inner = guide.querySelector('.ios-guide-inner');
+            if (!inner) return;
+
+            var title = 'Per installare CosaGuardo';
+            var stepsHtml = '';
+
+            if (platform === 'android') {
+                stepsHtml =
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">1</div>' +
+                    '<div>Tocca i <strong>3 puntini</strong> in alto a destra di Chrome</div></div>' +
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">2</div>' +
+                    '<div>Tocca <strong>"Installa app"</strong> o <strong>"Aggiungi alla schermata Home"</strong></div></div>' +
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">3</div>' +
+                    '<div>Conferma con <strong>"Installa"</strong></div></div>' +
+                    '<p style="font-size:0.78rem;color:var(--muted);margin-top:14px;text-align:center;">' +
+                    'Suggerimento: in modalità incognito l\'installazione è disabilitata da Chrome.</p>';
+            } else {
+                stepsHtml =
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">1</div>' +
+                    '<div>Cerca l\'icona <strong>☐⬇</strong> nella barra degli indirizzi (a destra dell\'URL)</div></div>' +
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">2</div>' +
+                    '<div>Click sull\'icona, poi <strong>"Installa"</strong></div></div>' +
+                    '<p style="font-size:0.78rem;color:var(--muted);margin-top:14px;text-align:center;">' +
+                    'Se non vedi l\'icona, prova a chiudere la modalità incognito o usa Chrome/Edge in modalità normale.</p>';
+            }
+
+            inner.innerHTML =
+                '<button class="ios-guide-close" id="ios-guide-close" aria-label="Chiudi">×</button>' +
+                '<h3 class="ios-guide-title">' + title + '</h3>' +
+                stepsHtml;
+
+            // Riattacca il listener al nuovo bottone close
+            var newClose = inner.querySelector('#ios-guide-close');
+            if (newClose) {
+                newClose.addEventListener('click', function() {
+                    hideIosGuide();
+                    dismissBanner('fallback_hint_close');
+                });
+            }
+            guide.classList.add('show');
+            track('install_fallback_shown', { platform: platform });
+        }
+
         // Esponi una funzione globale per forzare il banner da pagina /installa
         window.cgShowInstallPrompt = function() {
             if (isStandalone()) {
@@ -1074,6 +1130,10 @@
                 showIosGuide();
                 return;
             }
+            if (isIOS() && isChromeIOS()) {
+                alert('Per installare CosaGuardo su iPhone devi usare Safari (non Chrome). Apri questo sito su Safari e riprova.');
+                return;
+            }
             if (deferredPrompt) {
                 deferredPrompt.prompt();
                 deferredPrompt.userChoice.then(function(choice) {
@@ -1082,8 +1142,12 @@
                 });
                 return;
             }
-            // Nessun prompt disponibile (es. già installata o browser non supportato)
-            alert('Per installare l\'app, apri questo sito su Chrome (Android), Safari (iPhone) o Edge/Chrome (PC).');
+            // Nessun prompt disponibile → guida fallback
+            if (isAndroid()) {
+                showFallbackHint('android');
+            } else {
+                showFallbackHint('desktop');
+            }
         };
     })();
     </script>
