@@ -3,7 +3,9 @@ import sqlite3
 import re
 import requests
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.explainability import enrich_with_explanations
+from core.tmdb_cache import cached_call
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -15,12 +17,6 @@ CANDIDATE_DB_PATHS = [
 ]
 
 DB_PATH = next((p for p in CANDIDATE_DB_PATHS if os.path.exists(p)), CANDIDATE_DB_PATHS[0])
-
-print("BASE_DIR =", BASE_DIR)
-print("CWD =", os.getcwd())
-print("DB_PATH scelto =", DB_PATH)
-print("DB EXISTS =", os.path.exists(DB_PATH))
-print("CANDIDATES =", CANDIDATE_DB_PATHS)
 
 if not os.path.exists(DB_PATH):
     raise RuntimeError(
@@ -523,8 +519,15 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed
     resolved_seeds = []
     missing_titles = []
 
-    for title in seed_titles:
-        movie = find_movie_by_title(title)
+    # Parallelizzo find_movie_by_title — ogni seed fa 1 query DB locale
+    # + 1 chiamata cached a TMDb (per i generi). In parallelo: ~3-5x più veloce.
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        seed_results = list(ex.map(
+            lambda t: (t, find_movie_by_title(t)),
+            seed_titles
+        ))
+
+    for title, movie in seed_results:
         if movie:
             resolved_seeds.append(movie)
         else:
@@ -750,21 +753,48 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed
         rec["vibe_score_ui"] = round(min(9.6, 5.0 + max(tag_score, collab_score) * 8), 1)
 
     # genera spiegazioni personalizzate con explainability.py
-    # prima arricchisce genres/keywords da TMDb per i rec che li hanno null
-    for rec in filtered:
-        if not rec.get("genres") or not rec.get("matched_keywords"):
+    # PRIMA arricchisce genres/keywords da TMDb per i rec che li hanno null,
+    # IN PARALLELO usando la cache (24h memoria + 7gg DB).
+    needs_enrichment = [
+        rec for rec in filtered
+        if not rec.get("genres") or not rec.get("matched_keywords")
+    ]
+
+    if needs_enrichment:
+        def _fetch_movie_keywords_by_tmdb_id(tmdb_id: int):
+            """Cache wrapper per keywords endpoint TMDb di un movie_id."""
+            if not tmdb_id:
+                return []
+            cache_key = f"movie:keywords_by_tmdbid:{tmdb_id}"
+
+            def _fetch():
+                try:
+                    url = f"https://api.themoviedb.org/3/movie/{tmdb_id}/keywords"
+                    resp = requests.get(url, params={"api_key": TMDB_API_KEY}, timeout=4)
+                    return [
+                        k["name"].strip().lower()
+                        for k in resp.json().get("keywords", [])
+                        if k.get("name")
+                    ]
+                except Exception:
+                    return []
+            return cached_call(cache_key, _fetch)
+
+        def _enrich_one(rec):
             try:
                 tmdb = get_movie_tmdb_match(rec.get("title", ""))
-                if tmdb:
-                    if not rec.get("genres"):
-                        rec["genres"] = movie_genre_ids_to_names(tmdb.get("genre_ids", []))
-                    if not rec.get("matched_keywords") and tmdb.get("tmdb_id"):
-                        url = f"https://api.themoviedb.org/3/movie/{tmdb['tmdb_id']}/keywords"
-                        resp = requests.get(url, params={"api_key": TMDB_API_KEY}, timeout=4)
-                        kws = [k["name"].strip().lower() for k in resp.json().get("keywords", []) if k.get("name")]
-                        rec["matched_keywords"] = kws
+                if not tmdb:
+                    return
+                if not rec.get("genres"):
+                    rec["genres"] = movie_genre_ids_to_names(tmdb.get("genre_ids", []))
+                if not rec.get("matched_keywords") and tmdb.get("tmdb_id"):
+                    rec["matched_keywords"] = _fetch_movie_keywords_by_tmdb_id(tmdb["tmdb_id"])
             except Exception:
                 pass
+
+        # Parallel fetch — drasticamente più veloce del loop seriale precedente
+        with ThreadPoolExecutor(max_workers=10) as ex:
+            list(ex.map(_enrich_one, needs_enrichment))
 
     enrich_with_explanations(filtered)
 
@@ -873,9 +903,14 @@ def search_movies(query: str, limit: int = 10):
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
 def get_movie_tmdb_match(title: str):
+    """Cerca un film su TMDB. Cached 24h memoria + 7gg DB."""
     if not TMDB_API_KEY or not title:
         return None
+    cache_key = f"movie:tmdb_match:{title.strip().lower()}"
+    return cached_call(cache_key, lambda: _get_movie_tmdb_match_uncached(title))
 
+
+def _get_movie_tmdb_match_uncached(title: str):
     try:
         url = "https://api.themoviedb.org/3/search/movie"
         params = {
@@ -1080,13 +1115,22 @@ def get_movie_poster(title: str):
     return None
 
 def get_movie_tmdb_info(title: str):
+    """Recupera info film TMDb (poster, titolo, overview). Cached 24h memoria + 7gg DB."""
     if not TMDB_API_KEY:
         return {
             "poster_url": None,
             "display_title": title,
             "overview": None,
         }
+    if not title or not title.strip():
+        return {"poster_url": None, "display_title": title, "overview": None, "tmdb_id": None}
 
+    cache_key = f"movie:tmdb_info:{title.strip().lower()}"
+    cached = cached_call(cache_key, lambda: _get_movie_tmdb_info_uncached(title))
+    return cached if cached else {"poster_url": None, "display_title": title, "overview": None, "tmdb_id": None}
+
+
+def _get_movie_tmdb_info_uncached(title: str):
     try:
         url = "https://api.themoviedb.org/3/search/movie"
         params = {
@@ -1351,11 +1395,19 @@ def get_upcoming(limit: int = 8) -> list:
 
 
 def get_detail_movie(tmdb_id: int) -> dict:
+    """Detail completo di un film. Cached 24h memoria + 7gg DB.
+    NB: i providers/affiliate link sono ricalcolati a ogni get perché sono cheap (no I/O)."""
+    if not TMDB_API_KEY or not tmdb_id:
+        return {}
+    cache_key = f"movie:detail:{tmdb_id}"
+    cached = cached_call(cache_key, lambda: _get_detail_movie_uncached(tmdb_id))
+    return cached if cached else {}
+
+
+def _get_detail_movie_uncached(tmdb_id: int) -> dict:
     """
     Dati completi di un film: info base, generi, cast, trailer YouTube, providers IT.
     """
-    if not TMDB_API_KEY or not tmdb_id:
-        return {}
     try:
         r = requests.get(
             f"https://api.themoviedb.org/3/movie/{tmdb_id}",
@@ -1452,11 +1504,18 @@ def get_detail_movie(tmdb_id: int) -> dict:
 
 
 def get_detail_tv(tmdb_id: int) -> dict:
+    """Detail completo di una serie TV. Cached 24h memoria + 7gg DB."""
+    if not TMDB_API_KEY or not tmdb_id:
+        return {}
+    cache_key = f"tv:detail:{tmdb_id}"
+    cached = cached_call(cache_key, lambda: _get_detail_tv_uncached(tmdb_id))
+    return cached if cached else {}
+
+
+def _get_detail_tv_uncached(tmdb_id: int) -> dict:
     """
     Dati completi di una serie TV: info base, generi, cast, trailer YouTube, providers IT.
     """
-    if not TMDB_API_KEY or not tmdb_id:
-        return {}
     try:
         r = requests.get(
             f"https://api.themoviedb.org/3/tv/{tmdb_id}",

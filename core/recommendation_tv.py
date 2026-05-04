@@ -1,7 +1,9 @@
 import os
 import requests
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.explainability import enrich_with_explanations
+from core.tmdb_cache import cached_call
 
 
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
@@ -140,13 +142,18 @@ def simple_similarity(a, b):
     return score
 
 def find_tv_by_title(title_query: str):
+    """Cerca una serie TV su TMDB. Cached 24h memoria + 7gg DB."""
+    title_query = (title_query or "").strip()
+    if not title_query or not TMDB_API_KEY:
+        return None
+    cache_key = f"tv:find_by_title:{title_query.lower()}"
+    return cached_call(cache_key, lambda: _find_tv_by_title_uncached(title_query))
+
+
+def _find_tv_by_title_uncached(title_query: str):
     """
     Cerca una serie TV su TMDB e restituisce un seed minimale.
     """
-    title_query = title_query.strip()
-    if not title_query or not TMDB_API_KEY:
-        return None
-
     try:
         url = "https://api.themoviedb.org/3/search/tv"
         params = {
@@ -177,12 +184,17 @@ def find_tv_by_title(title_query: str):
         return None
 
 def get_tv_keywords(tv_id: int):
+    """Recupera keywords TV. Cached 24h memoria + 7gg DB."""
+    if not tv_id or not TMDB_API_KEY:
+        return []
+    cache_key = f"tv:keywords:{tv_id}"
+    return cached_call(cache_key, lambda: _get_tv_keywords_uncached(tv_id))
+
+
+def _get_tv_keywords_uncached(tv_id: int):
     """
     Recupera le keyword TMDB di una serie TV.
     """
-    if not tv_id or not TMDB_API_KEY:
-        return []
-
     try:
         url = f"https://api.themoviedb.org/3/tv/{tv_id}/keywords"
         params = {
@@ -501,12 +513,17 @@ def translate_keywords(keywords):
     return translated
 
 def get_similar_tv(tv_id: int, limit: int = 10):
+    """Recupera serie simili da TMDB. Cached 24h memoria + 7gg DB."""
+    if not tv_id or not TMDB_API_KEY:
+        return []
+    cache_key = f"tv:similar:{tv_id}:{limit}"
+    return cached_call(cache_key, lambda: _get_similar_tv_uncached(tv_id, limit))
+
+
+def _get_similar_tv_uncached(tv_id: int, limit: int = 10):
     """
     Recupera serie simili da TMDB
     """
-    if not tv_id or not TMDB_API_KEY:
-        return []
-
     try:
         url = f"https://api.themoviedb.org/3/tv/{tv_id}/similar"
         params = {
@@ -542,12 +559,17 @@ def get_similar_tv(tv_id: int, limit: int = 10):
 
 
 def get_recommended_tv(tv_id: int, limit: int = 10):
+    """Recupera serie consigliate da TMDB. Cached 24h memoria + 7gg DB."""
+    if not tv_id or not TMDB_API_KEY:
+        return []
+    cache_key = f"tv:recommended:{tv_id}:{limit}"
+    return cached_call(cache_key, lambda: _get_recommended_tv_uncached(tv_id, limit))
+
+
+def _get_recommended_tv_uncached(tv_id: int, limit: int = 10):
     """
     Recupera serie consigliate da TMDB
     """
-    if not tv_id or not TMDB_API_KEY:
-        return []
-
     try:
         url = f"https://api.themoviedb.org/3/tv/{tv_id}/recommendations"
         params = {
@@ -667,24 +689,29 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
     seed_titles_clean = []
 
     # =========================
-    # FASE 1 — RISOLUZIONE SEED
+    # FASE 1 — RISOLUZIONE SEED (parallelizzata)
     # =========================
-    for title in seed_titles:
+    # Risolvo titoli + keywords seed in parallelo (ogni seed = 2 chiamate TMDb)
+    def _resolve_seed(title):
         tv_show = find_tv_by_title(title)
+        if tv_show:
+            tv_show["keywords"] = get_tv_keywords(tv_show["tv_id"])
+        return (title, tv_show)
 
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        seed_results = list(ex.map(_resolve_seed, seed_titles))
+
+    for orig_title, tv_show in seed_results:
         if not tv_show:
-            missing_titles.append(title)
+            missing_titles.append(orig_title)
             continue
 
         resolved_seeds.append(tv_show)
-
         seed_titles_clean.append(tv_show.get("title", ""))
         seed_titles_clean.append(tv_show.get("original_title", ""))
 
         if tv_show.get("genres"):
             seed_genres.extend(tv_show["genres"])
-
-        tv_show["keywords"] = get_tv_keywords(tv_show["tv_id"])
 
         if tv_show.get("tv_id"):
             seed_ids.add(tv_show["tv_id"])
@@ -693,14 +720,24 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
         seed_title_keys.add((tv_show.get("original_title") or "").lower().strip())
 
     # =========================
-    # FASE 2 — CANDIDATI
+    # FASE 2 — CANDIDATI (parallelizzata in 2 sotto-fasi)
     # =========================
-    for tv_show in resolved_seeds:
-        similar_list = get_similar_tv(tv_show["tv_id"], limit=12)
-        recommended_list = get_recommended_tv(tv_show["tv_id"], limit=12)
+    # 2a — Recupero similar+recommended di TUTTI i seed in parallelo (12 HTTP -> 1 wave)
+    def _fetch_seed_candidates(tv_show):
+        sim = get_similar_tv(tv_show["tv_id"], limit=12)
+        rec = get_recommended_tv(tv_show["tv_id"], limit=12)
+        return (tv_show, sim + rec)
 
-        combined = similar_list + recommended_list
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        candidate_batches = list(ex.map(_fetch_seed_candidates, resolved_seeds))
 
+    # 2b — Pre-filtro deterministico (no I/O) per identificare i candidati validi
+    # e raccogliere i tv_id unici per cui dobbiamo recuperare le keywords
+    seed_titles_clean_lower = {(t or "").lower().strip() for t in seed_titles_clean}
+    candidates_to_process = []   # (tv_show, sim) coppie che superano i filtri base
+    unique_keyword_ids = set()   # tv_id per cui serve get_tv_keywords
+
+    for tv_show, combined in candidate_batches:
         for sim in combined:
             candidate_id = sim.get("tv_id")
             candidate_title = sim.get("title", "").strip()
@@ -708,72 +745,79 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
 
             if not candidate_title:
                 continue
-
             if candidate_id in seed_ids:
                 continue
-
-            normalized_candidate_title = candidate_title.lower().strip()
-            if normalized_candidate_title in {
-                (t or "").lower().strip()
-                for t in seed_titles_clean
-            }:
+            if candidate_key in seed_titles_clean_lower:
                 continue
 
             candidate_tokens = tokenize_title(candidate_title)
             is_same_as_seed = False
-
             for seed_title in seed_titles_clean:
-                seed_tokens = tokenize_title(seed_title)
-
-                if candidate_tokens == seed_tokens:
+                if candidate_tokens == tokenize_title(seed_title):
                     is_same_as_seed = True
                     break
-
             if is_same_as_seed:
                 continue
-
             if candidate_key in seed_title_keys:
                 continue
-
             if is_franchise_duplicate(candidate_title, seed_titles_clean):
                 continue
-
             if has_excluded_genres(sim.get("genres", [])):
                 continue
-
-            original_lang = sim.get("original_language")
-            if original_lang not in {"en", "it"}:
+            if sim.get("original_language") not in {"en", "it"}:
                 continue
 
-            candidate_keywords = get_tv_keywords(candidate_id)
+            candidates_to_process.append((tv_show, sim))
+            unique_keyword_ids.add(candidate_id)
 
-            if candidate_key not in all_candidates:
-                all_candidates[candidate_key] = {
-                    "tv_id": candidate_id,
-                    "title": candidate_title,
-                    "poster_path": sim.get("poster_path"),
-                    "overview": sim.get("overview"),
-                    "score": sim.get("vote_average", 0),
-                    "popularity": sim.get("popularity", 0),
-                    "appearances": 1,
-                    "similar_hits": 1 if sim.get("source_type") == "similar" else 0,
-                    "recommended_hits": 1 if sim.get("source_type") == "recommended" else 0,
-                    "genres": sim.get("genres", []),
-                    "keywords": candidate_keywords,
-                    "matched_seed_ids": {tv_show["tv_id"]},
-                    "matched_seed_titles": {tv_show.get("title", "")},
-                }
-            else:
-                all_candidates[candidate_key]["score"] += sim.get("vote_average", 0)
-                all_candidates[candidate_key]["popularity"] += sim.get("popularity", 0)
-                all_candidates[candidate_key]["appearances"] += 1
-                all_candidates[candidate_key]["matched_seed_ids"].add(tv_show["tv_id"])
-                all_candidates[candidate_key]["matched_seed_titles"].add(tv_show.get("title", ""))
+    # 2c — Recupero keywords per TUTTI i candidati unici in parallelo
+    keywords_map = {}
+    if unique_keyword_ids:
+        def _fetch_kw(tv_id):
+            return (tv_id, get_tv_keywords(tv_id))
 
-                if sim.get("source_type") == "similar":
-                    all_candidates[candidate_key]["similar_hits"] += 1
-                if sim.get("source_type") == "recommended":
-                    all_candidates[candidate_key]["recommended_hits"] += 1
+        with ThreadPoolExecutor(max_workers=12) as ex:
+            for fut in as_completed([ex.submit(_fetch_kw, tid) for tid in unique_keyword_ids]):
+                try:
+                    tv_id, kws = fut.result()
+                    keywords_map[tv_id] = kws
+                except Exception:
+                    pass
+
+    # 2d — Aggrego nei candidati finali (no I/O)
+    for tv_show, sim in candidates_to_process:
+        candidate_id = sim.get("tv_id")
+        candidate_title = sim.get("title", "").strip()
+        candidate_key = candidate_title.lower()
+        candidate_keywords = keywords_map.get(candidate_id, [])
+
+        if candidate_key not in all_candidates:
+            all_candidates[candidate_key] = {
+                "tv_id": candidate_id,
+                "title": candidate_title,
+                "poster_path": sim.get("poster_path"),
+                "overview": sim.get("overview"),
+                "score": sim.get("vote_average", 0),
+                "popularity": sim.get("popularity", 0),
+                "appearances": 1,
+                "similar_hits": 1 if sim.get("source_type") == "similar" else 0,
+                "recommended_hits": 1 if sim.get("source_type") == "recommended" else 0,
+                "genres": sim.get("genres", []),
+                "keywords": candidate_keywords,
+                "matched_seed_ids": {tv_show["tv_id"]},
+                "matched_seed_titles": {tv_show.get("title", "")},
+            }
+        else:
+            all_candidates[candidate_key]["score"] += sim.get("vote_average", 0)
+            all_candidates[candidate_key]["popularity"] += sim.get("popularity", 0)
+            all_candidates[candidate_key]["appearances"] += 1
+            all_candidates[candidate_key]["matched_seed_ids"].add(tv_show["tv_id"])
+            all_candidates[candidate_key]["matched_seed_titles"].add(tv_show.get("title", ""))
+
+            if sim.get("source_type") == "similar":
+                all_candidates[candidate_key]["similar_hits"] += 1
+            if sim.get("source_type") == "recommended":
+                all_candidates[candidate_key]["recommended_hits"] += 1
 
     # =========================
     # SCORING
