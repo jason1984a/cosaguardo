@@ -147,18 +147,58 @@ templates.TemplateResponse = _patched_TemplateResponse
 
 
 def prettify_title(title: str) -> str:
+    """
+    Pulisce i titoli stile MovieLens, gestendo:
+    - articoli in coda: 'Matrix, The' → 'The Matrix'
+    - alias 'a.k.a.': rimossi
+    - titoli localizzati IT in parentesi: preferiti se presenti
+    - anno '(YYYY)' finale: rimosso
+    """
     if not title:
         return title
 
-    suffixes = [", The", ", A", ", An", ", La", ", Le", ", Les", ", Il", ", Lo", ", L'"]
+    import re
+    t = title.strip()
 
+    # 1. Rimuovi anno finale "(YYYY)"
+    t = re.sub(r"\s*\(\d{4}\)\s*$", "", t)
+
+    # 2. Estrai tutte le parentesi alla fine, una alla volta da destra a sinistra
+    parens_at_end = []
+    while True:
+        m = re.search(r"\s*\(([^()]+)\)\s*$", t)
+        if not m:
+            break
+        parens_at_end.insert(0, m.group(1).strip())
+        t = t[: m.start()].rstrip()
+
+    main_title = t
+
+    # 3. Filtra le parentesi: scarta a.k.a. e anni soli
+    candidates_loc = []
+    for paren in parens_at_end:
+        if re.match(r"a\.?k\.?a\.?\b", paren, flags=re.IGNORECASE):
+            continue
+        if re.fullmatch(r"\d{4}", paren):
+            continue
+        candidates_loc.append(paren)
+
+    # 4. Se c'è un titolo localizzato, preferiscilo (in MovieLens è sempre l'ultima paren)
+    if candidates_loc:
+        chosen = candidates_loc[-1]
+        if any(c.isalpha() for c in chosen):
+            main_title = chosen
+
+    # 5. Articolo in coda: "Matrix, The" → "The Matrix"
+    suffixes = [", The", ", A", ", An", ", La", ", Le", ", Les", ", Il", ", Lo", ", L'", ", Gli", ", Una", ", Un"]
     for suffix in suffixes:
-        if title.endswith(suffix):
-            base = title[:-len(suffix)].strip()
+        if main_title.endswith(suffix):
+            base = main_title[: -len(suffix)].strip()
             article = suffix[2:].strip()
-            return f"{article} {base}"
+            main_title = f"{article} {base}"
+            break
 
-    return title
+    return main_title.strip()
 
 
 

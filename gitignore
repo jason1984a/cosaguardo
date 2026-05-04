@@ -1,0 +1,65 @@
+# ─── Python ──────────────────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ─── Virtual environments ────────────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ─── Environment / secrets ───────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.secret
+
+# ─── Database locali (NON quello in /db/ del progetto, che è committato) ─
+app/cosaguardo.db
+app/*.db-journal
+app/*.db-wal
+app/*.db-shm
+test.db
+*.sqlite-journal
+
+# ─── IDE / editor ────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Backup / temp ───────────────────────────────────────────────────────
+*.bak
+*.backup
+*.tmp
+*~
+
+# ─── Build / distribution ────────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ─── Logs ────────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Node (se mai dovesse servire) ───────────────────────────────────────
+node_modules/
+npm-debug.log*
+
+# ─── OS specifici ────────────────────────────────────────────────────────
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
