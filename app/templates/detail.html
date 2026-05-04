@@ -660,41 +660,45 @@ html, body {
         </button>
         <script>
         function goBack() {
-            const seeds      = JSON.parse(sessionStorage.getItem("cg_last_seeds") || "null");
-            const type       = sessionStorage.getItem("cg_last_type") || "movie";
-            const ref        = document.referrer || "";
-            const fromDetail = ref.includes("/film/") || ref.includes("/serie/");
+            const ref = document.referrer || "";
 
-            // Se arriviamo da un'altra scheda (non dai risultati), usa history.back
-            if (!seeds && !fromDetail) {
+            // Se l'utente è venuto direttamente da /recommend (= ricerca attuale),
+            // ricostruisci la POST per non perdere i seed.
+            const cameFromRecommend = ref.includes("/recommend");
+
+            if (cameFromRecommend) {
+                const seeds = JSON.parse(sessionStorage.getItem("cg_last_seeds") || "null");
+                const type  = sessionStorage.getItem("cg_last_type") || "movie";
+
+                if (seeds && seeds.length > 0) {
+                    const form = document.createElement("form");
+                    form.method = "POST";
+                    form.action = "/recommend";
+                    seeds.forEach((s, i) => {
+                        const inp = document.createElement("input");
+                        inp.type  = "hidden";
+                        inp.name  = "movie" + (i + 1);
+                        inp.value = s;
+                        form.appendChild(inp);
+                    });
+                    const ct = document.createElement("input");
+                    ct.type  = "hidden";
+                    ct.name  = "content_type";
+                    ct.value = type;
+                    form.appendChild(ct);
+                    document.body.appendChild(form);
+                    form.submit();
+                    return;
+                }
+            }
+
+            // In tutti gli altri casi: history.back se possibile, altrimenti home.
+            // history.length > 1 = c'è almeno una pagina precedente.
+            if (window.history.length > 1) {
                 history.back();
-                return;
+            } else {
+                window.location.href = "/";
             }
-
-            // Se abbiamo i seed salvati → ricostruisci la POST verso /recommend
-            if (seeds && seeds.length > 0) {
-                const form = document.createElement("form");
-                form.method = "POST";
-                form.action = "/recommend";
-                seeds.forEach((s, i) => {
-                    const inp = document.createElement("input");
-                    inp.type  = "hidden";
-                    inp.name  = "movie" + (i + 1);
-                    inp.value = s;
-                    form.appendChild(inp);
-                });
-                const ct = document.createElement("input");
-                ct.type  = "hidden";
-                ct.name  = "content_type";
-                ct.value = type;
-                form.appendChild(ct);
-                document.body.appendChild(form);
-                form.submit();
-                return;
-            }
-
-            // Fallback
-            window.location.href = "/";
         }
         </script>
     </div>

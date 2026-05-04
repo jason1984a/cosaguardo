@@ -11,7 +11,7 @@
  * dal timestamp di build, ma puoi anche bumpare manualmente.
  */
 
-const CACHE_VERSION = "v2026.05.04-3";
+const CACHE_VERSION = "v2026.05.04-4";
 const STATIC_CACHE = `cosaguardo-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `cosaguardo-runtime-${CACHE_VERSION}`;
 

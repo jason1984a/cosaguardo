@@ -45,16 +45,15 @@
         {% if recommendations and recommendations|length > 0 %}
         <div class="profilo-recs-grid">
             {% for rec in recommendations %}
-            <div class="profilo-rec-card dashboard-pick-clickable"
+            {% set rec_url = "/" + ("serie" if rec.content_type == "tv" else "film") + "/" + (rec.tmdb_id|string) if rec.tmdb_id else "" %}
+            {% if rec_url %}
+            <a href="{{ rec_url }}" class="profilo-rec-card" data-title="{{ rec.title }}" data-type="{{ rec.content_type }}">
+            {% else %}
+            <div class="profilo-rec-card profilo-rec-card--no-link"
                  data-title="{{ rec.title }}"
-                 data-type="{{ rec.content_type|upper }}"
-                 data-badge="{% if loop.first %}⭐ Miglior match{% else %}🎯 Per te{% endif %}"
-                 data-reason="{{ (rec.reason if rec.reason else 'Compatibile con i tuoi gusti.')|e }}"
-                 data-poster="{{ rec.poster_url if rec.poster_url else '' }}"
-                 data-why="{{ (rec.reason if rec.reason else '')|e }}"
-                 data-match="{{ rec.match_score if rec.match_score else '' }}"
-                 data-keywords="{{ rec.matched_keywords[:2]|join(', ') if rec.matched_keywords else '' }}"
-                 data-is-liked="{{ 1 if rec.is_liked else 0 }}">
+                 data-type="{{ rec.content_type }}"
+                 onclick="resolveAndGo(this)" style="cursor:pointer;">
+            {% endif %}
                 <div class="profilo-rec-poster">
                     {% if rec.poster_url %}
                     <img src="{{ rec.poster_url }}" alt="{{ rec.title }}" loading="lazy">
@@ -85,7 +84,7 @@
                         </button>
                     </div>
                 </div>
-            </div>
+            {% if rec_url %}</a>{% else %}</div>{% endif %}
             {% endfor %}
         </div>
         {% else %}
@@ -96,35 +95,6 @@
         </div>
         {% endif %}
     </section>
-
-    <!-- MODAL CONSIGLI -->
-    <div class="dashboard-modal" id="dashboard-rec-modal" aria-hidden="true">
-        <div class="dashboard-modal-backdrop" data-close-modal="true"></div>
-        <div class="dashboard-modal-card">
-            <button type="button" class="dashboard-modal-close" id="dashboard-modal-close" aria-label="Chiudi">✕</button>
-            <div class="dashboard-modal-poster-wrap">
-                <img id="dashboard-modal-poster" src="" alt="" class="dashboard-modal-poster">
-            </div>
-            <div class="dashboard-modal-content">
-                <div class="dashboard-editorial-badge" id="dashboard-modal-badge"></div>
-                <h3 id="dashboard-modal-title" class="modal-title-big"></h3>
-                <div class="dashboard-badge" id="dashboard-modal-type"></div>
-                <p id="dashboard-modal-reason" class="modal-reason"></p>
-                <p id="dashboard-modal-why" class="modal-reason"></p>
-                <div class="modal-actions">
-                    <div id="dashboard-modal-providers" style="margin-bottom:12px;"></div>
-                    <a href="#" id="dashboard-modal-detail" class="modal-btn primary">
-                        <i data-lucide="info" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
-                        Scheda completa
-                    </a>
-                    <button id="dashboard-modal-fav" class="modal-btn secondary">
-                        <i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
-                        Preferiti
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- ── PREFERITI ─────────────────────────────────────────────────── -->
     <details class="profilo-accordion" {% if liked_titles %}open{% endif %}>
@@ -369,9 +339,14 @@
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.06);
     border-radius: 14px; padding: 10px; cursor: pointer;
-    transition: background 0.18s ease, border-color 0.18s ease;
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+    text-decoration: none; color: inherit;
 }
-.profilo-rec-card:hover { background: rgba(255,255,255,0.07); border-color: rgba(96,165,250,0.25); }
+.profilo-rec-card:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(96,165,250,0.25);
+    transform: translateY(-1px);
+}
 .profilo-rec-poster {
     position: relative; width: 56px; flex-shrink: 0;
     aspect-ratio: 2/3; border-radius: 8px; overflow: hidden;
@@ -500,123 +475,41 @@ details[open] .profilo-accordion-chevron { transform: rotate(180deg); }
 <script src="{{ url_for('static', path='js/feedback.js') }}"></script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
-    const modal     = document.getElementById("dashboard-rec-modal");
-    const closeBtn  = document.getElementById("dashboard-modal-close");
-    const posterEl  = document.getElementById("dashboard-modal-poster");
-    const badgeEl   = document.getElementById("dashboard-modal-badge");
-    const titleEl   = document.getElementById("dashboard-modal-title");
-    const typeEl    = document.getElementById("dashboard-modal-type");
-    const reasonEl  = document.getElementById("dashboard-modal-reason");
-    const whyEl     = document.getElementById("dashboard-modal-why");
-    const detailBtn = document.getElementById("dashboard-modal-detail");
-    const favBtn    = document.getElementById("dashboard-modal-fav");
-    const providersEl = document.getElementById("dashboard-modal-providers");
+    // Le card senza tmdb_id risolvono il titolo lato server prima di redirigere
+    window.resolveAndGo = function(card) {
+        const title = card.dataset.title || "";
+        const type  = card.dataset.type  || "movie";
+        const basePath = type === "tv" ? "serie" : "film";
 
-    async function loadProviders(title, type) {
-        providersEl.innerHTML = '<p style="color:var(--muted);font-size:0.82rem;">Caricamento piattaforme...</p>';
-        try {
-            const res  = await fetch(`/watch-providers?title=${encodeURIComponent(title)}&content_type=${type.toLowerCase()}`);
-            const data = await res.json();
-            const flatrate = data.flatrate || [];
-            const rent     = data.rent     || [];
-            if (!flatrate.length && !rent.length) { providersEl.innerHTML = ""; return; }
-            const renderGroup = (items, label) => {
-                let h = `<div style="margin-bottom:10px;"><div style="font-size:0.7rem;color:var(--muted);margin-bottom:6px;font-weight:700;text-transform:uppercase;">${label}</div><div style="display:flex;gap:8px;flex-wrap:wrap;">`;
-                for (const p of items)
-                    h += `<a href="${p.link}" target="_blank" title="${p.name}" style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);text-decoration:none;color:var(--text);font-size:0.8rem;font-weight:600;">${p.logo_url ? `<img src="${p.logo_url}" style="width:20px;height:20px;border-radius:4px;">` : ""}${p.name}</a>`;
-                return h + `</div></div>`;
-            };
-            providersEl.innerHTML = (flatrate.length ? renderGroup(flatrate, "Incluso in abbonamento") : "") + (rent.length ? renderGroup(rent, "Noleggio/Acquisto") : "");
-        } catch(e) { providersEl.innerHTML = ""; }
-    }
-
-    function openModal(card) {
-        const title   = card.dataset.title  || "";
-        const type    = card.dataset.type   || "";
-        const badge   = card.dataset.badge  || "";
-        const reason  = card.dataset.reason || "";
-        const poster  = card.dataset.poster || "";
-        const match   = card.dataset.match  || "";
-        const isLiked = card.dataset.isLiked === "1";
-
-        titleEl.textContent  = title;
-        typeEl.textContent   = type;
-        badgeEl.textContent  = badge;
-        reasonEl.textContent = reason;
-        whyEl.innerHTML      = match ? `<strong>Match:</strong> ${match}/10` : "";
-
-        if (poster) { posterEl.src = poster; posterEl.style.display = "block"; }
-        else { posterEl.style.display = "none"; }
-
-        // Link scheda completa — usa endpoint dedicato /tmdb-id
-        if (detailBtn) {
-            detailBtn.href = "#";
-            detailBtn.style.opacity = "0.5";
-            detailBtn.style.pointerEvents = "none";
-            const basePath = type.toLowerCase() === "tv" ? "serie" : "film";
-            fetch(`/tmdb-id?title=${encodeURIComponent(title)}&content_type=${type.toLowerCase()}`)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.tmdb_id) {
-                        detailBtn.href = `/${basePath}/${data.tmdb_id}`;
-                        detailBtn.target = "_self";
-                    }
-                    detailBtn.style.opacity = "";
-                    detailBtn.style.pointerEvents = "";
-                })
-                .catch(() => {
-                    detailBtn.style.opacity = "";
-                    detailBtn.style.pointerEvents = "";
-                });
-        }
-
-        favBtn.classList.toggle("active", isLiked);
-        favBtn.innerHTML = isLiked
-            ? '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;fill:currentColor;"></i> Nei preferiti'
-            : '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i> Preferiti';
-        lucide.createIcons();
-
-        modal.classList.add("is-open");
-        modal.setAttribute("aria-hidden", "false");
-        document.body.style.overflow = "hidden";
-        loadProviders(title, type);
-
-        favBtn.onclick = function () {
-            if (card.dataset.isLiked === "1") return;
-            fetch("/feedback", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title, content_type: type.toLowerCase(), feedback_type: "liked" })
-            }).then(r => r.json()).then(data => {
-                if (data.status === "ok") {
-                    card.dataset.isLiked = "1";
-                    favBtn.classList.add("active");
-                    favBtn.innerHTML = '<i data-lucide="heart" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;fill:currentColor;"></i> Nei preferiti';
-                    lucide.createIcons();
+        fetch(`/tmdb-id?title=${encodeURIComponent(title)}&content_type=${type}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.tmdb_id) {
+                    window.location.href = `/${basePath}/${data.tmdb_id}`;
+                } else {
+                    alert("Non riesco a trovare la scheda. Prova a cercare il titolo manualmente.");
                 }
+            })
+            .catch(() => {
+                alert("Errore di connessione. Riprova tra poco.");
             });
-        };
-    }
+    };
 
-    function closeModal() {
-        modal.classList.remove("is-open");
-        modal.setAttribute("aria-hidden", "true");
-        document.body.style.overflow = "";
-        providersEl.innerHTML = "";
-    }
-
-    document.querySelectorAll(".dashboard-pick-clickable").forEach(card => {
-        card.addEventListener("click", function(e) {
-            if (e.target.closest(".feedback-actions")) return;
-            openModal(card);
+    // Quando l'utente clicca un bottone feedback dentro la card,
+    // non deve attivarsi il link/click di navigazione della card.
+    document.querySelectorAll(".profilo-rec-card .feedback-actions").forEach(fa => {
+        fa.addEventListener("click", function(e) {
+            e.stopPropagation();
+            // non preventDefault — il bottone feedback funziona normalmente
+        });
+        // Per i link <a>, intercetto anche i click sui bottoni interni per fermare la nav
+        fa.querySelectorAll("button").forEach(btn => {
+            btn.addEventListener("click", function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            });
         });
     });
-
-    if (closeBtn) closeBtn.addEventListener("click", closeModal);
-    if (modal) {
-        modal.addEventListener("click", e => { if (e.target.dataset.closeModal === "true") closeModal(); });
-        document.addEventListener("keydown", e => { if (e.key === "Escape" && modal.classList.contains("is-open")) closeModal(); });
-    }
 });
 </script>
 {% endblock %}
