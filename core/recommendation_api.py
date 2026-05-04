@@ -4,6 +4,7 @@ import re
 import requests
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional
 from core.explainability import enrich_with_explanations
 from core.tmdb_cache import cached_call
 
@@ -1395,19 +1396,29 @@ def get_upcoming(limit: int = 8) -> list:
 
 
 def get_detail_movie(tmdb_id: int) -> dict:
-    """Detail completo di un film. Cached 24h memoria + 7gg DB.
-    NB: i providers/affiliate link sono ricalcolati a ogni get perché sono cheap (no I/O)."""
+    """
+    Detail completo di un film.
+
+    Cache strategy:
+    - La risposta TMDb grezza è cached 24h memoria + 7gg DB
+    - I providers (mapping nostro + affiliate links) vengono ricalcolati AD OGNI call
+      così se cambia AFFILIATE_AMAZON / AFFILIATE_APPLE / PROVIDER_META,
+      gli effetti sono immediati senza aspettare la scadenza cache.
+    """
     if not TMDB_API_KEY or not tmdb_id:
         return {}
-    cache_key = f"movie:detail:{tmdb_id}"
-    cached = cached_call(cache_key, lambda: _get_detail_movie_uncached(tmdb_id))
-    return cached if cached else {}
+
+    # Cache key v2 — naming nuovo invalida implicitamente la cache vecchia
+    cache_key = f"movie:detail:raw:v2:{tmdb_id}"
+    raw = cached_call(cache_key, lambda: _fetch_detail_movie_raw(tmdb_id))
+    if not raw:
+        return {}
+
+    return _build_movie_detail(tmdb_id, raw)
 
 
-def _get_detail_movie_uncached(tmdb_id: int) -> dict:
-    """
-    Dati completi di un film: info base, generi, cast, trailer YouTube, providers IT.
-    """
+def _fetch_detail_movie_raw(tmdb_id: int) -> Optional[dict]:
+    """Solo fetch grezza da TMDb. NIENTE elaborazione providers/affiliate qui."""
     try:
         r = requests.get(
             f"https://api.themoviedb.org/3/movie/{tmdb_id}",
@@ -1416,9 +1427,20 @@ def _get_detail_movie_uncached(tmdb_id: int) -> dict:
             timeout=8
         )
         d = r.json()
-        if d.get("status_code") == 34:   # not found
-            return {}
+        if d.get("status_code") == 34:  # Not found
+            return None
+        return d
+    except Exception:
+        return None
 
+
+def _build_movie_detail(tmdb_id: int, d: dict) -> dict:
+    """
+    Costruisce il dict detail completo dai dati grezzi TMDb.
+    Mapping providers + affiliate links avvengono qui — NON cachato,
+    sempre fresco rispetto alle env vars.
+    """
+    try:
         # Poster / backdrop
         poster_path   = d.get("poster_path") or ""
         backdrop_path = d.get("backdrop_path") or ""
@@ -1441,7 +1463,7 @@ def _get_detail_movie_uncached(tmdb_id: int) -> dict:
         directors = [p["name"] for p in d.get("credits", {}).get("crew", [])
                      if p.get("job") == "Director"]
 
-        # Trailer YouTube (primo trailer IT, fallback EN)
+        # Trailer YouTube
         trailer_key = ""
         videos = d.get("videos", {}).get("results", [])
         for v in videos:
@@ -1452,6 +1474,7 @@ def _get_detail_movie_uncached(tmdb_id: int) -> dict:
         # Watch providers IT
         prov_it = d.get("watch/providers", {}).get("results", {}).get("IT", {})
         jw_link = prov_it.get("link", "")
+        title   = d.get("title") or d.get("original_title", "")
 
         def _parse_prov(items):
             out, seen = [], set()
@@ -1465,7 +1488,7 @@ def _get_detail_movie_uncached(tmdb_id: int) -> dict:
                     continue
                 seen.add(prov_name)
                 # Usa link affiliato se disponibile, altrimenti JustWatch
-                aff_link   = _build_affiliate_link(prov_name, title=d.get("title",""), tmdb_id=tmdb_id)
+                aff_link   = _build_affiliate_link(prov_name, title=title, tmdb_id=tmdb_id)
                 out.append({
                     "name":       prov_name,
                     "logo_url":   f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
@@ -1477,7 +1500,7 @@ def _get_detail_movie_uncached(tmdb_id: int) -> dict:
 
         return {
             "tmdb_id":      tmdb_id,
-            "title":        d.get("title") or d.get("original_title", ""),
+            "title":        title,
             "original_title": d.get("original_title", ""),
             "tagline":      d.get("tagline", ""),
             "overview":     d.get("overview", ""),
@@ -1504,18 +1527,29 @@ def _get_detail_movie_uncached(tmdb_id: int) -> dict:
 
 
 def get_detail_tv(tmdb_id: int) -> dict:
-    """Detail completo di una serie TV. Cached 24h memoria + 7gg DB."""
+    """
+    Detail completo di una serie TV.
+
+    Cache strategy:
+    - La risposta TMDb grezza è cached 24h memoria + 7gg DB (non cambia spesso)
+    - I providers (mapping nostro + affiliate links) vengono ricalcolati AD OGNI call
+      così se cambia AFFILIATE_AMAZON / AFFILIATE_APPLE / PROVIDER_META,
+      gli effetti sono immediati senza aspettare la scadenza cache.
+    """
     if not TMDB_API_KEY or not tmdb_id:
         return {}
-    cache_key = f"tv:detail:{tmdb_id}"
-    cached = cached_call(cache_key, lambda: _get_detail_tv_uncached(tmdb_id))
-    return cached if cached else {}
+
+    # Cache key v2 (raw response). Naming nuovo invalida implicitamente la cache vecchia.
+    cache_key = f"tv:detail:raw:v2:{tmdb_id}"
+    raw = cached_call(cache_key, lambda: _fetch_detail_tv_raw(tmdb_id))
+    if not raw:
+        return {}
+
+    return _build_tv_detail(tmdb_id, raw)
 
 
-def _get_detail_tv_uncached(tmdb_id: int) -> dict:
-    """
-    Dati completi di una serie TV: info base, generi, cast, trailer YouTube, providers IT.
-    """
+def _fetch_detail_tv_raw(tmdb_id: int) -> Optional[dict]:
+    """Solo fetch grezza da TMDb. NIENTE elaborazione providers/affiliate qui."""
     try:
         r = requests.get(
             f"https://api.themoviedb.org/3/tv/{tmdb_id}",
@@ -1524,9 +1558,20 @@ def _get_detail_tv_uncached(tmdb_id: int) -> dict:
             timeout=8
         )
         d = r.json()
-        if d.get("status_code") == 34:
-            return {}
+        if d.get("status_code") == 34:  # Not found
+            return None
+        return d
+    except Exception:
+        return None
 
+
+def _build_tv_detail(tmdb_id: int, d: dict) -> dict:
+    """
+    Costruisce il dict detail completo dai dati grezzi TMDb.
+    Questo è il punto dove avviene il mapping providers + affiliate links,
+    quindi NON cachato — sempre fresco rispetto alle env vars.
+    """
+    try:
         poster_path   = d.get("poster_path") or ""
         backdrop_path = d.get("backdrop_path") or ""
         genres        = [g["name"] for g in d.get("genres", [])]
@@ -1551,6 +1596,7 @@ def _get_detail_tv_uncached(tmdb_id: int) -> dict:
 
         prov_it = d.get("watch/providers", {}).get("results", {}).get("IT", {})
         jw_link = prov_it.get("link", "")
+        title   = d.get("name") or d.get("original_name", "")
 
         def _parse_prov(items):
             out, seen = [], set()
@@ -1564,7 +1610,7 @@ def _get_detail_tv_uncached(tmdb_id: int) -> dict:
                     continue
                 seen.add(prov_name)
                 # Usa link affiliato se disponibile, altrimenti JustWatch
-                aff_link   = _build_affiliate_link(prov_name, title=d.get("title", d.get("name", "")), tmdb_id=tmdb_id)
+                aff_link   = _build_affiliate_link(prov_name, title=title, tmdb_id=tmdb_id)
                 out.append({
                     "name":       prov_name,
                     "logo_url":   f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
@@ -1579,7 +1625,7 @@ def _get_detail_tv_uncached(tmdb_id: int) -> dict:
 
         return {
             "tmdb_id":        tmdb_id,
-            "title":          d.get("name") or d.get("original_name", ""),
+            "title":          title,
             "original_title": d.get("original_name", ""),
             "tagline":        d.get("tagline", ""),
             "overview":       d.get("overview", ""),
