@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Installa CosaGuardo come app — CosaGuardo{% endblock %}
+{% block meta_description %}Installa CosaGuardo come app sul tuo iPhone, Android o computer. Accesso rapido ai consigli, niente App Store.{% endblock %}
+{% block og_title %}Installa CosaGuardo come app{% endblock %}
+{% block og_description %}Aggiungi CosaGuardo alla schermata Home in 2 tap. Accesso rapido, lavora in offline.{% endblock %}
+
+{% block content %}
+<style>
+    .install-page {
+        max-width: 640px;
+        margin: 32px auto 64px;
+        padding: 0 8px;
+    }
+    .install-hero {
+        text-align: center;
+        margin-bottom: 36px;
+    }
+    .install-hero-icon {
+        width: 96px;
+        height: 96px;
+        border-radius: 22px;
+        margin: 0 auto 16px;
+        background-image: url('/static/icons/icon-512.png');
+        background-size: cover;
+        background-position: center;
+        box-shadow: 0 12px 40px rgba(110,168,254,0.25), 0 0 0 1px rgba(110,168,254,0.15);
+    }
+    .install-hero h1 {
+        font-size: clamp(1.6rem, 5vw, 2.2rem);
+        margin: 0 0 10px;
+        color: var(--text);
+    }
+    .install-hero p {
+        font-size: 1rem;
+        color: var(--muted);
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .install-cta {
+        text-align: center;
+        margin-bottom: 40px;
+    }
+    .install-cta-btn {
+        display: inline-block;
+        padding: 14px 28px;
+        font-size: 1.05rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #6ea8fe, #a78bfa);
+        color: #08101f;
+        border: none;
+        border-radius: 14px;
+        cursor: pointer;
+        transition: transform 0.18s, filter 0.18s;
+    }
+    .install-cta-btn:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.1);
+    }
+    .install-cta-hint {
+        margin-top: 10px;
+        font-size: 0.85rem;
+        color: var(--muted);
+    }
+
+    .install-platforms {
+        display: grid;
+        gap: 18px;
+        margin-bottom: 40px;
+    }
+    .install-platform {
+        background: rgba(17, 24, 50, 0.6);
+        border: 1px solid rgba(110,168,254,0.18);
+        border-radius: 16px;
+        padding: 20px 22px;
+    }
+    .install-platform h2 {
+        font-size: 1.1rem;
+        color: var(--text);
+        margin: 0 0 14px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .install-platform-emoji {
+        font-size: 1.4rem;
+    }
+    .install-platform ol {
+        margin: 0;
+        padding-left: 20px;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.65;
+    }
+    .install-platform li {
+        margin-bottom: 6px;
+    }
+    .install-platform li strong {
+        color: var(--text);
+    }
+    .platform-icon-share {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        background: #007aff;
+        color: #fff;
+        border-radius: 5px;
+        margin: 0 2px;
+        vertical-align: -5px;
+        font-size: 0.95rem;
+        font-weight: bold;
+    }
+
+    .install-benefits {
+        background: linear-gradient(135deg, rgba(110,168,254,0.07), rgba(167,139,250,0.07));
+        border: 1px solid rgba(110,168,254,0.15);
+        border-radius: 16px;
+        padding: 22px;
+    }
+    .install-benefits h2 {
+        font-size: 1.1rem;
+        color: var(--text);
+        margin: 0 0 14px;
+    }
+    .install-benefits ul {
+        margin: 0;
+        padding-left: 0;
+        list-style: none;
+    }
+    .install-benefits li {
+        padding-left: 28px;
+        position: relative;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 0.93rem;
+        line-height: 1.5;
+    }
+    .install-benefits li::before {
+        content: "✓";
+        position: absolute;
+        left: 0;
+        top: 0;
+        color: #6ea8fe;
+        font-weight: 800;
+    }
+</style>
+
+<div class="install-page">
+    <div class="install-hero">
+        <div class="install-hero-icon" aria-hidden="true"></div>
+        <h1>Installa CosaGuardo</h1>
+        <p>Aggiungi l'app alla schermata Home: accesso rapido, niente App Store, gratis.</p>
+    </div>
+
+    <div class="install-cta">
+        <button class="install-cta-btn" onclick="cgShowInstallPrompt()">📲 Installa ora</button>
+        <div class="install-cta-hint">Su iPhone segui i passi qui sotto</div>
+    </div>
+
+    <div class="install-platforms">
+        <div class="install-platform">
+            <h2><span class="install-platform-emoji">📱</span> iPhone / iPad (Safari)</h2>
+            <ol>
+                <li>Apri questo sito su <strong>Safari</strong> (non Chrome)</li>
+                <li>Tocca il bottone <span class="platform-icon-share">⬆</span> in fondo allo schermo</li>
+                <li>Scorri e tocca <strong>"Aggiungi a Home"</strong></li>
+                <li>Tocca <strong>"Aggiungi"</strong> in alto a destra</li>
+            </ol>
+        </div>
+
+        <div class="install-platform">
+            <h2><span class="install-platform-emoji">🤖</span> Android (Chrome)</h2>
+            <ol>
+                <li>Tocca il bottone <strong>📲 Installa ora</strong> qui sopra</li>
+                <li>Oppure tocca i <strong>3 puntini</strong> in alto a destra di Chrome</li>
+                <li>Seleziona <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong></li>
+            </ol>
+        </div>
+
+        <div class="install-platform">
+            <h2><span class="install-platform-emoji">💻</span> PC / Mac (Chrome, Edge)</h2>
+            <ol>
+                <li>Tocca il bottone <strong>📲 Installa ora</strong> qui sopra</li>
+                <li>Oppure cerca l'icona <strong>☐⬇</strong> nella barra degli indirizzi</li>
+                <li>Conferma <strong>"Installa"</strong></li>
+            </ol>
+        </div>
+    </div>
+
+    <div class="install-benefits">
+        <h2>Perché installare l'app</h2>
+        <ul>
+            <li>Si apre più velocemente di un browser, a tutto schermo</li>
+            <li>Icona dedicata sulla schermata Home, come una vera app</li>
+            <li>Nessuno spazio occupato dall'App Store: ~1 MB totale</li>
+            <li>Aggiornamenti automatici, sempre l'ultima versione</li>
+            <li>Gratis, niente account richiesto per usarla</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

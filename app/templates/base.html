@@ -288,6 +288,196 @@
         }
         .cookie-btn--decline:hover { background: rgba(255,255,255,0.12); }
 
+        /* ─── Install PWA Banner ─────────────────────────────────────── */
+        #install-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 9998;  /* sotto cookie banner se entrambi visibili */
+            padding: 0 12px 12px;
+            transform: translateY(120%);
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+        }
+        #install-banner.show {
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+        .install-banner-inner {
+            max-width: 480px;
+            margin: 0 auto;
+            background: linear-gradient(135deg, rgba(110,168,254,0.18), rgba(167,139,250,0.18)), rgba(17, 24, 50, 0.98);
+            border: 1px solid rgba(110,168,254,0.35);
+            border-radius: 18px;
+            padding: 14px 16px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: center;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 -8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(110,168,254,0.1);
+        }
+        .install-banner-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            flex-shrink: 0;
+            background-image: url('/static/icons/icon-192.png');
+            background-size: cover;
+            background-position: center;
+        }
+        .install-banner-text {
+            min-width: 0;
+        }
+        .install-banner-text strong {
+            display: block;
+            font-size: 0.92rem;
+            color: var(--text);
+            margin-bottom: 2px;
+            line-height: 1.2;
+        }
+        .install-banner-text span {
+            font-size: 0.78rem;
+            color: var(--muted);
+            line-height: 1.3;
+        }
+        .install-banner-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+            align-items: center;
+        }
+        .install-btn {
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            cursor: pointer;
+            border: none;
+            transition: all 0.18s ease;
+            white-space: nowrap;
+        }
+        .install-btn--primary {
+            background: linear-gradient(135deg, #6ea8fe, #a78bfa);
+            color: #08101f;
+        }
+        .install-btn--primary:hover { filter: brightness(1.1); }
+        .install-btn--close {
+            background: transparent;
+            color: var(--muted);
+            border: none;
+            font-size: 1.4rem;
+            line-height: 1;
+            padding: 4px 8px;
+            cursor: pointer;
+        }
+        .install-btn--close:hover { color: var(--text); }
+
+        /* iOS guida: appare quando è iOS Safari, scivola dal basso con freccia */
+        #ios-install-guide {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 10001;
+            padding: 16px 14px calc(16px + env(safe-area-inset-bottom));
+            background: rgba(8, 16, 31, 0.98);
+            border-top: 1px solid rgba(110,168,254,0.25);
+            backdrop-filter: blur(20px);
+            display: none;
+            animation: ios-slide-up 0.35s ease;
+        }
+        #ios-install-guide.show { display: block; }
+        @keyframes ios-slide-up {
+            from { transform: translateY(100%); }
+            to   { transform: translateY(0); }
+        }
+        .ios-guide-inner {
+            max-width: 420px;
+            margin: 0 auto;
+            color: var(--text);
+            position: relative;
+        }
+        .ios-guide-close {
+            position: absolute;
+            top: -4px;
+            right: 0;
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            font-size: 1.6rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 4px 8px;
+        }
+        .ios-guide-title {
+            font-size: 1rem;
+            font-weight: 700;
+            margin: 0 0 14px;
+            padding-right: 30px;
+        }
+        .ios-guide-step {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 0.88rem;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+        .ios-guide-step-num {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6ea8fe, #a78bfa);
+            color: #08101f;
+            font-weight: 800;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+        .ios-guide-share {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            background: #007aff;
+            color: #fff;
+            border-radius: 5px;
+            margin: 0 3px;
+            vertical-align: -5px;
+            font-size: 0.95rem;
+        }
+        .ios-guide-arrow {
+            text-align: center;
+            color: #6ea8fe;
+            font-size: 1.6rem;
+            margin-top: 4px;
+            animation: ios-arrow-bounce 1.4s ease-in-out infinite;
+        }
+        @keyframes ios-arrow-bounce {
+            0%, 100% { transform: translateY(0); opacity: 0.7; }
+            50%      { transform: translateY(8px); opacity: 1; }
+        }
+
+        @media (max-width: 480px) {
+            .install-banner-inner {
+                grid-template-columns: auto 1fr;
+                gap: 10px;
+            }
+            .install-banner-actions {
+                grid-column: 1 / -1;
+                justify-content: flex-end;
+                margin-top: 4px;
+            }
+            .install-banner-text strong { font-size: 0.88rem; }
+            .install-banner-text span   { font-size: 0.74rem; }
+        }
+
         @media (max-width: 500px) {
             .cookie-banner-inner {
                 grid-template-columns: 1fr;
@@ -521,6 +711,7 @@
                 </div>
                 <div class="footer-links">
                     <a href="/">Homepage</a>
+                    <a href="/installa">Installa app</a>
                     <a href="/privacy">Privacy Policy</a>
                     <a href="/termini">Termini di servizio</a>
                     <button onclick="resetCookieConsent()" class="footer-cookie-btn">Cookie</button>
@@ -540,6 +731,42 @@
                     <button onclick="acceptCookies()" class="cookie-btn cookie-btn--accept">Accetta</button>
                     <button onclick="declineCookies()" class="cookie-btn cookie-btn--decline">Solo necessari</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- INSTALL PWA BANNER -->
+        <div id="install-banner" role="dialog" aria-label="Installa l'app">
+            <div class="install-banner-inner">
+                <div class="install-banner-icon" aria-hidden="true"></div>
+                <div class="install-banner-text">
+                    <strong>📲 Installa CosaGuardo come app</strong>
+                    <span>per ricevere subito consigli</span>
+                </div>
+                <div class="install-banner-actions">
+                    <button id="install-btn-action" class="install-btn install-btn--primary">Installa</button>
+                    <button id="install-btn-close" class="install-btn--close" aria-label="Chiudi">×</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- iOS INSTALL GUIDE (overlay con istruzioni passo-passo) -->
+        <div id="ios-install-guide" role="dialog" aria-label="Come installare su iPhone">
+            <div class="ios-guide-inner">
+                <button class="ios-guide-close" id="ios-guide-close" aria-label="Chiudi">×</button>
+                <h3 class="ios-guide-title">Installa CosaGuardo sul tuo iPhone</h3>
+                <div class="ios-guide-step">
+                    <div class="ios-guide-step-num">1</div>
+                    <div>Tocca <span class="ios-guide-share">⬆</span> in fondo alla pagina</div>
+                </div>
+                <div class="ios-guide-step">
+                    <div class="ios-guide-step-num">2</div>
+                    <div>Scorri e seleziona <strong>"Aggiungi a Home"</strong></div>
+                </div>
+                <div class="ios-guide-step">
+                    <div class="ios-guide-step-num">3</div>
+                    <div>Tocca <strong>"Aggiungi"</strong> in alto a destra</div>
+                </div>
+                <div class="ios-guide-arrow">⬇️</div>
             </div>
         </div>
     </div>
@@ -602,6 +829,263 @@
                     });
             });
         }
+    </script>
+
+    {# ── PWA Install Banner Logic ── #}
+    <script>
+    (function() {
+        'use strict';
+
+        // ─── Configurazione ─────────────────────────────────────────────
+        var STORAGE_KEY      = 'cg_install_state_v1';
+        var ENGAGEMENT_KEY   = 'cg_engagement';
+        var DISMISS_DAYS     = 7;       // ricomparsa dopo X giorni se chiuso
+        var MIN_TIME_SEC     = 25;      // tempo minimo sul sito prima di mostrare
+        var MIN_PAGEVIEWS    = 2;       // pageview minime prima di mostrare
+        var INITIAL_DELAY_MS = 1500;    // ritardo dopo evento trigger
+
+        // ─── Detection device/browser ───────────────────────────────────
+        function isStandalone() {
+            return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                || window.navigator.standalone === true;
+        }
+        function isIOS() {
+            // Include iPad moderni che fingono di essere Mac (iPadOS 13+)
+            return /iPad|iPhone|iPod/.test(navigator.userAgent)
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+        function isSafari() {
+            var ua = navigator.userAgent;
+            return /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(ua);
+        }
+        function isChromeIOS() {
+            return /CriOS/.test(navigator.userAgent);
+        }
+        function isAndroid() {
+            return /Android/.test(navigator.userAgent);
+        }
+
+        // ─── State management ───────────────────────────────────────────
+        function getState() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            } catch (e) { return {}; }
+        }
+        function setState(s) {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+            catch (e) {}
+        }
+        function shouldShow() {
+            // Già installata? Non mostrare
+            if (isStandalone()) return false;
+
+            var s = getState();
+            // Già installata in passato → non riproporre
+            if (s.installed) return false;
+
+            // Dismiss recente → aspetta DISMISS_DAYS
+            if (s.dismissedAt) {
+                var diffDays = (Date.now() - s.dismissedAt) / (1000 * 60 * 60 * 24);
+                if (diffDays < DISMISS_DAYS) return false;
+            }
+
+            // Engagement minimo non raggiunto?
+            var eng = getEngagement();
+            if (eng.timeSec < MIN_TIME_SEC) return false;
+            if (eng.pageviews < MIN_PAGEVIEWS) return false;
+
+            return true;
+        }
+
+        // ─── Engagement tracking ────────────────────────────────────────
+        function getEngagement() {
+            try {
+                var raw = sessionStorage.getItem(ENGAGEMENT_KEY) || '{}';
+                var e = JSON.parse(raw);
+                return { timeSec: e.timeSec || 0, pageviews: e.pageviews || 0 };
+            } catch (err) { return { timeSec: 0, pageviews: 0 }; }
+        }
+        function bumpPageview() {
+            var e = getEngagement();
+            e.pageviews = (e.pageviews || 0) + 1;
+            try { sessionStorage.setItem(ENGAGEMENT_KEY, JSON.stringify(e)); } catch (_) {}
+        }
+        function tickTime() {
+            // Conta solo se la tab è attiva
+            if (document.visibilityState !== 'visible') return;
+            var e = getEngagement();
+            e.timeSec = (e.timeSec || 0) + 1;
+            try { sessionStorage.setItem(ENGAGEMENT_KEY, JSON.stringify(e)); } catch (_) {}
+
+            // Trigger check ogni 5 secondi (non spam)
+            if (e.timeSec % 5 === 0) maybeShowBanner();
+        }
+
+        // ─── GA4 tracking (solo se consenso accettato) ──────────────────
+        function track(eventName, params) {
+            try {
+                if (typeof gtag === 'function' &&
+                    localStorage.getItem('cg_cookie_consent') === 'accepted') {
+                    gtag('event', eventName, Object.assign({
+                        event_category: 'pwa_install'
+                    }, params || {}));
+                }
+            } catch (_) {}
+        }
+
+        // ─── beforeinstallprompt (Android Chrome / Desktop Chrome/Edge) ─
+        var deferredPrompt = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+            // Blocca il prompt nativo automatico — lo gestiamo noi
+            e.preventDefault();
+            deferredPrompt = e;
+            track('install_prompt_available', { platform: 'native' });
+        });
+
+        // Quando l'app viene effettivamente installata
+        window.addEventListener('appinstalled', function() {
+            var s = getState();
+            s.installed = true;
+            setState(s);
+            hideBanner();
+            track('app_installed', {});
+            deferredPrompt = null;
+        });
+
+        // ─── UI: show/hide ──────────────────────────────────────────────
+        var bannerShown = false;
+        function showBanner() {
+            if (bannerShown) return;
+            // Non sovrapporsi al cookie banner
+            var cookie = document.getElementById('cookie-banner');
+            if (cookie && cookie.style.display !== 'none' && cookie.style.display !== '') {
+                return;
+            }
+            var b = document.getElementById('install-banner');
+            if (!b) return;
+            b.classList.add('show');
+            bannerShown = true;
+            track('install_banner_shown', {
+                platform: isIOS() ? 'ios' : (isAndroid() ? 'android' : 'desktop')
+            });
+        }
+        function hideBanner() {
+            var b = document.getElementById('install-banner');
+            if (b) b.classList.remove('show');
+            bannerShown = false;
+        }
+        function showIosGuide() {
+            var g = document.getElementById('ios-install-guide');
+            if (g) g.classList.add('show');
+            track('ios_guide_shown', {});
+        }
+        function hideIosGuide() {
+            var g = document.getElementById('ios-install-guide');
+            if (g) g.classList.remove('show');
+        }
+
+        function maybeShowBanner() {
+            if (bannerShown) return;
+            if (!shouldShow()) return;
+
+            // Su Chrome iOS la PWA è impossibile installarla → non mostrare nulla
+            // (avrebbe banner che non porta a nulla. L'utente deve aprire Safari.)
+            if (isIOS() && isChromeIOS()) return;
+
+            showBanner();
+        }
+
+        // ─── Click handlers ─────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', function() {
+            var btnInstall = document.getElementById('install-btn-action');
+            var btnClose   = document.getElementById('install-btn-close');
+            var btnIosX    = document.getElementById('ios-guide-close');
+
+            if (btnInstall) {
+                btnInstall.addEventListener('click', function() {
+                    track('install_banner_clicked', {});
+
+                    // iOS Safari → mostra guida overlay
+                    if (isIOS() && isSafari()) {
+                        hideBanner();
+                        showIosGuide();
+                        return;
+                    }
+
+                    // Android/Desktop con prompt nativo disponibile
+                    if (deferredPrompt) {
+                        deferredPrompt.prompt();
+                        deferredPrompt.userChoice.then(function(choice) {
+                            track('install_prompt_outcome', { outcome: choice.outcome });
+                            if (choice.outcome === 'accepted') {
+                                // L'evento appinstalled aggiornerà lo state
+                                hideBanner();
+                            } else {
+                                // Rifiutato → tratta come dismiss
+                                dismissBanner('rejected');
+                            }
+                            deferredPrompt = null;
+                        });
+                        return;
+                    }
+
+                    // Fallback: nessun prompt nativo (es. Firefox desktop)
+                    // → mandalo alla pagina /installa con istruzioni
+                    window.location.href = '/installa';
+                });
+            }
+
+            if (btnClose) {
+                btnClose.addEventListener('click', function() {
+                    dismissBanner('manual_close');
+                });
+            }
+
+            if (btnIosX) {
+                btnIosX.addEventListener('click', function() {
+                    hideIosGuide();
+                    dismissBanner('ios_guide_close');
+                });
+            }
+
+            // ─── Inizia tracking engagement ─────────────────────────────
+            bumpPageview();
+            setInterval(tickTime, 1000);
+
+            // Primo check dopo INITIAL_DELAY_MS, poi ogni 5s via tickTime
+            setTimeout(maybeShowBanner, INITIAL_DELAY_MS);
+        });
+
+        function dismissBanner(reason) {
+            var s = getState();
+            s.dismissedAt = Date.now();
+            setState(s);
+            hideBanner();
+            track('install_banner_dismissed', { reason: reason });
+        }
+
+        // Esponi una funzione globale per forzare il banner da pagina /installa
+        window.cgShowInstallPrompt = function() {
+            if (isStandalone()) {
+                alert('CosaGuardo è già installata!');
+                return;
+            }
+            if (isIOS() && isSafari()) {
+                showIosGuide();
+                return;
+            }
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(function(choice) {
+                    track('install_prompt_outcome', { outcome: choice.outcome, source: 'install_page' });
+                    deferredPrompt = null;
+                });
+                return;
+            }
+            // Nessun prompt disponibile (es. già installata o browser non supportato)
+            alert('Per installare l\'app, apri questo sito su Chrome (Android), Safari (iPhone) o Edge/Chrome (PC).');
+        };
+    })();
     </script>
 </body>
 </html>

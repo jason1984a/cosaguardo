@@ -1233,6 +1233,16 @@ def service_worker():
     )
 
 
+@app.get("/installa", response_class=HTMLResponse)
+def installa(request: Request):
+    """Pagina dedicata per installare la PWA con istruzioni multi-piattaforma."""
+    return templates.TemplateResponse(
+        request=request,
+        name="installa.html",
+        context={"request": request},
+    )
+
+
 @app.get("/sitemap.xml")
 def sitemap():
     """
