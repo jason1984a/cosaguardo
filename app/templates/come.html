@@ -1,0 +1,406 @@
+{% extends "base.html" %}
+
+{% set _is_tv = item.content_type == "tv" %}
+{% set _kind        = "Serie TV" if _is_tv else "Film" %}
+{% set _kind_lc     = "serie TV" if _is_tv else "film" %}
+{% set _kind_plural = "serie" if _is_tv else "film" %}
+
+{% block title %}{{ _kind }} come {{ item.title }}{% if item.year %} ({{ item.year }}){% endif %}: 12 alternative consigliate — CosaGuardo{% endblock %}
+
+{% block meta_description %}Cerchi {{ _kind_lc }} come {{ item.title }}? 12 alternative selezionate dall'algoritmo di CosaGuardo: {{ _kind_lc }} simili per genere, atmosfera e tematiche. Scopri dove guardarli in streaming.{% endblock %}
+
+{% block og_title %}{{ _kind }} come {{ item.title }}: alternative consigliate{% endblock %}
+{% block og_description %}12 {{ _kind_lc }} simili a {{ item.title }} selezionate per te.{% endblock %}
+{% block og_image %}{% if detail.poster_url %}{{ detail.poster_url }}{% else %}https://cosaguardo.com/static/og-default.jpg{% endif %}{% endblock %}
+
+{% block content %}
+<style>
+.come-page { max-width: 1200px; margin: 24px auto 60px; padding: 0 16px; }
+
+.come-breadcrumb {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 16px;
+}
+.come-breadcrumb a { color: var(--muted); text-decoration: none; }
+.come-breadcrumb a:hover { color: var(--text); }
+.come-breadcrumb-sep { margin: 0 6px; opacity: 0.5; }
+
+.come-header {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 22px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    padding: 22px;
+    margin-bottom: 28px;
+}
+.come-header-poster img {
+    width: 100%;
+    border-radius: 12px;
+    display: block;
+    box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+}
+.come-header-poster-fallback {
+    width: 100%;
+    aspect-ratio: 2/3;
+    background: rgba(255,255,255,0.06);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.come-header-info h1 {
+    font-size: clamp(1.4rem, 3.5vw, 2rem);
+    line-height: 1.15;
+    margin: 0 0 8px;
+}
+.come-header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 14px;
+}
+.come-header-overview {
+    color: #cbd5e1;
+    line-height: 1.55;
+    font-size: 14px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+.come-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.come-btn-primary, .come-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 13px;
+}
+.come-btn-primary {
+    background: linear-gradient(135deg, #6ea8fe, #a78bfa);
+    color: #08101f;
+}
+.come-btn-secondary {
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+.come-btn-secondary:hover { background: rgba(255,255,255,0.1); }
+
+/* Provider quick row */
+.come-providers-mini {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+.come-provider-mini {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text);
+    font-size: 12px;
+}
+.come-provider-mini:hover { background: rgba(255,255,255,0.1); }
+.come-provider-mini img { width: 18px; height: 18px; border-radius: 4px; }
+
+/* Section */
+.come-section { margin-bottom: 36px; }
+.come-section-title {
+    font-size: 22px;
+    font-weight: 800;
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.come-section-subtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 0 0 18px;
+}
+
+/* Grid simili */
+.come-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+}
+.come-card {
+    text-decoration: none;
+    color: inherit;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.18s ease;
+    display: flex;
+    flex-direction: column;
+}
+.come-card:hover {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(110,168,254,0.25);
+    transform: translateY(-2px);
+}
+.come-card-poster-wrap {
+    position: relative;
+    aspect-ratio: 2/3;
+    background: rgba(255,255,255,0.05);
+}
+.come-card-poster-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.come-card-rank {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: linear-gradient(135deg, #6ea8fe, #a78bfa);
+    color: #08101f;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 13px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+.come-card-info {
+    padding: 11px 12px 12px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+.come-card-title {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.25;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-bottom: 4px;
+}
+.come-card-meta {
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+.come-card-reason {
+    font-size: 12px;
+    color: #cbd5e1;
+    line-height: 1.4;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    margin-top: auto;
+}
+
+/* CTA finale */
+.come-cta-box {
+    background: linear-gradient(135deg, rgba(110,168,254,0.08), rgba(167,139,250,0.08));
+    border: 1px solid rgba(110,168,254,0.15);
+    border-radius: 18px;
+    padding: 24px;
+    text-align: center;
+}
+.come-cta-box h3 {
+    font-size: 20px;
+    margin: 0 0 8px;
+}
+.come-cta-box p {
+    color: #cbd5e1;
+    line-height: 1.5;
+    margin: 0 auto 16px;
+    max-width: 540px;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+    .come-header { grid-template-columns: 110px 1fr; gap: 14px; padding: 14px; }
+    .come-header-info h1 { font-size: 1.2rem; }
+    .come-header-overview { -webkit-line-clamp: 2; font-size: 13px; }
+    .come-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+    .come-card-title { font-size: 13px; }
+    .come-card-reason { -webkit-line-clamp: 1; }
+}
+@media (max-width: 480px) {
+    .come-header { grid-template-columns: 1fr; }
+    .come-header-poster { max-width: 160px; margin: 0 auto; }
+    .come-header-actions { justify-content: center; }
+}
+</style>
+
+<div class="come-page">
+
+    <nav class="come-breadcrumb" aria-label="Breadcrumb">
+        <a href="/">Home</a>
+        <span class="come-breadcrumb-sep">›</span>
+        <a href="/dove-vedere">{{ "Serie TV" if _is_tv else "Film" }}</a>
+        <span class="come-breadcrumb-sep">›</span>
+        <span>{{ _kind }} come {{ item.title }}</span>
+    </nav>
+
+    <article class="come-header">
+        <div class="come-header-poster">
+            {% if detail.poster_url %}
+            <img src="{{ detail.poster_url }}" alt="Locandina di {{ item.title }}" width="160" height="240">
+            {% else %}
+            <div class="come-header-poster-fallback">
+                <i data-lucide="film" style="width:32px;height:32px;opacity:.3;"></i>
+            </div>
+            {% endif %}
+        </div>
+        <div class="come-header-info">
+            <h1>{{ _kind }} come {{ item.title }}: 12 alternative consigliate</h1>
+            <div class="come-header-meta">
+                <span><i data-lucide="film" style="width:13px;height:13px;stroke:currentColor;stroke-width:2.5;"></i> {{ _kind }}</span>
+                {% if item.year %}<span>{{ item.year }}</span>{% endif %}
+                {% if detail.vote_average and detail.vote_average > 0 %}<span>★ {{ "%.1f"|format(detail.vote_average) }}/10</span>{% endif %}
+                {% if detail.genres %}<span>{{ detail.genres[:3]|join(", ") }}</span>{% endif %}
+            </div>
+
+            <p class="come-header-overview">{{ detail.overview or item.overview or "Trama non disponibile in italiano." }}</p>
+
+            <div class="come-header-actions">
+                <a href="/{{ 'serie' if _is_tv else 'film' }}/{{ item.tmdb_id }}" class="come-btn-primary">
+                    <i data-lucide="info" style="width:14px;height:14px;stroke:currentColor;stroke-width:2.5;"></i>
+                    Scheda completa
+                </a>
+                <a href="/dove-vedere/{{ item.slug }}" class="come-btn-secondary">
+                    <i data-lucide="tv" style="width:14px;height:14px;stroke:currentColor;stroke-width:2.5;"></i>
+                    Dove vederlo
+                </a>
+            </div>
+
+            {# Mini riga provider del titolo principale (NON dei simili — design choice per performance) #}
+            {% if detail.providers and detail.providers.flatrate %}
+            <div class="come-providers-mini">
+                <span style="font-size:11px;color:var(--muted);align-self:center;text-transform:uppercase;letter-spacing:0.5px;font-weight:700;">Disponibile su:</span>
+                {% for p in detail.providers.flatrate[:5] %}
+                <a href="{{ p.link or detail.providers.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="come-provider-mini">
+                    {% if p.logo_url %}<img src="{{ p.logo_url }}" alt="{{ p.name }}">{% endif %}
+                    <span>{{ p.name }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </article>
+
+    <section class="come-section">
+        <h2 class="come-section-title">🎯 12 alternative consigliate dal nostro algoritmo</h2>
+        <p class="come-section-subtitle">
+            {{ _kind|lower|capitalize }} simili a {{ item.title }} per genere, atmosfera, tematiche e qualità.
+            Selezionate dall'algoritmo di raccomandazione di CosaGuardo.
+        </p>
+
+        {% if similar_items %}
+        <div class="come-grid">
+            {% for sim in similar_items %}
+            {% set sim_url = "/come/" + sim.slug if sim.slug else "/" + ("serie" if sim.content_type == "tv" else "film") + "/" + (sim.tmdb_id|string) %}
+            <a href="{{ sim_url }}" class="come-card">
+                <div class="come-card-poster-wrap">
+                    {% if sim.poster_url %}
+                    <img src="{{ sim.poster_url }}" alt="{{ sim.title }}" loading="lazy">
+                    {% endif %}
+                    <span class="come-card-rank">{{ loop.index }}</span>
+                </div>
+                <div class="come-card-info">
+                    <div class="come-card-title">{{ sim.title }}</div>
+                    <div class="come-card-meta">
+                        {% if sim.year %}{{ sim.year }}{% endif %}
+                        {% if sim.vote_average and sim.vote_average > 0 %}{% if sim.year %} • {% endif %}★ {{ "%.1f"|format(sim.vote_average) }}{% endif %}
+                    </div>
+                    {% if sim.reason %}
+                    <p class="come-card-reason">{{ sim.reason }}</p>
+                    {% endif %}
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p style="color:var(--muted);padding:20px 0;">
+            Al momento non riusciamo a trovare {{ _kind_lc }} simili a {{ item.title }}.
+            <a href="/" style="color:#a8c8ff;">Prova una nuova ricerca</a>.
+        </p>
+        {% endif %}
+    </section>
+
+    <section class="come-section">
+        <div class="come-cta-box">
+            <h3>🔎 Vuoi un consiglio davvero su misura?</h3>
+            <p>
+                Se ti è piaciuto {{ item.title }}, inserisci 2-3 titoli che ami e l'algoritmo
+                di CosaGuardo ti suggerirà cosa guardare dopo, con motivazioni specifiche.
+            </p>
+            <a href="/" class="come-btn-primary">
+                Trova consigli personalizzati
+                <i data-lucide="sparkles" style="width:14px;height:14px;stroke:currentColor;stroke-width:2.5;"></i>
+            </a>
+        </div>
+    </section>
+
+</div>
+
+{# ─── Schema.org JSON-LD per Rich Snippets Google ─── #}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "{{ _kind }} come {{ item.title }}",
+    "description": "12 alternative consigliate per chi ama {{ item.title }}.",
+    "numberOfItems": {{ similar_items|length }},
+    "itemListElement": [
+        {% for sim in similar_items %}
+        {
+            "@type": "ListItem",
+            "position": {{ loop.index }},
+            "item": {
+                "@type": "{{ 'TVSeries' if sim.content_type == 'tv' else 'Movie' }}",
+                "name": {{ sim.title|tojson }},
+                {% if sim.poster_url %}"image": {{ sim.poster_url|tojson }},{% endif %}
+                {% if sim.year %}"datePublished": "{{ sim.year }}",{% endif %}
+                "url": "https://cosaguardo.com{{ '/come/' + sim.slug if sim.slug else '/' + ('serie' if sim.content_type == 'tv' else 'film') + '/' + (sim.tmdb_id|string) }}"
+            }
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ]
+}
+</script>
+
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+        {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://cosaguardo.com/"},
+        {"@type": "ListItem", "position": 2, "name": "{{ 'Serie TV' if _is_tv else 'Film' }}", "item": "https://cosaguardo.com/dove-vedere"},
+        {"@type": "ListItem", "position": 3, "name": "{{ _kind }} come {{ item.title }}", "item": "https://cosaguardo.com/come/{{ item.slug }}"}
+    ]
+}
+</script>
+{% endblock %}

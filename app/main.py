@@ -59,7 +59,8 @@ from core.recommendation_api import (
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
 from core.seo_pages import (
     get_title_by_slug, list_seo_titles, list_all_slugs_for_sitemap,
-    populate_seo_titles_db, seo_titles_count, slugify
+    populate_seo_titles_db, seo_titles_count, slugify, get_similar_for_seo,
+    get_slug_by_tmdb_id,
 )
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -973,6 +974,7 @@ def film_detail(request: Request, tmdb_id: int):
             "is_logged_in": bool(user_id),
             "is_liked":   title_state.get("preference") == "liked",
             "is_seen":    title_state.get("seen", 0) == 1,
+            "seo_slug":   get_slug_by_tmdb_id(tmdb_id, "movie"),
         },
     )
 
@@ -1016,6 +1018,7 @@ def serie_detail(request: Request, tmdb_id: int):
             "is_logged_in": bool(user_id),
             "is_liked":   title_state.get("preference") == "liked",
             "is_seen":    title_state.get("seen", 0) == 1,
+            "seo_slug":   get_slug_by_tmdb_id(tmdb_id, "tv"),
         },
     )
 
@@ -1380,6 +1383,55 @@ def dove_vedere_detail(request: Request, slug: str):
     )
 
 
+@app.get("/come/{slug}", response_class=HTMLResponse)
+def come_simili(request: Request, slug: str):
+    """
+    Pagina SEO 'Film/Serie come X': 12 alternative consigliate dall'algoritmo.
+    URL pattern: /come/inception, /come/breaking-bad
+    """
+    item = get_title_by_slug(slug)
+    if not item:
+        # 404: titolo non in DB SEO. Reindirizza alla home con messaggio.
+        return templates.TemplateResponse(
+            request=request,
+            name="dove_vedere_hub.html",
+            context={
+                "request": request,
+                "items": [],
+                "content_type": None,
+                "page": 1,
+                "total_pages": 1,
+                "total": 0,
+                "_not_found_slug": slug,
+            },
+            status_code=404,
+        )
+
+    # Detail TMDb (cached) — solo per il titolo principale
+    if item["content_type"] == "tv":
+        detail = get_detail_tv(item["tmdb_id"]) or {}
+    else:
+        detail = get_detail_movie(item["tmdb_id"]) or {}
+
+    # Fallback poster URL
+    if not detail.get("poster_url") and item.get("poster_path"):
+        detail["poster_url"] = f"https://image.tmdb.org/t/p/w500{item['poster_path']}"
+
+    # 12 simili dall'algoritmo (cached 7gg)
+    similar_items = get_similar_for_seo(slug, limit=12)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="come.html",
+        context={
+            "request": request,
+            "item": item,
+            "detail": detail,
+            "similar_items": similar_items,
+        },
+    )
+
+
 @app.get("/admin/refresh-seo")
 def admin_refresh_seo(request: Request):
     """Rigenera le 800 pagine SEO da TMDb. Solo admin loggato.
@@ -1486,6 +1538,17 @@ def sitemap():
         xml_parts.append(
             f"  <url><loc>{base}/dove-vedere/{slug}</loc><lastmod>{lastmod}</lastmod>"
             f"<changefreq>weekly</changefreq><priority>0.7</priority></url>"
+        )
+
+    # 2b. Pagine SEO /come/{slug} ('Film/Serie come X' — alta intent commerciale)
+    for slug, ctype, updated_at in seo_entries:
+        try:
+            lastmod = datetime.fromtimestamp(updated_at).strftime("%Y-%m-%d") if updated_at else today
+        except Exception:
+            lastmod = today
+        xml_parts.append(
+            f"  <url><loc>{base}/come/{slug}</loc><lastmod>{lastmod}</lastmod>"
+            f"<changefreq>monthly</changefreq><priority>0.6</priority></url>"
         )
 
     # 3. Top film/serie diretti per indicizzazione delle schede /film/{id}

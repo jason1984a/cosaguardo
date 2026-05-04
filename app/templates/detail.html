@@ -797,6 +797,15 @@ html, body {
                     <i data-lucide="search" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
                     Trova simili
                 </a>
+                {% if seo_slug %}
+                <a href="/come/{{ seo_slug }}"
+                   class="detail-btn"
+                   style="background:rgba(110,168,254,0.08);border:1px solid rgba(110,168,254,0.2);"
+                   title="12 alternative consigliate dall'algoritmo">
+                    <i data-lucide="layout-grid" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    Esplora alternative
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>

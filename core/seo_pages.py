@@ -121,6 +121,28 @@ def get_title_by_slug(slug: str) -> Optional[dict]:
         return None
 
 
+def get_slug_by_tmdb_id(tmdb_id: int, content_type: str = "movie") -> Optional[str]:
+    """
+    Lookup tmdb_id → slug (None se il titolo non è nel DB SEO).
+    Usato per linking interno verso /come/{slug} e /dove-vedere/{slug}
+    dalle pagine /film/{id} e /serie/{id}.
+    """
+    if not tmdb_id:
+        return None
+    _ensure_db()
+    try:
+        conn = sqlite3.connect(SEO_DB_PATH, timeout=3)
+        cur = conn.execute(
+            "SELECT slug FROM seo_titles WHERE tmdb_id = ? AND content_type = ? LIMIT 1",
+            (tmdb_id, content_type),
+        )
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row else None
+    except Exception:
+        return None
+
+
 def list_seo_titles(content_type: Optional[str] = None,
                     page: int = 1,
                     per_page: int = 50) -> tuple[list[dict], int]:
@@ -353,3 +375,113 @@ def seo_titles_count() -> int:
         return n
     except Exception:
         return 0
+
+
+# ─── SIMILAR-FOR-SEO ──────────────────────────────────────────────────────
+# Per le pagine /come/{slug}: data una slug nel DB seo_titles, chiama
+# l'algoritmo di raccomandazione e restituisce 12 titoli simili.
+# Risultato cachato 7gg per non ricalcolare ogni hit (le similar non cambiano spesso).
+
+def get_similar_for_seo(slug: str, limit: int = 12) -> list[dict]:
+    """
+    Restituisce N titoli simili per una pagina /come/{slug}.
+    Ogni risultato include slug per linking interno SEO.
+
+    Cache: 24h memoria + 7gg DB (i simili sono quasi statici).
+    """
+    item = get_title_by_slug(slug)
+    if not item:
+        return []
+
+    from core.tmdb_cache import cached_call
+    cache_key = f"seo:similar:{item['content_type']}:{item['tmdb_id']}:{limit}"
+
+    return cached_call(
+        cache_key,
+        lambda: _compute_similar_for_seo(item, limit)
+    ) or []
+
+
+def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
+    """
+    Usa l'algoritmo motore esistente per trovare i simili,
+    poi arricchisce ogni risultato con lo slug SEO se disponibile.
+    """
+    title = item.get("title")
+    content_type = item.get("content_type", "movie")
+
+    if not title:
+        return []
+
+    raw_similar = []
+
+    try:
+        if content_type == "tv":
+            from core.recommendation_tv import recommend_tv_from_seed_titles
+            result = recommend_tv_from_seed_titles([title], top_k=limit + 5)
+            raw_similar = result.get("recommendations", [])
+        else:
+            from core.recommendation_api import recommend_from_seed_titles
+            result = recommend_from_seed_titles([title], top_k=limit + 5)
+            raw_similar = result.get("recommendations", [])
+    except Exception:
+        return []
+
+    # Arricchisci con slug SEO (per internal linking) — un solo lookup batch al DB
+    enriched = []
+    if raw_similar:
+        # Estraggo i tmdb_id dai risultati per fare lookup batch
+        ids_in_results = []
+        for r in raw_similar:
+            tid = r.get("tmdb_id") or r.get("tv_id") or r.get("movie_id")
+            if tid:
+                ids_in_results.append(tid)
+
+        # Lookup batch slug per tmdb_id
+        slug_map = {}
+        if ids_in_results:
+            _ensure_db()
+            try:
+                conn = sqlite3.connect(SEO_DB_PATH, timeout=3)
+                placeholders = ",".join("?" * len(ids_in_results))
+                cur = conn.execute(
+                    f"SELECT tmdb_id, slug, year FROM seo_titles "
+                    f"WHERE tmdb_id IN ({placeholders}) AND content_type = ?",
+                    ids_in_results + [content_type]
+                )
+                for row in cur.fetchall():
+                    slug_map[row[0]] = {"slug": row[1], "year": row[2]}
+                conn.close()
+            except Exception:
+                pass
+
+        # Costruisco l'output
+        for r in raw_similar[:limit]:
+            tid = r.get("tmdb_id") or r.get("tv_id") or r.get("movie_id")
+            slug_info = slug_map.get(tid, {})
+
+            enriched.append({
+                "tmdb_id":      tid,
+                "title":        r.get("title", ""),
+                "poster_url":   r.get("poster_url") or
+                                (f"https://image.tmdb.org/t/p/w300{r.get('poster_path')}"
+                                 if r.get("poster_path") else None),
+                "overview":     (r.get("overview") or "")[:200],
+                "vote_average": r.get("vote_average") or r.get("score") or 0,
+                "year":         slug_info.get("year") or _extract_year(r.get("release_date") or ""),
+                "slug":         slug_info.get("slug"),  # None se non in DB SEO
+                "content_type": content_type,
+                "reason":       r.get("reason") or r.get("explanation") or "",
+            })
+
+    return enriched
+
+
+def _extract_year(date_str: str) -> Optional[int]:
+    """Estrae l'anno da una data ISO (YYYY-MM-DD)."""
+    if date_str and len(date_str) >= 4:
+        try:
+            return int(date_str[:4])
+        except ValueError:
+            pass
+    return None
