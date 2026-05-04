@@ -2293,7 +2293,7 @@ button:active {
     transform: translate(-50%, -50%);
     z-index: 2;
     width: calc(100% - 32px);
-    max-width: 420px;
+    max-width: 580px;
     max-height: calc(100vh - 32px);
     overflow-y: auto;
     background: #121933;
@@ -2341,21 +2341,21 @@ button:active {
 
 .dashboard-modal-poster {
     width: 100%;
-    height: 320px;
+    height: 360px;
     object-fit: cover;
     display: block;
 }
 
 .dashboard-modal-content {
-    padding: 18px;
+    padding: 22px 24px 24px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
 .dashboard-modal-content h3 {
     margin: 0;
-    font-size: 28px;
+    font-size: 30px;
     line-height: 1.1;
     word-break: break-word;
 }
@@ -2375,10 +2375,13 @@ button:active {
         border-radius: 18px;
     }
     .dashboard-modal-poster {
-        height: 240px;
+        height: 260px;
+    }
+    .dashboard-modal-content {
+        padding: 18px;
     }
     .dashboard-modal-content h3 {
-        font-size: 22px;
+        font-size: 24px;
     }
 }
 
