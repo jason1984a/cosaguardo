@@ -1456,14 +1456,14 @@ def _get_detail_movie_uncached(tmdb_id: int) -> dict:
         def _parse_prov(items):
             out, seen = [], set()
             for p in (items or []):
-                name = p.get("provider_name", "")
-                if name in seen:
-                    continue
-                seen.add(name)
                 pid        = p.get("provider_id")
                 logo       = p.get("logo_path", "")
                 meta       = PROVIDER_META.get(pid, {})
-                prov_name  = meta.get("name", name)
+                prov_name  = meta.get("name", p.get("provider_name", ""))
+                # Dedup sul nome FINALE (post-mapping)
+                if prov_name in seen:
+                    continue
+                seen.add(prov_name)
                 # Usa link affiliato se disponibile, altrimenti JustWatch
                 aff_link   = _build_affiliate_link(prov_name, title=d.get("title",""), tmdb_id=tmdb_id)
                 out.append({
@@ -1555,16 +1555,16 @@ def _get_detail_tv_uncached(tmdb_id: int) -> dict:
         def _parse_prov(items):
             out, seen = [], set()
             for p in (items or []):
-                name = p.get("provider_name", "")
-                if name in seen:
-                    continue
-                seen.add(name)
                 pid        = p.get("provider_id")
                 logo       = p.get("logo_path", "")
                 meta       = PROVIDER_META.get(pid, {})
-                prov_name  = meta.get("name", name)
+                prov_name  = meta.get("name", p.get("provider_name", ""))
+                # Dedup sul nome FINALE (post-mapping)
+                if prov_name in seen:
+                    continue
+                seen.add(prov_name)
                 # Usa link affiliato se disponibile, altrimenti JustWatch
-                aff_link   = _build_affiliate_link(prov_name, title=d.get("title",""), tmdb_id=tmdb_id)
+                aff_link   = _build_affiliate_link(prov_name, title=d.get("title", d.get("name", "")), tmdb_id=tmdb_id)
                 out.append({
                     "name":       prov_name,
                     "logo_url":   f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
@@ -2195,12 +2195,20 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
 
     title_enc = urllib.parse.quote_plus(title) if title else ""
 
-    # ── Amazon Associates — Prime Video ────────────────────────────────────
+    # ── Amazon Associates — Prime Video (tutte le varianti) ────────────────
+    # TMDb usa nomi diversi per Amazon a seconda del paese/sottoscrizione:
+    #   - "Prime Video" (id 9, 119)
+    #   - "Amazon Video" (id 10) — noleggio/acquisto
+    #   - "Amazon Prime Video" (id 119, 9) — abbonamento principale
+    #   - "Amazon Prime Video with Ads" (id 1796) — abbonamento con pubblicità
+    # Il check qui sotto cattura tutte le varianti ("Amazon" o "Prime Video" nel nome).
     amazon_tag = os.environ.get("AFFILIATE_AMAZON", "")
-    if provider_name in ("Prime Video", "Amazon Video") and amazon_tag:
-        # Link di ricerca Amazon con tag affiliato
-        search = f"https://www.amazon.it/s?k={title_enc}&i=instant-video&tag={amazon_tag}"
-        return search
+    if amazon_tag:
+        pn_lower = (provider_name or "").lower()
+        is_amazon = ("amazon" in pn_lower) or ("prime video" in pn_lower)
+        if is_amazon:
+            # Link di ricerca Amazon con tag affiliato
+            return f"https://www.amazon.it/s?k={title_enc}&i=instant-video&tag={amazon_tag}"
 
     # ── Apple TV+ — Apple Performance Partners (Partnerize) ────────────────
     # Formato ufficiale: https://geo.tv.apple.com/<region>/<path>?at=<token>&ct=<campaign>
@@ -2236,21 +2244,22 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
 
 
 PROVIDER_META = {
-    8:   {"name": "Netflix",        "color": "#E50914"},
-    9:   {"name": "Prime Video",    "color": "#00A8E0"},
-    10:  {"name": "Amazon Video",   "color": "#00A8E0"},
-    35:  {"name": "Rakuten TV",     "color": "#BF0000"},
-    39:  {"name": "NOW",            "color": "#00BCD4"},
-    40:  {"name": "Chili",          "color": "#FF6600"},
-    119: {"name": "Prime Video",    "color": "#00A8E0"},
-    149: {"name": "Rakuten TV",     "color": "#BF0000"},
-    235: {"name": "TIMVISION",      "color": "#E60000"},
-    337: {"name": "Disney+",        "color": "#113CCF"},
-    341: {"name": "Apple TV+",      "color": "#555555"},
-    350: {"name": "Apple TV+",      "color": "#555555"},
-    381: {"name": "Canal+",         "color": "#000000"},
-    531: {"name": "Paramount+",     "color": "#0064FF"},
-    619: {"name": "Disney+",        "color": "#113CCF"},
+    8:    {"name": "Netflix",        "color": "#E50914"},
+    9:    {"name": "Prime Video",    "color": "#00A8E0"},
+    10:   {"name": "Amazon Video",   "color": "#00A8E0"},
+    35:   {"name": "Rakuten TV",     "color": "#BF0000"},
+    39:   {"name": "NOW",            "color": "#00BCD4"},
+    40:   {"name": "Chili",          "color": "#FF6600"},
+    119:  {"name": "Prime Video",    "color": "#00A8E0"},
+    149:  {"name": "Rakuten TV",     "color": "#BF0000"},
+    235:  {"name": "TIMVISION",      "color": "#E60000"},
+    337:  {"name": "Disney+",        "color": "#113CCF"},
+    341:  {"name": "Apple TV+",      "color": "#555555"},
+    350:  {"name": "Apple TV+",      "color": "#555555"},
+    381:  {"name": "Canal+",         "color": "#000000"},
+    531:  {"name": "Paramount+",     "color": "#0064FF"},
+    619:  {"name": "Disney+",        "color": "#113CCF"},
+    1796: {"name": "Prime Video",    "color": "#00A8E0"},  # Amazon Prime Video with Ads → mostriamo come Prime Video
 }
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -2302,14 +2311,17 @@ def get_watch_providers(title: str, content_type: str = "movie", country: str = 
             out = []
             seen = set()
             for p in (items or []):
-                name = p.get("provider_name", "")
-                if name in seen:
-                    continue
-                seen.add(name)
                 pid       = p.get("provider_id")
                 logo_path = p.get("logo_path", "")
                 meta      = PROVIDER_META.get(pid, {})
-                prov_name = meta.get("name", name)
+                # Nome post-mapping: usa quello in PROVIDER_META se conosciuto,
+                # altrimenti il nome originale TMDb
+                prov_name = meta.get("name", p.get("provider_name", ""))
+                # Dedup sul nome FINALE: così "Amazon Prime Video with Ads" e
+                # "Amazon Prime Video" entrambi mappati a "Prime Video" non si duplicano
+                if prov_name in seen:
+                    continue
+                seen.add(prov_name)
                 aff_link  = _build_affiliate_link(prov_name, title=title)
                 out.append({
                     "name":         prov_name,
