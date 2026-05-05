@@ -1646,18 +1646,53 @@ def admin_memory_stats(request: Request):
         return {"error": str(e)}
 
 
+# ─── Cache sitemap (1h TTL — non cambia spesso) ────────────────────────
+_sitemap_cache: dict = {"xml": None, "ts": 0.0}
+_SITEMAP_TTL = 3600  # 1 ora
+
+
+@app.get("/robots.txt")
+def robots_txt():
+    """
+    robots.txt — dice ai crawler dove trovare la sitemap e cosa NON crawlare.
+    Fondamentale per Google: prima cerca questo file, POI la sitemap.
+    """
+    content = """User-agent: *
+Allow: /
+
+# Non indicizzare aree admin/tecniche
+Disallow: /admin/
+Disallow: /api/
+Disallow: /static/sw.js
+Disallow: /tmdb-id
+Disallow: /watch-providers
+Disallow: /feedback
+
+# Non indicizzare pagine utente (private)
+Disallow: /profilo
+Disallow: /login
+Disallow: /register
+Disallow: /logout
+
+# Sitemap
+Sitemap: https://cosaguardo.com/sitemap.xml
+"""
+    return Response(content=content, media_type="text/plain")
+
+
 @app.get("/sitemap.xml")
 def sitemap():
     """
-    Sitemap dinamica con:
-    - Pagine statiche
-    - Hub /dove-vedere (alta priorità per crawl)
-    - Tutti gli slug /dove-vedere/* dal DB SEO (~800 titoli)
-    - Top 20 film/serie come /film/{id} e /serie/{id} per indicizzazione schede
-
-    Aggiornata ad ogni richiesta. Per limitare carico TMDb, gli slug SEO
-    vengono dal DB locale (popolato via /admin/refresh-seo).
+    Sitemap dinamica cached 1h.
+    Include: pagine statiche + hub + tutti gli slug /dove-vedere/ e /come/.
+    NON fa chiamate TMDb live (per affidabilità verso Google crawler).
     """
+    # Cache check (1h TTL)
+    import time as _t
+    now = _t.time()
+    if _sitemap_cache["xml"] and (now - _sitemap_cache["ts"]) < _SITEMAP_TTL:
+        return Response(content=_sitemap_cache["xml"], media_type="application/xml")
+
     base = "https://cosaguardo.com"
     today = datetime.now().strftime("%Y-%m-%d")
 
@@ -1668,38 +1703,11 @@ def sitemap():
         ("/dove-vedere?tipo=film",  "daily", "0.7"),
         ("/dove-vedere?tipo=serie", "daily", "0.7"),
         ("/installa",        "monthly", "0.5"),
-        ("/login",           "monthly", "0.4"),
-        ("/register",        "monthly", "0.4"),
         ("/privacy",         "yearly",  "0.3"),
         ("/termini",         "yearly",  "0.3"),
     ]
 
-    # Top film/serie attuali da TMDb (mantengo le entry /film/{id} esistenti)
-    movie_ids = []
-    tv_ids    = []
-    try:
-        r = __import__("requests").get(
-            "https://api.themoviedb.org/3/movie/popular",
-            params={"api_key": os.environ.get("TMDB_API_KEY",""), "language":"it-IT", "page":1},
-            timeout=5
-        )
-        for item in r.json().get("results",[])[:20]:
-            if item.get("id"): movie_ids.append(item["id"])
-    except Exception:
-        pass
-
-    try:
-        r = __import__("requests").get(
-            "https://api.themoviedb.org/3/tv/popular",
-            params={"api_key": os.environ.get("TMDB_API_KEY",""), "language":"it-IT", "page":1},
-            timeout=5
-        )
-        for item in r.json().get("results",[])[:20]:
-            if item.get("id"): tv_ids.append(item["id"])
-    except Exception:
-        pass
-
-    # Tutti gli slug /dove-vedere/* dal DB (~800 entry)
+    # Tutti gli slug /dove-vedere/* e /come/* dal DB locale (~750+750)
     seo_entries = []
     try:
         seo_entries = list_all_slugs_for_sitemap()
@@ -1709,14 +1717,14 @@ def sitemap():
     xml_parts = ['<?xml version="1.0" encoding="UTF-8"?>',
                  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 
-    # 1. Pagine statiche (massima priorità)
+    # 1. Pagine statiche
     for path, freq, priority in static_urls:
         xml_parts.append(
             f"  <url><loc>{base}{path}</loc><lastmod>{today}</lastmod>"
             f"<changefreq>{freq}</changefreq><priority>{priority}</priority></url>"
         )
 
-    # 2. Pagine SEO /dove-vedere/{slug} (queste sono il vero contenuto SEO)
+    # 2. Pagine /dove-vedere/{slug}
     for slug, ctype, updated_at in seo_entries:
         try:
             lastmod = datetime.fromtimestamp(updated_at).strftime("%Y-%m-%d") if updated_at else today
@@ -1727,7 +1735,7 @@ def sitemap():
             f"<changefreq>weekly</changefreq><priority>0.7</priority></url>"
         )
 
-    # 2b. Pagine SEO /come/{slug} ('Film/Serie come X' — alta intent commerciale)
+    # 3. Pagine /come/{slug}
     for slug, ctype, updated_at in seo_entries:
         try:
             lastmod = datetime.fromtimestamp(updated_at).strftime("%Y-%m-%d") if updated_at else today
@@ -1738,20 +1746,12 @@ def sitemap():
             f"<changefreq>monthly</changefreq><priority>0.6</priority></url>"
         )
 
-    # 3. Top film/serie diretti per indicizzazione delle schede /film/{id}
-    for mid in movie_ids:
-        xml_parts.append(
-            f"  <url><loc>{base}/film/{mid}</loc><lastmod>{today}</lastmod>"
-            f"<changefreq>weekly</changefreq><priority>0.6</priority></url>"
-        )
-    for tid in tv_ids:
-        xml_parts.append(
-            f"  <url><loc>{base}/serie/{tid}</loc><lastmod>{today}</lastmod>"
-            f"<changefreq>weekly</changefreq><priority>0.6</priority></url>"
-        )
-
     xml_parts.append("</urlset>")
     xml = "\n".join(xml_parts)
+
+    # Salva in cache
+    _sitemap_cache["xml"] = xml
+    _sitemap_cache["ts"]  = now
 
     return Response(content=xml, media_type="application/xml")
 # ──────────────────────────────────────────────────────────────────────────
