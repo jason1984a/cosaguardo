@@ -394,7 +394,7 @@ def get_similar_for_seo(slug: str, limit: int = 12) -> list[dict]:
         return []
 
     from core.tmdb_cache import cached_call
-    cache_key = f"seo:similar:v4:{item['content_type']}:{item['tmdb_id']}:{limit}"
+    cache_key = f"seo:similar:v5:{item['content_type']}:{item['tmdb_id']}:{limit}"
 
     return cached_call(
         cache_key,
@@ -442,8 +442,10 @@ def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
             print(f"[seo /come] ERROR recommend_movie per '{title}': {e}")
             return []
 
-    if not raw_similar:
-        return []
+    # NOTA: NON facciamo return early se raw_similar è vuoto.
+    # Il motore CosaGuardo con singolo seed può restituire 0 candidati,
+    # ma il fallback TMDb (Fase 4) può comunque produrre risultati validi.
+    # Quindi continuiamo il flusso anche con raw_similar vuoto.
 
     # ── FASE 1: arricchimento poster + tmdb_id (in parallelo) ────────
     from concurrent.futures import ThreadPoolExecutor
@@ -566,21 +568,31 @@ def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
         try:
             existing_ids = {e["tmdb_id"] for e in enriched}
             extra_recs = []
+            tmdb_similar = []
 
             if content_type == "tv":
                 from core.recommendation_tv import get_similar_tv, get_recommended_tv
-                # Combino similar + recommended TMDb (entrambi cached)
-                tmdb_similar = (get_recommended_tv(tmdb_id_seed, limit=20) or []) + \
-                               (get_similar_tv(tmdb_id_seed, limit=20) or [])
+                rec_tv = get_recommended_tv(tmdb_id_seed, limit=20) or []
+                sim_tv = get_similar_tv(tmdb_id_seed, limit=20) or []
+                tmdb_similar = rec_tv + sim_tv
+                print(f"[seo /come] fallback TV pool: {len(rec_tv)} recommended + "
+                      f"{len(sim_tv)} similar = {len(tmdb_similar)} candidati totali")
             else:
                 from core.recommendation_api import get_similar_movies_tmdb
                 tmdb_similar = get_similar_movies_tmdb(tmdb_id_seed, limit=30) or []
+                print(f"[seo /come] fallback movie pool: {len(tmdb_similar)} candidati")
 
             # Dedup vs gli enriched già presenti
             seen_ids = set(existing_ids)
+            skip_no_id = skip_dup = skip_no_poster = 0
+
             for r in tmdb_similar:
                 tid = r.get("tv_id") or r.get("tmdb_id") or r.get("movie_id")
-                if not tid or tid in seen_ids:
+                if not tid:
+                    skip_no_id += 1
+                    continue
+                if tid in seen_ids:
+                    skip_dup += 1
                     continue
                 seen_ids.add(tid)
 
@@ -589,6 +601,7 @@ def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
                 if not poster_url and r.get("poster_path"):
                     poster_url = f"https://image.tmdb.org/t/p/w300{r['poster_path']}"
                 if not poster_url:
+                    skip_no_poster += 1
                     continue
 
                 # Slug SEO se disponibile
@@ -628,10 +641,13 @@ def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
                     break
 
             enriched.extend(extra_recs)
-            print(f"[seo /come] '{title}': aggiunti {len(extra_recs)} fallback TMDb, "
-                  f"totale finale {len(enriched)}")
+            print(f"[seo /come] '{title}': fallback aggiunti={len(extra_recs)} "
+                  f"(skip_no_id={skip_no_id}, skip_dup={skip_dup}, "
+                  f"skip_no_poster={skip_no_poster}), totale={len(enriched)}")
         except Exception as e:
+            import traceback
             print(f"[seo /come] ERROR fallback TMDb per '{title}': {e}")
+            print(f"[seo /come] Traceback: {traceback.format_exc()}")
 
     return enriched[:limit]
 
