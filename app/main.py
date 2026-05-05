@@ -1459,6 +1459,152 @@ def admin_seo_stats(request: Request):
     }
 
 
+@app.get("/admin/debug-come/{slug}")
+def admin_debug_come(request: Request, slug: str):
+    """
+    Diagnostico /come/{slug}: mostra cosa restituisce ogni step.
+    NON cachato — esegue tutto live per debugging.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    # Step 1: trovo il titolo
+    item = get_title_by_slug(slug)
+    if not item:
+        return {"error": f"slug '{slug}' non trovato in seo_titles"}
+
+    out = {
+        "slug": slug,
+        "item": {k: v for k, v in item.items() if k != "overview"},
+        "steps": {}
+    }
+
+    # Step 2: chiamo l'algoritmo
+    title = item["title"]
+    content_type = item["content_type"]
+
+    try:
+        if content_type == "tv":
+            from core.recommendation_tv import recommend_tv_from_seed_titles
+            res = recommend_tv_from_seed_titles([title], top_k=17)
+        else:
+            from core.recommendation_api import recommend_from_seed_titles
+            res = recommend_from_seed_titles([title], top_k=17)
+
+        recs = res.get("recommendations", []) or []
+        out["steps"]["1_motore"] = {
+            "candidati": len(recs),
+            "resolved_seeds": len(res.get("resolved_seeds", []) or []),
+            "missing_titles": res.get("missing_titles", []) or [],
+            "primi_3": [
+                {"title": r.get("title"), "tv_id": r.get("tv_id"), "tmdb_id": r.get("tmdb_id"),
+                 "poster_path": r.get("poster_path")}
+                for r in recs[:3]
+            ],
+        }
+    except Exception as e:
+        import traceback
+        out["steps"]["1_motore_ERROR"] = {"error": str(e), "traceback": traceback.format_exc()}
+
+    # Step 3: TMDb similar/recommended (per fallback)
+    tmdb_id = item.get("tmdb_id")
+    try:
+        if content_type == "tv":
+            from core.recommendation_tv import get_similar_tv, get_recommended_tv
+            sim = get_similar_tv(tmdb_id, limit=20) or []
+            rec = get_recommended_tv(tmdb_id, limit=20) or []
+            out["steps"]["2_tmdb_fallback"] = {
+                "similar": len(sim),
+                "recommended": len(rec),
+                "primi_3_similar": [{"title": x.get("title"), "tv_id": x.get("tv_id"),
+                                     "poster_path": x.get("poster_path")} for x in sim[:3]],
+                "primi_3_recommended": [{"title": x.get("title"), "tv_id": x.get("tv_id"),
+                                         "poster_path": x.get("poster_path")} for x in rec[:3]],
+            }
+        else:
+            from core.recommendation_api import get_similar_movies_tmdb
+            sim = get_similar_movies_tmdb(tmdb_id, limit=20) or []
+            out["steps"]["2_tmdb_fallback"] = {
+                "similar": len(sim),
+                "primi_3": [{"title": x.get("title"), "tmdb_id": x.get("tmdb_id"),
+                             "poster_path": x.get("poster_path")} for x in sim[:3]],
+            }
+    except Exception as e:
+        import traceback
+        out["steps"]["2_tmdb_ERROR"] = {"error": str(e), "traceback": traceback.format_exc()}
+
+    # Step 4: chiamata completa
+    try:
+        from core.seo_pages import _compute_similar_for_seo
+        final = _compute_similar_for_seo(item, limit=12)
+        out["steps"]["3_finale"] = {
+            "totali": len(final),
+            "primi_5": [{"title": x["title"], "tmdb_id": x["tmdb_id"],
+                         "has_poster": bool(x["poster_url"])} for x in final[:5]],
+        }
+    except Exception as e:
+        import traceback
+        out["steps"]["3_finale_ERROR"] = {"error": str(e), "traceback": traceback.format_exc()}
+
+    # Step 5: cache check — c'è una entry stale?
+    try:
+        import sqlite3 as _sql
+        conn = _sql.connect(os.environ.get("DATABASE_PATH") or "app/cosaguardo.db", timeout=3)
+        cur = conn.execute(
+            "SELECT cache_key, length(value_json), expires_at FROM tmdb_cache WHERE cache_key LIKE ?",
+            (f"seo:similar:%:{content_type}:{tmdb_id}:%",)
+        )
+        out["steps"]["4_cache"] = [
+            {"key": r[0], "size_bytes": r[1], "expires_at": r[2]}
+            for r in cur.fetchall()
+        ]
+        conn.close()
+    except Exception as e:
+        out["steps"]["4_cache_ERROR"] = str(e)
+
+    return out
+
+
+@app.get("/admin/cache-purge-come/{slug}")
+def admin_cache_purge_come(request: Request, slug: str):
+    """Cancella TUTTE le entry cache /come per uno slug specifico (tutte le versioni v1, v2, ...)."""
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    item = get_title_by_slug(slug)
+    if not item:
+        return {"error": f"slug '{slug}' non trovato"}
+
+    try:
+        import sqlite3 as _sql
+        conn = _sql.connect(os.environ.get("DATABASE_PATH") or "app/cosaguardo.db", timeout=3)
+        cur = conn.execute(
+            "DELETE FROM tmdb_cache WHERE cache_key LIKE ?",
+            (f"seo:similar:%:{item['content_type']}:{item['tmdb_id']}:%",)
+        )
+        deleted = cur.rowcount
+        conn.commit()
+        conn.close()
+
+        # Pulisco anche cache memoria L1
+        from core.tmdb_cache import _mem_cache, _mem_lock
+        with _mem_lock:
+            keys_to_remove = [k for k in _mem_cache.keys()
+                              if k.startswith("seo:similar:") and f":{item['tmdb_id']}:" in k]
+            for k in keys_to_remove:
+                _mem_cache.pop(k, None)
+
+        return {
+            "status": "ok",
+            "slug": slug,
+            "tmdb_id": item["tmdb_id"],
+            "deleted_db_rows": deleted,
+            "cleared_memory_keys": len(keys_to_remove),
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/sitemap.xml")
 def sitemap():
     """
