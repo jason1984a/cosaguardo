@@ -14,9 +14,9 @@ import threading
 from typing import Any, Optional, Callable
 
 # ─── Config ──────────────────────────────────────────────────────────────
-TTL_MEMORY_SEC  = 24 * 60 * 60       # 24h in memoria
-TTL_DB_SEC      = 7 * 24 * 60 * 60   # 7 giorni in DB
-MAX_MEMORY_KEYS = 5000               # cap per evitare memory bloat
+TTL_MEMORY_SEC  = 6 * 60 * 60        # 6h in memoria (era 24h — riduce footprint)
+TTL_DB_SEC      = 7 * 24 * 60 * 60   # 7 giorni in DB (invariato)
+MAX_MEMORY_KEYS = 1500               # cap ridotto per evitare OOM su Render Starter (era 5000)
 
 # DB persistente: usa lo stesso DB utenti (Render persistent disk)
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

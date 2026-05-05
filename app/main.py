@@ -1605,6 +1605,47 @@ def admin_cache_purge_come(request: Request, slug: str):
         return {"error": str(e)}
 
 
+@app.get("/admin/memory-stats")
+def admin_memory_stats(request: Request):
+    """
+    Statistiche memoria del processo Python.
+    Utile per diagnosticare OOM crashes su Render.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    try:
+        import resource, sys
+        # Memoria max usata dal processo (in KB su Linux, bytes su macOS)
+        rss_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        rss_mb = round(rss_kb / 1024, 1)  # Linux: KB → MB
+
+        # Cache memoria
+        from core.tmdb_cache import _mem_cache, _mem_lock, MAX_MEMORY_KEYS
+        with _mem_lock:
+            cache_count = len(_mem_cache)
+            # Stima dimensione cache (rough — usa sys.getsizeof sui values)
+            try:
+                cache_size_bytes = sum(sys.getsizeof(v) for v in _mem_cache.values())
+                cache_size_mb = round(cache_size_bytes / (1024*1024), 2)
+            except Exception:
+                cache_size_mb = -1
+
+        return {
+            "process_rss_mb": rss_mb,
+            "render_starter_limit_mb": 512,
+            "process_pct_used": round(100 * rss_mb / 512, 1),
+            "cache_memory": {
+                "count": cache_count,
+                "max_allowed": MAX_MEMORY_KEYS,
+                "estimated_size_mb": cache_size_mb,
+            },
+            "warning": "Process > 80% del limite" if rss_mb > 410 else None,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/sitemap.xml")
 def sitemap():
     """
