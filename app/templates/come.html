@@ -5,9 +5,11 @@
 {% set _kind_lc     = "serie TV" if _is_tv else "film" %}
 {% set _kind_plural = "serie" if _is_tv else "film" %}
 
-{% block title %}{{ _kind }} come {{ item.title }}{% if item.year %} ({{ item.year }}){% endif %}: 12 alternative consigliate — CosaGuardo{% endblock %}
+{% set _count = similar_items|length %}
 
-{% block meta_description %}Cerchi {{ _kind_lc }} come {{ item.title }}? 12 alternative selezionate dall'algoritmo di CosaGuardo: {{ _kind_lc }} simili per genere, atmosfera e tematiche. Scopri dove guardarli in streaming.{% endblock %}
+{% block title %}{{ _kind }} come {{ item.title }}{% if item.year %} ({{ item.year }}){% endif %}: {% if _count >= 8 %}{{ _count }} alternative consigliate{% else %}alternative consigliate{% endif %} — CosaGuardo{% endblock %}
+
+{% block meta_description %}Cerchi {{ _kind_lc }} come {{ item.title }}? Alternative selezionate dall'algoritmo di CosaGuardo: {{ _kind_lc }} simili per genere, atmosfera e tematiche. Scopri dove guardarli in streaming.{% endblock %}
 
 {% block og_title %}{{ _kind }} come {{ item.title }}: alternative consigliate{% endblock %}
 {% block og_description %}12 {{ _kind_lc }} simili a {{ item.title }} selezionate per te.{% endblock %}
@@ -275,7 +277,7 @@
             {% endif %}
         </div>
         <div class="come-header-info">
-            <h1>{{ _kind }} come {{ item.title }}: 12 alternative consigliate</h1>
+            <h1>{{ _kind }} come {{ item.title }}: {% if _count >= 8 %}{{ _count }} alternative consigliate{% else %}alternative consigliate{% endif %}</h1>
             <div class="come-header-meta">
                 <span><i data-lucide="film" style="width:13px;height:13px;stroke:currentColor;stroke-width:2.5;"></i> {{ _kind }}</span>
                 {% if item.year %}<span>{{ item.year }}</span>{% endif %}
@@ -312,7 +314,7 @@
     </article>
 
     <section class="come-section">
-        <h2 class="come-section-title">🎯 12 alternative consigliate dal nostro algoritmo</h2>
+        <h2 class="come-section-title">🎯 {% if _count > 0 %}{{ _count }} alternative consigliate{% else %}Alternative{% endif %} dal nostro algoritmo</h2>
         <p class="come-section-subtitle">
             {{ _kind|lower|capitalize }} simili a {{ item.title }} per genere, atmosfera, tematiche e qualità.
             Selezionate dall'algoritmo di raccomandazione di CosaGuardo.
@@ -372,7 +374,7 @@
     "@context": "https://schema.org",
     "@type": "ItemList",
     "name": "{{ _kind }} come {{ item.title }}",
-    "description": "12 alternative consigliate per chi ama {{ item.title }}.",
+    "description": "Alternative consigliate per chi ama {{ item.title }}.",
     "numberOfItems": {{ similar_items|length }},
     "itemListElement": [
         {% for sim in similar_items %}

@@ -394,7 +394,7 @@ def get_similar_for_seo(slug: str, limit: int = 12) -> list[dict]:
         return []
 
     from core.tmdb_cache import cached_call
-    cache_key = f"seo:similar:v2:{item['content_type']}:{item['tmdb_id']}:{limit}"
+    cache_key = f"seo:similar:v4:{item['content_type']}:{item['tmdb_id']}:{limit}"
 
     return cached_call(
         cache_key,
@@ -407,12 +407,14 @@ def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
     Usa l'algoritmo motore esistente per trovare i simili,
     poi arricchisce ogni risultato con poster, anno, e slug SEO.
 
-    Differenze tra recommend film e tv:
-    - TV: rec ha già {tv_id, poster_path, title, ...} → nessun lookup TMDb extra
-    - Film: rec ha solo {title, score, ...} → serve get_movie_tmdb_info per poster/tmdb_id
+    Strategia robusta:
+    - Se il motore restituisce rec con poster_path mancanti, faccio lookup TMDb
+      via find_tv_by_title o get_movie_tmdb_info.
+    - Logging diagnostico (visibile su Render Logs) per capire cosa va storto.
     """
     title = item.get("title")
     content_type = item.get("content_type", "movie")
+    tmdb_id_seed = item.get("tmdb_id")
 
     if not title:
         return []
@@ -424,28 +426,30 @@ def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
             from core.recommendation_tv import recommend_tv_from_seed_titles
             result = recommend_tv_from_seed_titles([title], top_k=limit + 5)
             raw_similar = result.get("recommendations", []) or []
+            print(f"[seo /come] tv '{title}' (id={tmdb_id_seed}): "
+                  f"motore ha restituito {len(raw_similar)} candidati")
         except Exception as e:
-            # Logga ma non swallow silenziosamente — utile per debug
-            print(f"[seo_pages] recommend_tv error for '{title}': {e}")
+            print(f"[seo /come] ERROR recommend_tv per '{title}': {e}")
             return []
     else:
         try:
-            from core.recommendation_api import recommend_from_seed_titles, get_movie_tmdb_info
+            from core.recommendation_api import recommend_from_seed_titles
             result = recommend_from_seed_titles([title], top_k=limit + 5)
             raw_similar = result.get("recommendations", []) or []
+            print(f"[seo /come] movie '{title}' (id={tmdb_id_seed}): "
+                  f"motore ha restituito {len(raw_similar)} candidati")
         except Exception as e:
-            print(f"[seo_pages] recommend_movie error for '{title}': {e}")
+            print(f"[seo /come] ERROR recommend_movie per '{title}': {e}")
             return []
 
     if not raw_similar:
         return []
 
-    # ── FASE 1: arricchimento poster/tmdb_id ──────────────────────────
-    # Per i film, raw_similar non ha tmdb_id/poster_path → li recupero
-    # con lookup parallelo (cached) via get_movie_tmdb_info.
+    # ── FASE 1: arricchimento poster + tmdb_id (in parallelo) ────────
+    from concurrent.futures import ThreadPoolExecutor
+
     if content_type == "movie":
         from core.recommendation_api import get_movie_tmdb_info
-        from concurrent.futures import ThreadPoolExecutor
 
         def _resolve_movie(rec):
             t = rec.get("title", "")
@@ -461,7 +465,31 @@ def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
         with ThreadPoolExecutor(max_workers=8) as ex:
             raw_similar = list(ex.map(_resolve_movie, raw_similar))
 
-    # ── FASE 2: lookup batch slug SEO ─────────────────────────────────
+    else:  # tv
+        # Le rec TV potrebbero avere poster_path mancante per alcuni titoli.
+        # Se manca, faccio fallback con find_tv_by_title (cached).
+        from core.recommendation_tv import find_tv_by_title
+
+        def _resolve_tv(rec):
+            # Se ha già tv_id e poster_path, non serve nulla
+            if rec.get("tv_id") and rec.get("poster_path"):
+                return rec
+            # Altrimenti, fallback lookup
+            t = rec.get("title", "")
+            if not t:
+                return rec
+            tv_info = find_tv_by_title(t)
+            if tv_info:
+                if not rec.get("tv_id"):
+                    rec["tv_id"] = tv_info.get("tv_id")
+                if not rec.get("poster_path"):
+                    rec["poster_path"] = tv_info.get("poster_path")
+            return rec
+
+        with ThreadPoolExecutor(max_workers=8) as ex:
+            raw_similar = list(ex.map(_resolve_tv, raw_similar))
+
+    # ── FASE 2: lookup batch slug SEO (per internal linking) ─────────
     ids_in_results = []
     for r in raw_similar:
         tid = (r.get("_tmdb_id") or r.get("tmdb_id")
@@ -488,27 +516,28 @@ def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
 
     # ── FASE 3: costruzione output finale ────────────────────────────
     enriched = []
+    skipped_no_id = 0
+    skipped_no_poster = 0
+
     for r in raw_similar:
         tid = (r.get("_tmdb_id") or r.get("tmdb_id")
                or r.get("tv_id") or r.get("movie_id"))
 
-        # Salto i rec senza tmdb_id (impossibile linkare/mostrare poster)
         if not tid:
+            skipped_no_id += 1
             continue
 
         slug_info = slug_map.get(tid, {})
 
-        # Poster: per TV è poster_path, per film è già URL completo dal lookup
-        poster_url = r.get("_poster_url")  # film: URL già completo
+        # Poster: per film è già URL completo dal lookup, per TV serve costruire
+        poster_url = r.get("_poster_url")  # film
         if not poster_url and r.get("poster_path"):
-            # TV: serve costruire URL
             poster_url = f"https://image.tmdb.org/t/p/w300{r['poster_path']}"
 
-        # Salto i rec senza poster (UX terribile senza immagine)
         if not poster_url:
+            skipped_no_poster += 1
             continue
 
-        # Anno: prima dal DB SEO, poi dal rec, poi dalla data
         year = (slug_info.get("year")
                 or r.get("_year")
                 or _extract_year(r.get("release_date")
@@ -529,7 +558,82 @@ def _compute_similar_for_seo(item: dict, limit: int = 12) -> list[dict]:
         if len(enriched) >= limit:
             break
 
-    return enriched
+    # ── FASE 4: fallback TMDb se l'algoritmo ha prodotto pochi risultati ──
+    # Il motore CosaGuardo è ottimizzato per multi-seed (3+ titoli).
+    # Con singolo seed (caso /come/X) può restituire pochi candidati.
+    # In quei casi usiamo TMDb similar+recommended come complemento.
+    if len(enriched) < limit and tmdb_id_seed:
+        try:
+            existing_ids = {e["tmdb_id"] for e in enriched}
+            extra_recs = []
+
+            if content_type == "tv":
+                from core.recommendation_tv import get_similar_tv, get_recommended_tv
+                # Combino similar + recommended TMDb (entrambi cached)
+                tmdb_similar = (get_recommended_tv(tmdb_id_seed, limit=20) or []) + \
+                               (get_similar_tv(tmdb_id_seed, limit=20) or [])
+            else:
+                from core.recommendation_api import get_similar_movies_tmdb
+                tmdb_similar = get_similar_movies_tmdb(tmdb_id_seed, limit=30) or []
+
+            # Dedup vs gli enriched già presenti
+            seen_ids = set(existing_ids)
+            for r in tmdb_similar:
+                tid = r.get("tv_id") or r.get("tmdb_id") or r.get("movie_id")
+                if not tid or tid in seen_ids:
+                    continue
+                seen_ids.add(tid)
+
+                # Poster
+                poster_url = r.get("poster_url")
+                if not poster_url and r.get("poster_path"):
+                    poster_url = f"https://image.tmdb.org/t/p/w300{r['poster_path']}"
+                if not poster_url:
+                    continue
+
+                # Slug SEO se disponibile
+                slug_info = slug_map.get(tid, {})
+                if not slug_info:
+                    # Lookup singolo (fallback, non batch perché siamo già in coda)
+                    try:
+                        conn2 = sqlite3.connect(SEO_DB_PATH, timeout=2)
+                        cur2 = conn2.execute(
+                            "SELECT slug, year FROM seo_titles WHERE tmdb_id = ? AND content_type = ? LIMIT 1",
+                            (tid, content_type)
+                        )
+                        row2 = cur2.fetchone()
+                        conn2.close()
+                        if row2:
+                            slug_info = {"slug": row2[0], "year": row2[1]}
+                    except Exception:
+                        pass
+
+                year = (slug_info.get("year")
+                        or _extract_year(r.get("release_date")
+                                         or r.get("first_air_date") or ""))
+
+                extra_recs.append({
+                    "tmdb_id":      tid,
+                    "title":        r.get("title", "") or r.get("name", ""),
+                    "poster_url":   poster_url,
+                    "overview":     (r.get("overview") or "")[:200],
+                    "vote_average": r.get("vote_average") or 0,
+                    "year":         year,
+                    "slug":         slug_info.get("slug"),
+                    "content_type": content_type,
+                    "reason":       "Simile per genere e tematiche",
+                })
+
+                if len(enriched) + len(extra_recs) >= limit:
+                    break
+
+            enriched.extend(extra_recs)
+            print(f"[seo /come] '{title}': aggiunti {len(extra_recs)} fallback TMDb, "
+                  f"totale finale {len(enriched)}")
+        except Exception as e:
+            print(f"[seo /come] ERROR fallback TMDb per '{title}': {e}")
+
+    return enriched[:limit]
 
 
 def _extract_year(date_str: str) -> Optional[int]:
