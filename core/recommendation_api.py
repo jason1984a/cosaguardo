@@ -1731,8 +1731,18 @@ def get_cinema_news(limit: int = 8) -> list:
 
 def search_movies_fast(query: str, limit: int = 8) -> list:
     """
-    Ricerca veloce film con matching fuzzy.
-    Prima prova il DB locale (velocissimo), poi fallback su TMDb.
+    Ricerca veloce film con ranking per popolarità (titoli famosi prima).
+
+    Strategia ibrida:
+    - Query corte (≤3 char): TMDb-first → risultati ordinati per popolarità.
+      DB locale solo come complemento per indicizzare titoli storici/MovieLens
+      che TMDb non rankerebbe in alto.
+    - Query lunghe (4+ char): TMDb + DB locale paralleli, scoring custom che
+      combina match esatto, startsWith, popolarità.
+
+    Cache:
+    - L1 in-memory (dict modulo) → istantanea per query ripetute nella stessa request
+    - L2 tmdb_cache (DB) → 24h, condivisa fra processi/restart
     """
     query = query.strip()
     if len(query) < 2:
@@ -1742,76 +1752,169 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
     def normalize(s):
         return _re.sub(r"[-\'\s]+", " ", s).strip().lower()
 
+    q_lower = query.lower()
     q_norm = normalize(query)
-    results = []
 
-    # 1. Prova DB locale
+    # Cache key (stabile, case-insensitive)
+    cache_key = f"search_movie_v2:{q_lower}:{limit}"
+
+    # L2 cache hit?
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
-
-        # Verifica che la tabella titles esista
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='titles'")
-        if cursor.fetchone():
-            cursor.execute("""
-                SELECT movielens_movie_id, title
-                FROM titles
-                WHERE LOWER(title) LIKE LOWER(?)
-                ORDER BY LENGTH(title) ASC
-                LIMIT ?
-            """, (f"%{query}%", limit * 2))
-            rows_direct = cursor.fetchall()
-
-            cursor.execute("""
-                SELECT movielens_movie_id, title
-                FROM titles
-                WHERE LOWER(REPLACE(REPLACE(title, '-', ' '), chr(39), ' ')) LIKE ?
-                ORDER BY LENGTH(title) ASC
-                LIMIT ?
-            """, (f"%{q_norm}%", limit * 2))
-            rows_fuzzy = cursor.fetchall()
-            conn.close()
-
-            seen_ids = set()
-            for row in rows_direct + rows_fuzzy:
-                if row[0] in seen_ids: continue
-                seen_ids.add(row[0])
-                title = row[1]
-                display = _localized_title_cache.get(title, title)
-                results.append({
-                    "movie_id":      row[0],
-                    "title":         title,
-                    "display_title": display or title,
-                })
-                if len(results) >= limit: break
-        else:
-            conn.close()
+        from core.tmdb_cache import cache_get, cache_set
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
     except Exception:
-        pass
+        cache_get = None
+        cache_set = None
 
-    # 2. Fallback TMDb se DB non disponibile o pochi risultati
-    if len(results) < 3 and TMDB_API_KEY:
+    # ── 1. TMDb search ─────────────────────────────────────────────────
+    # Default sort di TMDb è già un mix rilevanza+popolarità.
+    # Chiediamo i primi 20 risultati per avere materia per il ranking custom.
+    tmdb_results = []
+    if TMDB_API_KEY:
         try:
             r = requests.get(
                 "https://api.themoviedb.org/3/search/movie",
-                params={"api_key": TMDB_API_KEY, "query": query, "language": "it-IT"},
+                params={
+                    "api_key": TMDB_API_KEY,
+                    "query": query,
+                    "language": "it-IT",
+                    "include_adult": "false",
+                },
                 timeout=4
             )
-            seen_titles = {res["title"].lower() for res in results}
-            for item in r.json().get("results", [])[:limit]:
-                t = item.get("title") or item.get("original_title","")
-                if not t or t.lower() in seen_titles: continue
-                seen_titles.add(t.lower())
-                results.append({
+            for item in r.json().get("results", [])[:20]:
+                t_it   = (item.get("title") or "").strip()
+                t_orig = (item.get("original_title") or "").strip()
+                if not t_it and not t_orig:
+                    continue
+
+                display = t_it or t_orig
+                base    = t_orig or t_it
+
+                pop = float(item.get("popularity") or 0)
+                vc  = int(item.get("vote_count") or 0)
+
+                # Filtro qualità minima: scarta titoli con ZERO voti
+                # (sono spesso schede placeholder / film sconosciuti)
+                if vc < 1:
+                    continue
+
+                tmdb_results.append({
                     "movie_id":      item.get("id"),
-                    "title":         item.get("original_title") or t,
-                    "display_title": t,
+                    "tmdb_id":       item.get("id"),
+                    "title":         base,
+                    "display_title": display,
+                    "_popularity":   pop,
+                    "_vote_count":   vc,
                 })
-                if len(results) >= limit: break
         except Exception:
             pass
 
-    return results[:limit]
+    # ── 2. DB locale (fallback / complemento) ─────────────────────────
+    db_results = []
+    if len(tmdb_results) < limit:  # solo se TMDb non ne ha trovati abbastanza
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='titles'")
+            if cursor.fetchone():
+                cursor.execute("""
+                    SELECT movielens_movie_id, title
+                    FROM titles
+                    WHERE LOWER(title) LIKE LOWER(?)
+                    ORDER BY LENGTH(title) ASC
+                    LIMIT ?
+                """, (f"%{query}%", limit * 2))
+                rows = cursor.fetchall()
+                conn.close()
+
+                # Evita di duplicare titoli già in tmdb_results
+                tmdb_titles_lower = {r["title"].lower() for r in tmdb_results}
+                tmdb_titles_lower |= {r["display_title"].lower() for r in tmdb_results}
+                for row in rows:
+                    title = row[1]
+                    if title.lower() in tmdb_titles_lower:
+                        continue
+                    display = _localized_title_cache.get(title, title)
+                    db_results.append({
+                        "movie_id":      row[0],
+                        "tmdb_id":       None,  # DB locale non ha tmdb_id
+                        "title":         title,
+                        "display_title": display or title,
+                        "_popularity":   0,
+                        "_vote_count":   0,
+                    })
+            else:
+                conn.close()
+        except Exception:
+            pass
+
+    # ── 3. Ranking custom: combina match qualitá + popolaritá ──────────
+    def score(item):
+        title_l = (item.get("title") or "").lower()
+        disp_l  = (item.get("display_title") or "").lower()
+
+        s = 0
+        # Match esatto: super boost (utente ha digitato il titolo intero)
+        if title_l == q_lower or disp_l == q_lower:
+            s += 10000
+        # StartsWith: boost grande (es. "house" → "House M.D.")
+        elif title_l.startswith(q_lower) or disp_l.startswith(q_lower):
+            s += 5000
+        # Word-startsWith: una parola del titolo inizia col query
+        elif any(w.startswith(q_lower) for w in title_l.split()) or \
+             any(w.startswith(q_lower) for w in disp_l.split()):
+            s += 2000
+        # Contains: match generico
+        elif q_lower in title_l or q_lower in disp_l:
+            s += 500
+
+        # Tie-breaker: popolarità (in scala log per non dominare)
+        pop = item.get("_popularity", 0)
+        if pop > 0:
+            import math
+            s += math.log10(pop + 1) * 100  # 100 popularity → +200, 10 → +100
+
+        # Boost piccolo per titoli con molti voti (segno di "vero film famoso")
+        vc = item.get("_vote_count", 0)
+        if vc >= 1000:
+            s += 50
+        elif vc >= 100:
+            s += 20
+
+        return s
+
+    combined = tmdb_results + db_results
+    combined.sort(key=score, reverse=True)
+
+    # Pulisci campi interni prima di restituire
+    cleaned = []
+    seen = set()
+    for item in combined:
+        # Dedup finale per titolo (case-insensitive)
+        key = (item.get("display_title") or item.get("title", "")).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append({
+            "movie_id":      item.get("movie_id"),
+            "tmdb_id":       item.get("tmdb_id"),
+            "title":         item.get("title"),
+            "display_title": item.get("display_title"),
+        })
+        if len(cleaned) >= limit:
+            break
+
+    # Cache risultato (24h: popolarità non cambia in fretta)
+    if cache_set:
+        try:
+            cache_set(cache_key, cleaned, ttl=24 * 60 * 60)
+        except Exception:
+            pass
+
+    return cleaned
 
 
 def search_tv_fast(query: str, limit: int = 8) -> list:

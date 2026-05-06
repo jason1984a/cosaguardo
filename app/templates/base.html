@@ -1472,8 +1472,9 @@
                 var rawTitle     = it.title || '';
                 var kind = it._kind === 'tv' ? 'tv' : 'movie';
                 var label = kind === 'tv' ? 'SERIE TV' : 'FILM';
-                // TV: id già pronto. Movie: serve risoluzione via /tmdb-id
-                var directId = (kind === 'tv') ? (it.id || it.tv_id || '') : '';
+                // TV: campo "id" è tmdb. Movie: campo "tmdb_id" (potrebbe essere null se solo DB locale).
+                var directId = (kind === 'tv') ? (it.id || it.tv_id || '')
+                                               : (it.tmdb_id || '');
                 return '<a class="qs-result" ' +
                        'data-kind="' + kind + '" ' +
                        'data-title="' + escHtml(rawTitle) + '" ' +
@@ -1498,11 +1499,14 @@
             el.style.opacity = '0.5';
             el.style.pointerEvents = 'none';
 
-            if (kind === 'tv' && directId) {
-                window.location.href = '/serie/' + encodeURIComponent(directId);
+            // Se abbiamo gia il tmdb_id, naviga direttamente (no round-trip extra)
+            if (directId) {
+                var path = (kind === 'tv') ? '/serie/' : '/film/';
+                window.location.href = path + encodeURIComponent(directId);
                 return;
             }
-            // Movie → risolvi tmdb_id via endpoint server
+            // Fallback: tmdb_id non disponibile (titolo da DB locale MovieLens senza match TMDb).
+            // Risolvi via endpoint server.
             fetch('/tmdb-id?title=' + encodeURIComponent(title) + '&content_type=' + kind)
                 .then(function(r) { return r.ok ? r.json() : { tmdb_id: null }; })
                 .then(function(data) {
@@ -1510,7 +1514,6 @@
                         var path = (kind === 'tv') ? '/serie/' : '/film/';
                         window.location.href = path + encodeURIComponent(data.tmdb_id);
                     } else {
-                        // Fallback: nessun TMDb ID trovato → mostra messaggio
                         el.style.opacity = '1';
                         el.style.pointerEvents = '';
                         el.querySelector('.qs-result-title').textContent =

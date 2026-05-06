@@ -1076,6 +1076,7 @@ def search_tv_series(query: str, limit: int = 8):
     - Cache server-side (prima call ~200ms, successive <1ms)
     - Fuzzy matching: normalizza trattini/apostrofi
     - Titoli italiani quando disponibili
+    - Ranking: match esatto/startsWith → popolarità (titoli famosi prima)
     """
     query = query.strip()
     if not query or not TMDB_API_KEY:
@@ -1109,13 +1110,53 @@ def search_tv_series(query: str, limit: int = 8):
         seen_ids = {r.get("id") for r in raw}
         raw += [r for r in raw2 if r.get("id") not in seen_ids]
 
+    q_lower = query.lower()
+
+    # ── Ranking custom: match qualità + popolarità ──
+    # TMDb ordina già per rilevanza, ma "House" può tirare prima un docu-reality
+    # del 2010 piuttosto che "House M.D.". Risolviamo con scoring esplicito.
+    def score(item):
+        it_name   = (item.get("name") or "").lower()
+        orig_name = (item.get("original_name") or "").lower()
+        s = 0
+        if it_name == q_lower or orig_name == q_lower:
+            s += 10000
+        elif it_name.startswith(q_lower) or orig_name.startswith(q_lower):
+            s += 5000
+        elif any(w.startswith(q_lower) for w in it_name.split()) or \
+             any(w.startswith(q_lower) for w in orig_name.split()):
+            s += 2000
+        elif q_lower in it_name or q_lower in orig_name:
+            s += 500
+
+        # Tie-breaker popolarità (log scale, no domina su match qualità)
+        pop = float(item.get("popularity") or 0)
+        if pop > 0:
+            import math
+            s += math.log10(pop + 1) * 100
+
+        # Boost soft per serie con molti voti
+        vc = int(item.get("vote_count") or 0)
+        if vc >= 500:
+            s += 50
+        elif vc >= 50:
+            s += 20
+
+        return s
+
+    raw_sorted = sorted(raw, key=score, reverse=True)
+
     results = []
     seen_titles = set()
-    for item in raw[:limit * 2]:
+    for item in raw_sorted[:limit * 2]:
         it_name  = item.get("name","")        # titolo italiano (lingua richiesta)
         orig_name = item.get("original_name","")
 
         if not it_name and not orig_name:
+            continue
+
+        # Filtro qualità minima (scarta scheduri placeholder)
+        if int(item.get("vote_count") or 0) < 1:
             continue
 
         # Usa il titolo italiano se diverso dall'originale, altrimenti originale
