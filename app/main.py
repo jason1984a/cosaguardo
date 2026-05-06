@@ -1807,16 +1807,19 @@ def admin_db_cache_stats(request: Request):
 def admin_db_cache_trim(request: Request, keep: int = 30000):
     """
     Trim manuale: cancella entry più vecchie finché ne restano solo `keep`.
+    Esegue DELETE a batch da 5000 righe per evitare timeout SQLite.
     Esempio: /admin/db-cache-trim?keep=20000
+
+    Se la risposta ha "partial": true, rilancia la stessa URL per continuare.
     """
     if not _check_admin(request):
         return RedirectResponse(url="/admin", status_code=302)
     if keep < 1000 or keep > 100000:
         return {"error": "keep deve essere tra 1000 e 100000"}
     from core.tmdb_cache import cache_db_trim_to, cache_db_count_and_size
-    deleted = cache_db_trim_to(keep)
+    trim_result = cache_db_trim_to(keep)
     after = cache_db_count_and_size()
-    return {"status": "ok", "deleted": deleted, "after": after}
+    return {"status": "ok", "trim": trim_result, "after": after}
 
 
 @app.get("/admin/flush-cache")

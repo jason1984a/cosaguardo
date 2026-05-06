@@ -197,34 +197,83 @@ def cache_db_count_and_size() -> dict:
         return {"error": str(e)}
 
 
-def cache_db_trim_to(keep: int) -> int:
-    """Forza trim manuale: tieni solo le `keep` entry con expires_at più alto.
-    Restituisce -1 se errore, altrimenti il numero di righe eliminate."""
+def cache_db_trim_to(keep: int, batch_size: int = 5000, max_batches: int = 60) -> dict:
+    """
+    Forza trim manuale: tieni solo le `keep` entry con expires_at più alto.
+    Esegue DELETE a batch (default 5000 righe per volta) per evitare timeout
+    SQLite e journal enormi su disk-full.
+
+    Restituisce dict con: deleted (int), batches (int), final_count (int),
+                          partial (bool — True se ha esaurito max_batches).
+    """
     _ensure_db()
+    total_deleted = 0
+    batches_run = 0
+    partial = False
+    last_error = None
+
     try:
-        conn = sqlite3.connect(CACHE_DB_PATH, timeout=10)
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM tmdb_cache")
-        count = cur.fetchone()[0]
-        if count <= keep:
+        for _ in range(max_batches):
+            try:
+                conn = sqlite3.connect(CACHE_DB_PATH, timeout=15)
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM tmdb_cache")
+                count = cur.fetchone()[0]
+                if count <= keep:
+                    conn.close()
+                    break
+                # Quante righe cancellare in questo batch
+                excess = count - keep
+                this_batch = min(batch_size, excess)
+                cur.execute(
+                    """DELETE FROM tmdb_cache
+                       WHERE rowid IN (
+                         SELECT rowid FROM tmdb_cache
+                         ORDER BY expires_at ASC
+                         LIMIT ?
+                       )""",
+                    (this_batch,)
+                )
+                deleted = cur.rowcount
+                conn.commit()
+                conn.close()
+                total_deleted += deleted
+                batches_run += 1
+                if deleted == 0:
+                    # Sicurezza: se per qualche motivo non cancella nulla, esci
+                    break
+            except Exception as e:
+                last_error = str(e)
+                # Salva quello che abbiamo già fatto e prova ancora una volta;
+                # se fallisce di nuovo, esci (lo segnaliamo come partial)
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                break
+        else:
+            # for-else: max_batches esaurito senza break → ancora roba da pulire
+            partial = True
+
+        # Conta finale
+        try:
+            conn = sqlite3.connect(CACHE_DB_PATH, timeout=5)
+            final_count = conn.execute("SELECT COUNT(*) FROM tmdb_cache").fetchone()[0]
             conn.close()
-            return 0
-        cur.execute(
-            """DELETE FROM tmdb_cache
-               WHERE rowid IN (
-                 SELECT rowid FROM tmdb_cache
-                 ORDER BY expires_at ASC
-                 LIMIT ?
-               )""",
-            (count - keep,)
-        )
-        deleted = cur.rowcount
-        conn.commit()
-        conn.close()
-        return deleted
+        except Exception:
+            final_count = -1
+
+        result = {
+            "deleted": total_deleted,
+            "batches": batches_run,
+            "final_count": final_count,
+            "partial": partial,
+        }
+        if last_error:
+            result["last_error"] = last_error
+        return result
     except Exception as e:
-        print(f"[cache] manual trim ERROR: {e}")
-        return -1
+        return {"deleted": total_deleted, "batches": batches_run, "error": str(e)}
 
 
 # ─── API pubblica ────────────────────────────────────────────────────────
