@@ -414,6 +414,17 @@ def cinema_news():
         "upcoming":    cinema.get("upcoming") or [],
     }
 
+@app.get("/home-platforms", response_class=JSONResponse)
+def home_platforms():
+    """
+    Striscia loghi piattaforme streaming per la home.
+    10 provider TMDb principali per il pubblico italiano.
+    Cache server-side 30 giorni (loghi cambiano raramente).
+    """
+    from core.recommendation_api import get_home_platforms
+    return get_home_platforms()
+
+
 @app.get("/home-picks", response_class=JSONResponse)
 def home_picks(request: Request):
     """

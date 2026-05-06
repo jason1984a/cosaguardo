@@ -14,18 +14,16 @@
         </div>
     </section>
 
-    {# Striscia piattaforme streaming: tile monogramma — segnale visivo
-       "qui dentro trovi i contenuti di tutte le piattaforme principali".
-       Niente click action: è puramente decorativo/informativo. #}
+    {# Striscia piattaforme streaming: loghi TMDb caricati via fetch async.
+       Decorativa per ora (no click); diventerà cliccabile quando aggiungeremo
+       la pagina filtro per piattaforma. #}
     <section class="platform-strip" aria-label="Piattaforme streaming supportate">
-        <div class="platform-strip-row">
-            <div class="platform-tile platform-netflix" title="Netflix">N</div>
-            <div class="platform-tile platform-prime"   title="Prime Video">P</div>
-            <div class="platform-tile platform-disney"  title="Disney+">D+</div>
-            <div class="platform-tile platform-now"     title="NOW">NOW</div>
-            <div class="platform-tile platform-apple"   title="Apple TV+"><span>tv+</span></div>
-            <div class="platform-tile platform-paramount" title="Paramount+">P+</div>
-            <div class="platform-tile platform-more"   title="E altre piattaforme">+</div>
+        <div class="platform-strip-row" id="platform-strip-row">
+            {# Skeleton: 8 placeholder che evitano CLS (Cumulative Layout Shift)
+               mentre i loghi reali arrivano. Sostituiti dal JS sotto. #}
+            {% for _ in range(8) %}
+            <div class="platform-tile platform-tile--skeleton"></div>
+            {% endfor %}
         </div>
     </section>
 
@@ -400,6 +398,48 @@ document.getElementById("recommend-form")?.addEventListener("submit", function(e
 });
 
 document.addEventListener("DOMContentLoaded", function () {
+    // ── Striscia piattaforme streaming ────────────────────────────────
+    // Carica loghi da TMDb via /home-platforms (server-cached 30gg).
+    // Se fallisce, lascia gli skeleton in piedi per qualche secondo e poi
+    // nasconde la sezione (no errori visibili).
+    (function loadPlatformStrip() {
+        const stripRow = document.getElementById("platform-strip-row");
+        if (!stripRow) return;
+
+        fetch("/home-platforms")
+            .then(r => r.ok ? r.json() : [])
+            .then(platforms => {
+                if (!Array.isArray(platforms) || !platforms.length) {
+                    // Fallback: nasconde la sezione invece di lasciare skeleton vuoti
+                    const section = stripRow.closest(".platform-strip");
+                    if (section) section.style.display = "none";
+                    return;
+                }
+                // Sostituisce skeleton con tile reali.
+                // Per ora decorative: <div title="...">. Click handler verrà aggiunto
+                // quando implementeremo la pagina filtro.
+                stripRow.innerHTML = platforms.map(p => `
+                    <div class="platform-tile" title="${escapeAttr(p.name || '')}">
+                        <img src="${escapeAttr(p.logo_url)}"
+                             alt="${escapeAttr(p.name || '')}"
+                             loading="lazy" decoding="async"
+                             onerror="this.parentElement.style.display='none'">
+                    </div>
+                `).join("");
+            })
+            .catch(() => {
+                const section = stripRow.closest(".platform-strip");
+                if (section) section.style.display = "none";
+            });
+
+        // Helper inline (non polluiamo lo scope globale)
+        function escapeAttr(s) {
+            return String(s || "").replace(/[&<>"']/g, c =>
+                ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]
+            );
+        }
+    })();
+
     // ── Nav fascia principale "I più apprezzati" ────────────────────────────
     const row      = document.getElementById("hero-trending-row");
     const leftBtn  = document.querySelector(".trend-nav-left-main");

@@ -2536,3 +2536,81 @@ def get_watch_providers(title: str, content_type: str = "movie", country: str = 
 
     except Exception:
         return {}
+
+
+# ─── Home platform strip ──────────────────────────────────────────────────
+# Lista hardcoded dei provider_id TMDb per le piattaforme principali italiane.
+# Sono ID stabili (cambiano molto raramente), ma se TMDb dovesse rinominare
+# qualcosa la chiamata fallback e mostriamo solo quelli che TMDb ci ritorna.
+HOME_PLATFORM_IDS = [
+    8,    # Netflix
+    119,  # Amazon Prime Video
+    337,  # Disney+
+    39,   # NOW
+    350,  # Apple TV+
+    531,  # Paramount+
+    261,  # RaiPlay
+    484,  # Mediaset Infinity
+    29,   # Sky Go
+    283,  # Crunchyroll
+]
+
+def get_home_platforms() -> list[dict]:
+    """
+    Ritorna i 10 provider streaming principali con loghi TMDb.
+    Cache 30 giorni (loghi cambiano raramente).
+
+    Output: [{provider_id, name, logo_url}, ...]
+    Ordine: HOME_PLATFORM_IDS (manualmente curato per rilevanza IT).
+    Se TMDb non risponde o non ha un provider, viene saltato.
+    """
+    cache_key = "home:platforms:v1:IT:movie"
+    try:
+        from core.tmdb_cache import cache_get, cache_set
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+    except Exception:
+        cache_get = None
+        cache_set = None
+
+    if not TMDB_API_KEY:
+        return []
+
+    # Recupera lista completa provider movie + tv per la regione IT.
+    # Movie copre la maggior parte; TV usato come merge per provider mancanti.
+    by_id = {}
+
+    for endpoint in ("movie", "tv"):
+        try:
+            r = requests.get(
+                f"https://api.themoviedb.org/3/watch/providers/{endpoint}",
+                params={
+                    "api_key": TMDB_API_KEY,
+                    "language": "it-IT",
+                    "watch_region": "IT",
+                },
+                timeout=5,
+            )
+            for p in (r.json().get("results") or []):
+                pid = p.get("provider_id")
+                if pid in HOME_PLATFORM_IDS and pid not in by_id:
+                    by_id[pid] = {
+                        "provider_id": pid,
+                        "name":        p.get("provider_name") or "",
+                        "logo_url":    f"https://image.tmdb.org/t/p/original{p.get('logo_path','')}"
+                                       if p.get("logo_path") else "",
+                    }
+        except Exception:
+            continue
+
+    # Ordina secondo HOME_PLATFORM_IDS (manualmente curato), salta mancanti
+    ordered = [by_id[pid] for pid in HOME_PLATFORM_IDS if pid in by_id and by_id[pid]["logo_url"]]
+
+    if cache_set and ordered:
+        try:
+            cache_set(cache_key, ordered, ttl=30 * 24 * 60 * 60)  # 30gg
+        except Exception:
+            pass
+
+    return ordered
