@@ -164,6 +164,19 @@ async def anti_scanner(request: Request, call_next):
     return await call_next(request)
 
 
+# ─── Cache-Control middleware per asset statici ─────────────────────────
+# Browser cacha 1 anno gli asset sotto /static (CSS, JS, immagini, icone).
+# I template usano cache-busting via querystring (?v=6) per forzare reload
+# quando un file cambia: /static/css/style.css?v=7 è una URL diversa, refetch garantito.
+# "immutable" dice al browser: non revalidare mai con If-Modified-Since (zero round-trip).
+@app.middleware("http")
+async def static_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    return response
+
+
 # ─── Perf logging middleware ────────────────────────────────────────────
 # Logga durata e status di ogni request. Filtrabile su Render Logs con grep "[perf]".
 # Format: [perf] METHOD /route status=200 dur=123ms ua=browser
