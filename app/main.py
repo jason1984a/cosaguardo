@@ -1822,6 +1822,22 @@ def admin_db_cache_trim(request: Request, keep: int = 30000):
     return {"status": "ok", "trim": trim_result, "after": after}
 
 
+@app.get("/admin/db-vacuum")
+def admin_db_vacuum(request: Request):
+    """
+    Esegue VACUUM sul DB SQLite per recuperare spazio fisico post-trim.
+    Operazione bloccante: il sito può rispondere lentamente per 30-90 secondi.
+    Lancia in momenti di basso traffico.
+
+    Richiede ~1× la dimensione attuale del DB libera sul disco.
+    Verificalo prima con: /admin/db-cache-stats e Render Disk metrics.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+    from core.tmdb_cache import db_vacuum
+    return db_vacuum()
+
+
 @app.get("/admin/flush-cache")
 def admin_flush_cache(request: Request):
     """Svuota tutte le cache in-memory. Solo admin loggato."""

@@ -58,7 +58,8 @@ _db_init_lock = threading.Lock()
 
 
 def _ensure_db():
-    """Crea la tabella tmdb_cache se non esiste. Idempotente."""
+    """Crea la tabella tmdb_cache se non esiste. Idempotente.
+    Imposta anche WAL mode (persistente nel file)."""
     global _db_init_done
     if _db_init_done:
         return
@@ -67,6 +68,13 @@ def _ensure_db():
             return
         try:
             conn = sqlite3.connect(CACHE_DB_PATH, timeout=5)
+            # WAL mode + busy_timeout — vedi commento in app/db.py:get_connection
+            try:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.execute("PRAGMA busy_timeout=5000")
+            except Exception:
+                pass
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS tmdb_cache (
                     cache_key   TEXT PRIMARY KEY,
@@ -345,3 +353,54 @@ def cache_stats() -> dict:
     with _mem_lock:
         mem_count = len(_mem_cache)
     return {"memory": mem_count, "db": db_count}
+
+
+def db_vacuum() -> dict:
+    """
+    Esegue VACUUM sul DB SQLite. Recupera spazio fisico delle pagine libere
+    interne (post-trim/post-delete). Operazione bloccante: tiene un write lock
+    per tutta la durata.
+
+    NOTA: VACUUM richiede temporaneamente fino a ~1× la dimensione del DB di
+    spazio libero su disco (scrive una copia pulita prima di rimpiazzare).
+    Su Render Starter con disco a 2GB e DB ~958MB → margine sufficiente.
+
+    Restituisce dict con: status, size_before_mb, size_after_mb, duration_sec,
+                          eventuale error.
+    """
+    import os
+    _ensure_db()
+    try:
+        size_before = os.path.getsize(CACHE_DB_PATH)
+    except Exception:
+        size_before = -1
+
+    t0 = time.time()
+    try:
+        # timeout alto: VACUUM su DB grossi può richiedere minuti
+        conn = sqlite3.connect(CACHE_DB_PATH, timeout=120, isolation_level=None)
+        # isolation_level=None → autocommit, necessario perché VACUUM non può
+        # girare dentro una transazione esplicita
+        conn.execute("VACUUM")
+        conn.close()
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "size_before_mb": round(size_before / 1024 / 1024, 1) if size_before > 0 else None,
+        }
+
+    duration = round(time.time() - t0, 1)
+    try:
+        size_after = os.path.getsize(CACHE_DB_PATH)
+    except Exception:
+        size_after = -1
+
+    return {
+        "status": "ok",
+        "size_before_mb": round(size_before / 1024 / 1024, 1) if size_before > 0 else None,
+        "size_after_mb": round(size_after / 1024 / 1024, 1) if size_after > 0 else None,
+        "freed_mb": round((size_before - size_after) / 1024 / 1024, 1) if (size_before > 0 and size_after > 0) else None,
+        "duration_sec": duration,
+    }
+

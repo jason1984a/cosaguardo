@@ -103,8 +103,17 @@ def save_daily_recommendations(user_id, rec_date, recommendations):
     conn.close()
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=10)
     conn.row_factory = sqlite3.Row
+    # WAL mode: permette letture concorrenti senza bloccare scritture.
+    # Risolve i "database is locked" da shell esterne e durante operazioni admin.
+    # Idempotente: SQLite memorizza il journal_mode nel file, basta settarlo una volta.
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA synchronous=NORMAL")  # leggermente più veloce di FULL, sicuro su WAL
+        conn.execute("PRAGMA busy_timeout=5000")    # se locked, attende fino a 5s prima di errore
+    except Exception:
+        pass  # se PRAGMA fallisce, continua col default — mai rompere la connessione
     return conn
 
 
