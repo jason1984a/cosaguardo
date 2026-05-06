@@ -645,6 +645,9 @@
 
     {# Preconnect anticipa DNS+TLS handshake per unpkg.com (Lucide icons) #}
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    {# Preconnect a YouTube: anticipa DNS quando l'utente cliccherà play sul trailer (facade pattern) #}
+    <link rel="preconnect" href="https://www.youtube.com">
+    <link rel="preconnect" href="https://i.ytimg.com">
     {# Lucide pinnato a versione fissa: cache stabile + zero rischio breaking changes su @latest #}
     {# defer: lo script scarica in parallelo al parsing HTML, esegue prima di DOMContentLoaded #}
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js" defer></script>
