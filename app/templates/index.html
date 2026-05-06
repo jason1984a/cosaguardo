@@ -3,7 +3,7 @@
 {% block title %}CosaGuardo{% endblock %}
 
 {% block head_extra %}
-<link rel="stylesheet" href="/static/css/style.css">
+{# style.css è già caricato da base.html con ?v=7 — evitato doppio load #}
 {% endblock %}
 
 {% block content %}
@@ -332,6 +332,7 @@ function updatePlaceholders(type) {
 // Reset bottone se la pagina viene ripristinata da bfcache (es. tasto Indietro browser)
 window.addEventListener("pageshow", function(e) {
     if (e.persisted) {
+        // 1. Reset stato bottone submit
         const btn     = document.getElementById("submit-btn");
         const btnText = btn?.querySelector(".btn-text");
         const btnLoad = btn?.querySelector(".btn-loading");
@@ -341,6 +342,28 @@ window.addEventListener("pageshow", function(e) {
             if (btnText) btnText.style.display = "";
             if (btnLoad) btnLoad.style.display = "none";
         }
+
+        // 2. Fix "card vuota" su mobile dopo back-navigation:
+        //    bfcache ripristina la home alla posizione precedente (es. scroll
+        //    sulla card cliccata) ma a volte le immagini lazy non si re-triggerano.
+        //    Forziamo: scroll a inizio + ricreazione icone + nudge lazy-load.
+        try {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+        } catch(_) { window.scrollTo(0, 0); }
+
+        // Re-render icone Lucide (defer + bfcache a volte le perde)
+        if (window.lucide && typeof lucide.createIcons === 'function') {
+            lucide.createIcons();
+        }
+
+        // Nudge lazy-loaded images: se hanno src ma sono "vuote", forza reload
+        document.querySelectorAll('img[loading="lazy"]').forEach(function(img) {
+            if (img.src && !img.complete) {
+                var s = img.src;
+                img.src = '';
+                img.src = s;
+            }
+        });
     }
 });
 
@@ -372,13 +395,11 @@ document.addEventListener("DOMContentLoaded", function () {
         rightBtn.addEventListener("click", () => row.scrollBy({ left:  440, behavior: "smooth" }));
     }
 
-    // Click su card "più apprezzati" → apre modal cinema (stesso già usato da cinema strips)
-    document.querySelectorAll(".trend-mini-card--hot").forEach(card => {
-        card.style.cursor = "pointer";
-        card.addEventListener("click", () => {
-            if (typeof openCinemaModal === "function") openCinemaModal(card);
-        });
-    });
+    // NOTA: le card .trend-mini-card--hot sono <a href="/film/{id}" o "/serie/{id}">,
+    // navigano direttamente. NON aggiungere click handler qui — un vecchio handler
+    // chiamava openCinemaModal su questi link causando: doppio tap su mobile (hover
+    // sticky), modal "Nessuna descrizione" (data-cinema-* mai popolati), back button
+    // confuso (nav avvenuta in background).
     // ────────────────────────────────────────────────────────────────────────
 
     const extraTitles = document.getElementById("extra-titles");

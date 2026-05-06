@@ -191,6 +191,154 @@
             border-color: rgba(110,168,254,0.5);
         }
 
+        /* ── QUICK SEARCH (lente nell'header) ─────────────────────────── */
+        .qs-trigger {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--muted);
+            cursor: pointer;
+            margin-right: 4px;
+            transition: 0.2s ease;
+        }
+        .qs-trigger:hover {
+            background: rgba(255,255,255,0.06);
+            color: var(--text);
+        }
+        .qs-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(8,12,28,0.85);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: none;
+            padding: 70px 16px 16px;
+            overflow-y: auto;
+        }
+        .qs-overlay.is-open { display: block; }
+        .qs-panel {
+            max-width: 640px;
+            margin: 0 auto;
+        }
+        .qs-input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .qs-input {
+            width: 100%;
+            padding: 16px 48px 16px 48px;
+            font-size: 1rem;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,0.18);
+            background: rgba(20,28,52,0.92);
+            color: var(--text);
+            outline: none;
+        }
+        .qs-input:focus {
+            border-color: rgba(110,168,254,0.6);
+            box-shadow: 0 0 0 3px rgba(110,168,254,0.15);
+        }
+        .qs-input-icon {
+            position: absolute;
+            left: 16px;
+            color: var(--muted);
+            pointer-events: none;
+            display: inline-flex;
+        }
+        .qs-input-close {
+            position: absolute;
+            right: 8px;
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            display: inline-flex;
+        }
+        .qs-input-close:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+        .qs-tabs {
+            display: flex;
+            gap: 6px;
+            margin: 14px 0 8px;
+        }
+        .qs-tab {
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid rgba(255,255,255,0.08);
+            color: var(--muted);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.15s ease;
+        }
+        .qs-tab.is-active {
+            background: rgba(110,168,254,0.18);
+            border-color: rgba(110,168,254,0.45);
+            color: #cfe2ff;
+        }
+        .qs-results {
+            margin-top: 8px;
+            background: rgba(20,28,52,0.92);
+            border: 1px solid rgba(255,255,255,0.08);
+            border-radius: 14px;
+            overflow: hidden;
+            max-height: 60vh;
+            overflow-y: auto;
+        }
+        .qs-results:empty { display: none; }
+        .qs-result {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            color: var(--text);
+            text-decoration: none;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .qs-result:last-child { border-bottom: none; }
+        .qs-result:hover, .qs-result.is-focus {
+            background: rgba(110,168,254,0.10);
+        }
+        .qs-result-type {
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            white-space: nowrap;
+        }
+        .qs-result-type.movie { background: rgba(147,197,253,0.18); color: #93c5fd; }
+        .qs-result-type.tv    { background: rgba(196,181,253,0.18); color: #c4b5fd; }
+        .qs-result-title {
+            flex: 1;
+            font-size: 0.95rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .qs-empty {
+            padding: 18px 14px;
+            color: var(--muted);
+            font-size: 0.9rem;
+            text-align: center;
+        }
+        .qs-loading {
+            padding: 18px;
+            text-align: center;
+            color: var(--muted);
+            font-size: 0.85rem;
+        }
+
         /* Footer links */
         .footer-links {
             display: flex;
@@ -638,7 +786,7 @@
         }
     </style>
 
-    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=6">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=8">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='favicon.ico') }}">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='icon.svg') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', path='apple-touch-icon.png') }}">
@@ -680,6 +828,9 @@
 
                 <nav class="nav">
                     <div class="nav-links">
+                        <button type="button" class="qs-trigger" id="qs-trigger" aria-label="Cerca film o serie TV">
+                            <i data-lucide="search" style="width:18px;height:18px;stroke:currentColor;stroke-width:2;"></i>
+                        </button>
                         <a href="/" class="nav-link-item" aria-label="Home">
                             <span class="nav-icon"><i data-lucide="home" style="width:18px;height:18px;stroke:currentColor;stroke-width:1.75;"></i></span>
                             <span class="nav-text">Home</span>
@@ -1167,5 +1318,192 @@
         };
     })();
     </script>
+
+    <!-- ═══ QUICK SEARCH OVERLAY ═══════════════════════════════════════════
+         Lente nell'header → cerca film/serie e naviga diretto a /film/{id} o /serie/{id} -->
+    <div class="qs-overlay" id="qs-overlay" role="dialog" aria-label="Ricerca rapida" aria-hidden="true">
+        <div class="qs-panel">
+            <div class="qs-input-wrap">
+                <span class="qs-input-icon">
+                    <i data-lucide="search" style="width:20px;height:20px;stroke:currentColor;stroke-width:2;"></i>
+                </span>
+                <input type="text" id="qs-input" class="qs-input"
+                       placeholder="Cerca un film o una serie TV…"
+                       autocomplete="off" autocapitalize="off" spellcheck="false">
+                <button type="button" class="qs-input-close" id="qs-close" aria-label="Chiudi ricerca">
+                    <i data-lucide="x" style="width:18px;height:18px;stroke:currentColor;stroke-width:2;"></i>
+                </button>
+            </div>
+            <div class="qs-tabs" role="tablist">
+                <button type="button" class="qs-tab is-active" data-qs-tab="all"   role="tab">Tutti</button>
+                <button type="button" class="qs-tab"            data-qs-tab="movie" role="tab">Film</button>
+                <button type="button" class="qs-tab"            data-qs-tab="tv"    role="tab">Serie TV</button>
+            </div>
+            <div class="qs-results" id="qs-results" role="listbox"></div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var trigger = document.getElementById('qs-trigger');
+        var overlay = document.getElementById('qs-overlay');
+        var input   = document.getElementById('qs-input');
+        var closeBtn= document.getElementById('qs-close');
+        var results = document.getElementById('qs-results');
+        var tabs    = document.querySelectorAll('.qs-tab');
+        if (!trigger || !overlay || !input) return;
+
+        var currentTab = 'all';
+        var debounceTimer = null;
+        var lastQuery = '';
+        var lastReqId = 0;
+
+        function openOverlay() {
+            overlay.classList.add('is-open');
+            overlay.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { input.focus(); }, 30);
+        }
+        function closeOverlay() {
+            overlay.classList.remove('is-open');
+            overlay.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            input.value = '';
+            results.innerHTML = '';
+            lastQuery = '';
+        }
+
+        trigger.addEventListener('click', openOverlay);
+        closeBtn.addEventListener('click', closeOverlay);
+        // Click sul backdrop (overlay esterno al panel) chiude
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) closeOverlay();
+        });
+        // ESC chiude
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && overlay.classList.contains('is-open')) closeOverlay();
+        });
+
+        // Tabs
+        tabs.forEach(function(t) {
+            t.addEventListener('click', function() {
+                tabs.forEach(function(x) { x.classList.remove('is-active'); });
+                t.classList.add('is-active');
+                currentTab = t.getAttribute('data-qs-tab');
+                if (input.value.trim().length >= 2) doSearch(input.value.trim());
+            });
+        });
+
+        input.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            var q = input.value.trim();
+            if (q.length < 2) {
+                results.innerHTML = '';
+                lastQuery = '';
+                return;
+            }
+            if (q === lastQuery) return;
+            debounceTimer = setTimeout(function() { doSearch(q); }, 180);
+        });
+
+        function doSearch(q) {
+            lastQuery = q;
+            var reqId = ++lastReqId;
+            results.innerHTML = '<div class="qs-loading">Cerco…</div>';
+
+            var fetches = [];
+            if (currentTab === 'all' || currentTab === 'movie') {
+                fetches.push(
+                    fetch('/search-fast?q=' + encodeURIComponent(q) + '&content_type=movie')
+                        .then(function(r) { return r.ok ? r.json() : []; })
+                        .then(function(arr) { return arr.map(function(x) { x._kind = 'movie'; return x; }); })
+                        .catch(function() { return []; })
+                );
+            }
+            if (currentTab === 'all' || currentTab === 'tv') {
+                fetches.push(
+                    fetch('/search-fast?q=' + encodeURIComponent(q) + '&content_type=tv')
+                        .then(function(r) { return r.ok ? r.json() : []; })
+                        .then(function(arr) { return arr.map(function(x) { x._kind = 'tv'; return x; }); })
+                        .catch(function() { return []; })
+                );
+            }
+
+            Promise.all(fetches).then(function(arrs) {
+                if (reqId !== lastReqId) return;  // risposta vecchia, ignora
+                var merged = [].concat.apply([], arrs).slice(0, 12);
+                renderResults(merged, q);
+            });
+        }
+
+        function escHtml(s) {
+            return String(s || '').replace(/[&<>"']/g, function(c) {
+                return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+            });
+        }
+
+        function renderResults(items, query) {
+            if (!items || !items.length) {
+                results.innerHTML = '<div class="qs-empty">Nessun risultato per "' + escHtml(query) + '"</div>';
+                return;
+            }
+            var html = items.map(function(it) {
+                var displayTitle = it.display_title || it.title || '';
+                var rawTitle     = it.title || '';
+                var kind = it._kind === 'tv' ? 'tv' : 'movie';
+                var label = kind === 'tv' ? 'SERIE TV' : 'FILM';
+                // TV: id già pronto. Movie: serve risoluzione via /tmdb-id
+                var directId = (kind === 'tv') ? (it.id || it.tv_id || '') : '';
+                return '<a class="qs-result" ' +
+                       'data-kind="' + kind + '" ' +
+                       'data-title="' + escHtml(rawTitle) + '" ' +
+                       'data-direct-id="' + directId + '">' +
+                       '<span class="qs-result-type ' + kind + '">' + label + '</span>' +
+                       '<span class="qs-result-title">' + escHtml(displayTitle) + '</span>' +
+                       '</a>';
+            }).join('');
+            results.innerHTML = html;
+            results.querySelectorAll('.qs-result').forEach(function(el) {
+                el.addEventListener('click', onResultClick);
+            });
+        }
+
+        function onResultClick(e) {
+            e.preventDefault();
+            var el = e.currentTarget;
+            var kind = el.getAttribute('data-kind');
+            var directId = el.getAttribute('data-direct-id');
+            var title = el.getAttribute('data-title');
+            // Feedback visivo
+            el.style.opacity = '0.5';
+            el.style.pointerEvents = 'none';
+
+            if (kind === 'tv' && directId) {
+                window.location.href = '/serie/' + encodeURIComponent(directId);
+                return;
+            }
+            // Movie → risolvi tmdb_id via endpoint server
+            fetch('/tmdb-id?title=' + encodeURIComponent(title) + '&content_type=' + kind)
+                .then(function(r) { return r.ok ? r.json() : { tmdb_id: null }; })
+                .then(function(data) {
+                    if (data && data.tmdb_id) {
+                        var path = (kind === 'tv') ? '/serie/' : '/film/';
+                        window.location.href = path + encodeURIComponent(data.tmdb_id);
+                    } else {
+                        // Fallback: nessun TMDb ID trovato → mostra messaggio
+                        el.style.opacity = '1';
+                        el.style.pointerEvents = '';
+                        el.querySelector('.qs-result-title').textContent =
+                            'Impossibile aprire la scheda. Riprova.';
+                    }
+                })
+                .catch(function() {
+                    el.style.opacity = '1';
+                    el.style.pointerEvents = '';
+                });
+        }
+    })();
+    </script>
+
 </body>
 </html>

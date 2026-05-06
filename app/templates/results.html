@@ -3,7 +3,7 @@
 {% block title %}Risultati | CosaGuardo{% endblock %}
 
 {% block head_extra %}
-<link rel="stylesheet" href="/static/css/style.css">
+{# style.css è già caricato da base.html con ?v=7 — evitato doppio load #}
 <meta name="cg-content-type" content="{{ content_type }}">
 {% endblock %}
 
