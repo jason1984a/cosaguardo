@@ -136,6 +136,91 @@ def get_toprated_cached(limit: int = 10) -> list:
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SECRET_KEY", "cosaguardo-secret-key"))
+
+
+# ─── Perf logging middleware ────────────────────────────────────────────
+# Logga durata e status di ogni request. Filtrabile su Render Logs con grep "[perf]".
+# Format: [perf] METHOD /route status=200 dur=123ms ua=browser
+# Per disattivare: set env var PERF_LOG=0 (default = attivo)
+import time as _perf_time
+import threading as _perf_threading
+import re as _perf_re
+
+_PERF_LOG_ENABLED = os.environ.get("PERF_LOG", "1") != "0"
+_PERF_SLOW_MS = int(os.environ.get("PERF_SLOW_MS", "500"))  # marca [SLOW] sopra questa soglia
+# Path da non loggare (statici, healthcheck, ecc. — riducono rumore)
+_PERF_SKIP_PREFIXES = ("/static/", "/favicon", "/sw.js", "/manifest")
+
+# Accumulator in-memory per /admin/perf-stats — resetta al restart processo.
+# Per ogni "route pattern" (parametri normalizzati) tiene: count, total_ms,
+# max_ms, ultimo_status. Cap totale 200 pattern per evitare memory bloat.
+_PERF_STATS_MAX_PATTERNS = 200
+_perf_stats: dict = {}
+_perf_stats_lock = _perf_threading.Lock()
+
+
+def _perf_normalize_path(path: str) -> str:
+    """Sostituisce parametri variabili nei path per raggruppare statistiche.
+    /film/27205 → /film/{id}, /come/inception → /come/{slug}"""
+    # /film/{numero}, /serie/{numero}, /persona/{numero}
+    path = _perf_re.sub(r"^(/film|/serie|/persona)/\d+", r"\1/{id}", path)
+    # /come/{qualcosa}, /dove-vedere/{qualcosa} (non l'hub /dove-vedere/ stesso)
+    path = _perf_re.sub(r"^(/come|/dove-vedere)/[^/]+$", r"\1/{slug}", path)
+    return path
+
+
+def _perf_record(path: str, dur_ms: int, status, ua_kind: str) -> None:
+    norm = _perf_normalize_path(path)
+    with _perf_stats_lock:
+        if norm not in _perf_stats and len(_perf_stats) >= _PERF_STATS_MAX_PATTERNS:
+            return  # cap raggiunto, non aggiungiamo nuovi pattern
+        s = _perf_stats.setdefault(norm, {
+            "count": 0, "total_ms": 0, "max_ms": 0, "slow_count": 0,
+            "last_status": None, "bot_count": 0, "usr_count": 0,
+        })
+        s["count"] += 1
+        s["total_ms"] += dur_ms
+        if dur_ms > s["max_ms"]:
+            s["max_ms"] = dur_ms
+        if dur_ms >= _PERF_SLOW_MS:
+            s["slow_count"] += 1
+        s["last_status"] = status
+        if ua_kind == "bot":
+            s["bot_count"] += 1
+        else:
+            s["usr_count"] += 1
+
+
+@app.middleware("http")
+async def perf_logger(request: Request, call_next):
+    if not _PERF_LOG_ENABLED:
+        return await call_next(request)
+
+    path = request.url.path
+    if any(path.startswith(p) for p in _PERF_SKIP_PREFIXES):
+        return await call_next(request)
+
+    t0 = _perf_time.perf_counter()
+    status = "?"
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    except Exception:
+        status = "EXC"
+        raise
+    finally:
+        dur_ms = int((_perf_time.perf_counter() - t0) * 1000)
+        slow_marker = " [SLOW]" if dur_ms >= _PERF_SLOW_MS else ""
+        ua = (request.headers.get("user-agent") or "").lower()
+        ua_kind = "bot" if any(p in ua for p in ("bot", "crawler", "spider", "googlebot")) else "usr"
+        try:
+            _perf_record(path, dur_ms, status, ua_kind)
+        except Exception:
+            pass  # mai rompere la richiesta per il logger
+        print(f"[perf] {request.method} {path} status={status} dur={dur_ms}ms ua={ua_kind}{slow_marker}")
+
+
 init_db()
 
 app.mount(
@@ -1836,6 +1921,64 @@ def admin_db_vacuum(request: Request):
         return RedirectResponse(url="/admin", status_code=302)
     from core.tmdb_cache import db_vacuum
     return db_vacuum()
+
+
+@app.get("/admin/perf-stats")
+def admin_perf_stats(request: Request, sort: str = "avg"):
+    """
+    Riassunto performance per route pattern dall'avvio del processo.
+    Resetta a ogni restart Render. Ordinabile via ?sort=avg|max|count|slow.
+
+    Esempio: /admin/perf-stats?sort=avg → route più lente in media (target principale)
+             /admin/perf-stats?sort=slow → route che superano più spesso 500ms
+             /admin/perf-stats?sort=count → route più chiamate
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    with _perf_stats_lock:
+        snapshot = {k: dict(v) for k, v in _perf_stats.items()}
+
+    rows = []
+    for route, s in snapshot.items():
+        avg = s["total_ms"] / s["count"] if s["count"] else 0
+        rows.append({
+            "route": route,
+            "count": s["count"],
+            "avg_ms": round(avg, 1),
+            "max_ms": s["max_ms"],
+            "slow_count": s["slow_count"],
+            "slow_pct": round(100 * s["slow_count"] / s["count"], 1) if s["count"] else 0,
+            "bot": s["bot_count"],
+            "usr": s["usr_count"],
+            "last_status": s["last_status"],
+        })
+
+    sort_keys = {
+        "avg":   lambda r: -r["avg_ms"],
+        "max":   lambda r: -r["max_ms"],
+        "count": lambda r: -r["count"],
+        "slow":  lambda r: -r["slow_count"],
+    }
+    rows.sort(key=sort_keys.get(sort, sort_keys["avg"]))
+
+    return {
+        "slow_threshold_ms": _PERF_SLOW_MS,
+        "patterns_tracked": len(rows),
+        "sorted_by": sort,
+        "routes": rows,
+    }
+
+
+@app.get("/admin/perf-reset")
+def admin_perf_reset(request: Request):
+    """Resetta i contatori perf-stats. Utile per fare misure pulite di una sessione."""
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+    with _perf_stats_lock:
+        cleared = len(_perf_stats)
+        _perf_stats.clear()
+    return {"status": "ok", "cleared_patterns": cleared}
 
 
 @app.get("/admin/flush-cache")
