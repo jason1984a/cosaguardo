@@ -1451,7 +1451,13 @@
 
             Promise.all(fetches).then(function(arrs) {
                 if (reqId !== lastReqId) return;  // risposta vecchia, ignora
-                var merged = [].concat.apply([], arrs).slice(0, 12);
+                var merged = [].concat.apply([], arrs);
+                // Riordina per _score discendente: film e serie si mescolano
+                // in base a popolarità+match (no più "tutti film, poi tutte serie").
+                merged.sort(function(a, b) {
+                    return (b._score || 0) - (a._score || 0);
+                });
+                merged = merged.slice(0, 12);
                 renderResults(merged, q);
             });
         }

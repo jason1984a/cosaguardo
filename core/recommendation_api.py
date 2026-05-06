@@ -1887,12 +1887,15 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
         return s
 
     combined = tmdb_results + db_results
-    combined.sort(key=score, reverse=True)
+    # Calcola score una volta sola e tieni traccia (servirà per merge client-side
+    # quando la lente unisce risultati film+TV)
+    scored = [(item, score(item)) for item in combined]
+    scored.sort(key=lambda x: -x[1])
 
     # Pulisci campi interni prima di restituire
     cleaned = []
     seen = set()
-    for item in combined:
+    for item, s in scored:
         # Dedup finale per titolo (case-insensitive)
         key = (item.get("display_title") or item.get("title", "")).lower()
         if key in seen:
@@ -1903,6 +1906,7 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
             "tmdb_id":       item.get("tmdb_id"),
             "title":         item.get("title"),
             "display_title": item.get("display_title"),
+            "_score":        round(s, 1),  # esposto per merge client-side
         })
         if len(cleaned) >= limit:
             break

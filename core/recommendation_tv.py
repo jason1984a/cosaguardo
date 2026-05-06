@@ -1172,6 +1172,7 @@ def search_tv_series(query: str, limit: int = 8):
             "title":         base_title,
             "display_title": display_title,
             "id":            item.get("id"),
+            "_score":        round(score(item), 1),  # esposto per merge client-side
         })
         if len(results) >= limit:
             break
