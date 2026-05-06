@@ -196,18 +196,37 @@
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 38px;
+            gap: 6px;
             height: 38px;
+            padding: 0 12px;
             border-radius: 12px;
-            background: transparent;
-            border: 1px solid transparent;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.10);
             color: var(--muted);
             cursor: pointer;
-            margin-right: 4px;
+            margin-right: 6px;
             transition: 0.2s ease;
+            font: inherit;
+            line-height: 1;
+        }
+        /* Forza dimensioni dell'SVG (Lucide a volte rende W:0 dentro flex container).
+           Width auto sull'SVG aggira il bug "stretch" dei flex children. */
+        .qs-trigger svg {
+            width: 18px !important;
+            height: 18px !important;
+            flex-shrink: 0;
+        }
+        .qs-trigger-label {
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        @media (max-width: 640px) {
+            .qs-trigger { padding: 0 10px; }
+            .qs-trigger-label { display: none; }
         }
         .qs-trigger:hover {
-            background: rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.10);
+            border-color: rgba(255,255,255,0.18);
             color: var(--text);
         }
         .qs-overlay {
@@ -786,7 +805,7 @@
         }
     </style>
 
-    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=8">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=9">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='favicon.ico') }}">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='icon.svg') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', path='apple-touch-icon.png') }}">
@@ -829,7 +848,8 @@
                 <nav class="nav">
                     <div class="nav-links">
                         <button type="button" class="qs-trigger" id="qs-trigger" aria-label="Cerca film o serie TV">
-                            <i data-lucide="search" style="width:18px;height:18px;stroke:currentColor;stroke-width:2;"></i>
+                            <i data-lucide="search" style="stroke:currentColor;stroke-width:2;"></i>
+                            <span class="qs-trigger-label">Cerca</span>
                         </button>
                         <a href="/" class="nav-link-item" aria-label="Home">
                             <span class="nav-icon"><i data-lucide="home" style="width:18px;height:18px;stroke:currentColor;stroke-width:1.75;"></i></span>
