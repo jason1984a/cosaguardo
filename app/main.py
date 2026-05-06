@@ -66,6 +66,23 @@ from core.seo_pages import (
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
 
+# ─── Bot detection (anti-OOM su crawl massiccio) ────────────────────────
+_BOT_UA_PATTERNS = (
+    "bot", "crawler", "spider", "googlebot", "bingbot", "yandex",
+    "duckduckbot", "baiduspider", "slurp", "facebookexternalhit",
+    "twitterbot", "linkedinbot", "applebot", "semrushbot", "ahrefsbot",
+    "mj12bot", "petalbot", "pinterestbot",
+)
+
+
+def _is_bot(request: Request) -> bool:
+    """True se l'User-Agent sembra un bot/crawler. Case-insensitive."""
+    ua = (request.headers.get("user-agent") or "").lower()
+    if not ua:
+        return True  # UA vuoto è quasi sempre bot/script
+    return any(p in ua for p in _BOT_UA_PATTERNS)
+
+
 # ─── Cache trending home (TTL 10 minuti) ───────────────────────────────────
 import time as _time
 _trending_cache: dict = {"data": None, "ts": 0.0}
@@ -1418,7 +1435,17 @@ def come_simili(request: Request, slug: str):
         detail["poster_url"] = f"https://image.tmdb.org/t/p/w500{item['poster_path']}"
 
     # 12 simili dall'algoritmo (cached 7gg)
-    similar_items = get_similar_for_seo(slug, limit=12)
+    # Anti-OOM: se è un bot e la cache è miss, ritorna lista vuota invece di
+    # triggerare l'engine recommend (che è il pezzo che fa esplodere la RAM).
+    # Gli utenti reali continuano a generare la cache normalmente; i bot poi
+    # leggeranno dalla cache calda. Pagina resta indicizzabile (titolo+detail ci sono).
+    if _is_bot(request):
+        from core.tmdb_cache import cache_get
+        cache_key = f"seo:similar:v5:{item['content_type']}:{item['tmdb_id']}:12"
+        cached = cache_get(cache_key)
+        similar_items = cached if cached else []
+    else:
+        similar_items = get_similar_for_seo(slug, limit=12)
 
     return templates.TemplateResponse(
         request=request,
@@ -1765,6 +1792,31 @@ def privacy(request: Request):
 @app.get("/termini", response_class=HTMLResponse)
 def termini(request: Request):
     return templates.TemplateResponse(request=request, name="termini.html", context={"request": request})
+
+
+@app.get("/admin/db-cache-stats")
+def admin_db_cache_stats(request: Request):
+    """Statistiche tabella tmdb_cache (count, size, expired, pct cap)."""
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+    from core.tmdb_cache import cache_db_count_and_size
+    return cache_db_count_and_size()
+
+
+@app.get("/admin/db-cache-trim")
+def admin_db_cache_trim(request: Request, keep: int = 30000):
+    """
+    Trim manuale: cancella entry più vecchie finché ne restano solo `keep`.
+    Esempio: /admin/db-cache-trim?keep=20000
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+    if keep < 1000 or keep > 100000:
+        return {"error": "keep deve essere tra 1000 e 100000"}
+    from core.tmdb_cache import cache_db_trim_to, cache_db_count_and_size
+    deleted = cache_db_trim_to(keep)
+    after = cache_db_count_and_size()
+    return {"status": "ok", "deleted": deleted, "after": after}
 
 
 @app.get("/admin/flush-cache")

@@ -14,9 +14,11 @@ import threading
 from typing import Any, Optional, Callable
 
 # ─── Config ──────────────────────────────────────────────────────────────
-TTL_MEMORY_SEC  = 6 * 60 * 60        # 6h in memoria (era 24h — riduce footprint)
-TTL_DB_SEC      = 7 * 24 * 60 * 60   # 7 giorni in DB (invariato)
-MAX_MEMORY_KEYS = 1500               # cap ridotto per evitare OOM su Render Starter (era 5000)
+TTL_MEMORY_SEC  = 6 * 60 * 60        # 6h in memoria
+TTL_DB_SEC      = 7 * 24 * 60 * 60   # 7 giorni in DB
+MAX_MEMORY_KEYS = 1500               # cap RAM L1 (anti-OOM Render Starter 512MB)
+MAX_DB_KEYS     = 30000              # cap entry DB L2 (anti-disk-full Render Starter 1GB)
+DB_TRIM_CHECK_EVERY = 200            # ogni N insert, verifica se serve trim L2
 
 # DB persistente: usa lo stesso DB utenti (Render persistent disk)
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -105,7 +107,12 @@ def _db_get(key: str) -> Optional[Any]:
         return None
 
 
+_insert_counter = 0
+_insert_counter_lock = threading.Lock()
+
+
 def _db_set(key: str, value: Any, ttl: int = TTL_DB_SEC) -> None:
+    global _insert_counter
     _ensure_db()
     try:
         conn = sqlite3.connect(CACHE_DB_PATH, timeout=2)
@@ -116,7 +123,108 @@ def _db_set(key: str, value: Any, ttl: int = TTL_DB_SEC) -> None:
         conn.commit()
         conn.close()
     except Exception:
-        pass  # cache failure non deve mai rompere la richiesta
+        return  # cache failure non deve mai rompere la richiesta
+
+    # Trim periodico: ogni N insert, controlla se siamo sopra il cap
+    with _insert_counter_lock:
+        _insert_counter += 1
+        should_check = (_insert_counter >= DB_TRIM_CHECK_EVERY)
+        if should_check:
+            _insert_counter = 0
+
+    if should_check:
+        try:
+            _trim_db_if_needed()
+        except Exception:
+            pass  # mai rompere la richiesta utente
+
+
+def _trim_db_if_needed() -> int:
+    """
+    Se la tabella tmdb_cache supera MAX_DB_KEYS, elimina le entry più vecchie
+    (per expires_at crescente = quelle che scadrebbero per prime).
+    Restituisce il numero di righe eliminate.
+    """
+    try:
+        conn = sqlite3.connect(CACHE_DB_PATH, timeout=5)
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM tmdb_cache")
+        count = cur.fetchone()[0]
+        if count <= MAX_DB_KEYS:
+            conn.close()
+            return 0
+        # Riporta sotto il 90% del cap (lascia margine, evita re-trim immediati)
+        to_delete = count - int(MAX_DB_KEYS * 0.9)
+        cur.execute(
+            """DELETE FROM tmdb_cache
+               WHERE rowid IN (
+                 SELECT rowid FROM tmdb_cache
+                 ORDER BY expires_at ASC
+                 LIMIT ?
+               )""",
+            (to_delete,)
+        )
+        deleted = cur.rowcount
+        conn.commit()
+        conn.close()
+        print(f"[cache] L2 trim: count={count} → eliminate {deleted} entry più vecchie")
+        return deleted
+    except Exception as e:
+        print(f"[cache] L2 trim ERROR: {e}")
+        return 0
+
+
+def cache_db_count_and_size() -> dict:
+    """Statistiche tabella tmdb_cache. Per /admin/db-cache-stats."""
+    _ensure_db()
+    try:
+        conn = sqlite3.connect(CACHE_DB_PATH, timeout=3)
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*), COALESCE(SUM(length(value_json)), 0) FROM tmdb_cache")
+        count, size_bytes = cur.fetchone()
+        cur.execute("SELECT COUNT(*) FROM tmdb_cache WHERE expires_at < ?", (int(time.time()),))
+        expired = cur.fetchone()[0]
+        conn.close()
+        return {
+            "count": count,
+            "size_bytes": size_bytes,
+            "size_mb": round(size_bytes / 1024 / 1024, 1),
+            "expired_count": expired,
+            "max_db_keys": MAX_DB_KEYS,
+            "pct_used": round(100 * count / MAX_DB_KEYS, 1) if MAX_DB_KEYS else 0,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def cache_db_trim_to(keep: int) -> int:
+    """Forza trim manuale: tieni solo le `keep` entry con expires_at più alto.
+    Restituisce -1 se errore, altrimenti il numero di righe eliminate."""
+    _ensure_db()
+    try:
+        conn = sqlite3.connect(CACHE_DB_PATH, timeout=10)
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM tmdb_cache")
+        count = cur.fetchone()[0]
+        if count <= keep:
+            conn.close()
+            return 0
+        cur.execute(
+            """DELETE FROM tmdb_cache
+               WHERE rowid IN (
+                 SELECT rowid FROM tmdb_cache
+                 ORDER BY expires_at ASC
+                 LIMIT ?
+               )""",
+            (count - keep,)
+        )
+        deleted = cur.rowcount
+        conn.commit()
+        conn.close()
+        return deleted
+    except Exception as e:
+        print(f"[cache] manual trim ERROR: {e}")
+        return -1
 
 
 # ─── API pubblica ────────────────────────────────────────────────────────
