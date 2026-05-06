@@ -196,10 +196,11 @@ def build_taste_profile(searches, max_searches=10, top_genres=3, top_keywords=6,
             "vibes": [],
         }
 
-    genre_counter = Counter()
-    keyword_counter = Counter()
-    vibe_counter = Counter()
-
+    # Step 1: gather (title, content_type) tuples uniche da tutte le ricerche.
+    # Dedup per (title, content_type) per evitare di chiamare TMDb più volte
+    # sullo stesso titolo se appare in più ricerche.
+    title_keys = []
+    seen_keys = set()
     for search in searches[:max_searches]:
         if isinstance(search, dict):
             seed_titles_raw = search.get("seed_titles", "")
@@ -209,28 +210,58 @@ def build_taste_profile(searches, max_searches=10, top_genres=3, top_keywords=6,
             content_type = (search["content_type"] or "").strip().lower()
 
         titles = list(dict.fromkeys(parse_seed_titles(seed_titles_raw)))
-
         for title in titles:
-            metadata = resolve_title_metadata(title, content_type)
-            if not metadata:
+            key = (title, content_type)
+            if key not in seen_keys:
+                seen_keys.add(key)
+                title_keys.append(key)
+
+    if not title_keys:
+        return {"genres": [], "keywords": [], "vibes": []}
+
+    # Step 2: parallel fetch metadata (8 thread). Ogni resolve_title_metadata
+    # internamente fa 1-2 chiamate TMDb (find + keywords). Senza parallelizzazione,
+    # 50 titoli × ~400ms = 20s. Con 8 thread, ~3-4s.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    metadata_by_key: dict = {}
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        futures = {
+            ex.submit(resolve_title_metadata, title, ctype): (title, ctype)
+            for (title, ctype) in title_keys
+        }
+        for fut in as_completed(futures):
+            key = futures[fut]
+            try:
+                metadata_by_key[key] = fut.result()
+            except Exception:
+                metadata_by_key[key] = None
+
+    # Step 3: counting (CPU only, sequenziale è ok)
+    genre_counter = Counter()
+    keyword_counter = Counter()
+    vibe_counter = Counter()
+
+    for key in title_keys:
+        metadata = metadata_by_key.get(key)
+        if not metadata:
+            continue
+
+        for genre in metadata.get("genres", []):
+            if not genre or genre in GENRE_BLACKLIST:
                 continue
+            genre_counter[genre] += 1
 
-            for genre in metadata.get("genres", []):
-                if not genre or genre in GENRE_BLACKLIST:
-                    continue
-                genre_counter[genre] += 1
+        for keyword in metadata.get("keywords", []):
+            if isinstance(keyword, dict):
+                keyword = keyword.get("name")
+            normalized = normalize_keyword(keyword)
+            if normalized:
+                keyword_counter[normalized] += 1
 
-            for keyword in metadata.get("keywords", []):
-                if isinstance(keyword, dict):
-                    keyword = keyword.get("name")
-                normalized = normalize_keyword(keyword)
-                if normalized:
-                    keyword_counter[normalized] += 1
-
-            for vibe in metadata.get("vibes", []):
-                vibe_norm = normalize_keyword(vibe)
-                if vibe_norm:
-                    vibe_counter[vibe_norm] += 1
+        for vibe in metadata.get("vibes", []):
+            vibe_norm = normalize_keyword(vibe)
+            if vibe_norm:
+                vibe_counter[vibe_norm] += 1
 
     return {
         "genres": [name for name, _ in genre_counter.most_common(top_genres)],

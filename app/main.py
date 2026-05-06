@@ -138,6 +138,32 @@ app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SECRET_KEY", "cosaguardo-secret-key"))
 
 
+# ─── Anti-scanner middleware ─────────────────────────────────────────────
+# Intercetta tentativi di scan verso path PHP/WordPress noti che NON esistono
+# nel sito (Python/FastAPI). Risponde 404 immediato senza far girare il router
+# o generare entry nel perf logger. Riduce CPU e log noise.
+from fastapi.responses import PlainTextResponse as _PlainTextResponse
+
+# Path con questi suffissi → 404 immediato (sono tutti probe scanner)
+_SCANNER_BLOCK_SUFFIXES = (".php", ".asp", ".aspx", ".jsp", ".cgi", ".env")
+# Path che iniziano con questi prefissi → 404 immediato (anche senza estensione)
+_SCANNER_BLOCK_PREFIXES = (
+    "/wp-admin", "/wp-content", "/wp-includes", "/wp-login",
+    "/wp-trackback", "/xmlrpc", "/cgi-bin", "/.git",
+    "/.well-known/log", "/.well-known/admin",
+    "/themes/", "/plugins/", "/uploads/", "/admin.php",
+)
+
+
+@app.middleware("http")
+async def anti_scanner(request: Request, call_next):
+    path = request.url.path
+    # Bloccando per suffisso o prefisso
+    if path.endswith(_SCANNER_BLOCK_SUFFIXES) or any(path.startswith(p) for p in _SCANNER_BLOCK_PREFIXES):
+        return _PlainTextResponse("Not Found", status_code=404)
+    return await call_next(request)
+
+
 # ─── Perf logging middleware ────────────────────────────────────────────
 # Logga durata e status di ogni request. Filtrabile su Render Logs con grep "[perf]".
 # Format: [perf] METHOD /route status=200 dur=123ms ua=browser
@@ -1050,8 +1076,10 @@ def film_detail(request: Request, tmdb_id: int):
         )
 
     # Raccomandazioni simili dal motore interno
+    # Anti-OOM: i bot non vedono la sezione "simili" (è il pezzo costoso),
+    # vedono comunque tutto il detail principale (cache TMDb leggera).
     similar = []
-    if detail.get("title"):
+    if detail.get("title") and not _is_bot(request):
         try:
             res = recommend_from_seed_titles([detail["title"]], top_k=6, per_seed_limit=20)
             for rec in res.get("recommendations", [])[:6]:
@@ -1095,8 +1123,9 @@ def serie_detail(request: Request, tmdb_id: int):
         )
 
     # Raccomandazioni simili
+    # Anti-OOM: i bot non vedono la sezione "simili" (è il pezzo costoso).
     similar = []
-    if detail.get("title"):
+    if detail.get("title") and not _is_bot(request):
         try:
             res = recommend_tv_from_seed_titles([detail["title"]])
             for rec in res.get("recommendations", [])[:6]:
