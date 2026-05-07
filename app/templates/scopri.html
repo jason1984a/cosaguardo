@@ -5,6 +5,18 @@
 {% block og_title %}{{ seo_title }}{% endblock %}
 {% block og_description %}{{ seo_desc }}{% endblock %}
 
+{% block head_extra %}
+{# PRELOAD del primo poster — è il candidate LCP della pagina.
+   Senza questo, il browser scopre l'URL solo dopo aver parsato 80KB di CSS;
+   con il preload nell'<head>, il fetch parte in parallelo al parsing HTML.
+   Gestisce sia modalità strips (no filtri) che modalità grid (con filtri). #}
+{% if not has_filters and strips and strips[0].cards and strips[0].cards[0].poster_url %}
+<link rel="preload" as="image" href="{{ strips[0].cards[0].poster_url }}" fetchpriority="high">
+{% elif has_filters and results and results[0].poster_url %}
+<link rel="preload" as="image" href="{{ results[0].poster_url }}" fetchpriority="high">
+{% endif %}
+{% endblock %}
+
 {% block content %}
 <div class="scopri-shell">
 

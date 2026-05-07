@@ -810,6 +810,12 @@
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='icon.svg') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', path='apple-touch-icon.png') }}">
 
+    {# Preconnect a image.tmdb.org: TUTTI i poster vengono da qui.
+       Senza questo, ogni poster paga DNS+TCP+TLS handshake da zero (~300-500ms su 4G slow)
+       prima del fetch — fatale per LCP. Il crossorigin è obbligatorio perché i request
+       img sono cross-origin senza credentials. #}
+    <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
+    <link rel="dns-prefetch" href="https://image.tmdb.org">
     {# Preconnect anticipa DNS+TLS handshake per unpkg.com (Lucide icons) #}
     <link rel="preconnect" href="https://unpkg.com" crossorigin>
     {# Preconnect a YouTube: anticipa DNS quando l'utente cliccherà play sul trailer (facade pattern) #}
@@ -898,20 +904,10 @@
             </div>
         </footer>
 
-        <!-- COOKIE BANNER -->
-        <div id="cookie-banner" style="display:none;" role="dialog" aria-label="Consenso cookie">
-            <div class="cookie-banner-inner">
-                <div class="cookie-banner-text">
-                    <strong>Rispettiamo la tua privacy</strong>
-                    <p>Usiamo cookie analitici (Google Analytics) per capire come viene usato il sito e migliorarlo. Non vendiamo dati a terze parti.</p>
-                    <a href="/privacy" class="cookie-banner-link">Leggi la Privacy Policy</a>
-                </div>
-                <div class="cookie-banner-actions">
-                    <button onclick="acceptCookies()" class="cookie-btn cookie-btn--accept">Accetta</button>
-                    <button onclick="declineCookies()" class="cookie-btn cookie-btn--decline">Solo necessari</button>
-                </div>
-            </div>
-        </div>
+        {# COOKIE BANNER:
+           Rimosso dall'HTML iniziale per non competere come LCP candidate.
+           Viene iniettato via JS dopo idle se il consenso non è già stato dato.
+           Vedi script più sotto. #}
 
         <!-- INSTALL PWA BANNER -->
         <div id="install-banner" role="dialog" aria-label="Installa l'app">
@@ -963,30 +959,67 @@
         }
     </script>
 
-    <!-- Cookie banner logic -->
+    <!-- Cookie banner logic — iniezione DOM lazy per non bloccare LCP -->
     <script>
         (function() {
+            // HTML del banner come stringa: iniettato solo quando serve, mai presente
+            // nel DOM iniziale. Questo evita che il banner diventi LCP candidate
+            // (è position:fixed bottom:0 max-width:780px → enorme rispetto ai poster mobile).
+            var BANNER_HTML =
+                '<div id="cookie-banner" role="dialog" aria-label="Consenso cookie">' +
+                  '<div class="cookie-banner-inner">' +
+                    '<div class="cookie-banner-text">' +
+                      '<strong>Rispettiamo la tua privacy</strong>' +
+                      '<p>Usiamo cookie analitici (Google Analytics) per capire come viene usato il sito e migliorarlo. Non vendiamo dati a terze parti.</p>' +
+                      '<a href="/privacy" class="cookie-banner-link">Leggi la Privacy Policy</a>' +
+                    '</div>' +
+                    '<div class="cookie-banner-actions">' +
+                      '<button onclick="acceptCookies()" class="cookie-btn cookie-btn--accept">Accetta</button>' +
+                      '<button onclick="declineCookies()" class="cookie-btn cookie-btn--decline">Solo necessari</button>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>';
+
+            function injectBanner() {
+                if (document.getElementById('cookie-banner')) return;
+                var wrap = document.createElement('div');
+                wrap.innerHTML = BANNER_HTML;
+                document.body.appendChild(wrap.firstChild);
+            }
+
+            function removeBanner() {
+                var b = document.getElementById('cookie-banner');
+                if (b && b.parentNode) b.parentNode.removeChild(b);
+            }
+
+            // Espongo le funzioni globali (chiamate da onclick inline e da footer "Cookie")
+            window.acceptCookies = function() {
+                localStorage.setItem('cg_cookie_consent', 'accepted');
+                removeBanner();
+                if (typeof loadGA4 === 'function') loadGA4();
+            };
+
+            window.declineCookies = function() {
+                localStorage.setItem('cg_cookie_consent', 'declined');
+                removeBanner();
+            };
+
+            window.resetCookieConsent = function() {
+                localStorage.removeItem('cg_cookie_consent');
+                injectBanner();
+            };
+
+            // Iniezione iniziale: solo se non c'è consenso registrato.
+            // Aspetta idle/timeout per stare COMPLETAMENTE fuori dalla finestra LCP.
             var consent = localStorage.getItem('cg_cookie_consent');
             if (!consent) {
-                document.getElementById('cookie-banner').style.display = 'block';
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(injectBanner, { timeout: 2500 });
+                } else {
+                    setTimeout(injectBanner, 1800);
+                }
             }
         })();
-
-        function acceptCookies() {
-            localStorage.setItem('cg_cookie_consent', 'accepted');
-            document.getElementById('cookie-banner').style.display = 'none';
-            if (typeof loadGA4 === 'function') loadGA4();
-        }
-
-        function declineCookies() {
-            localStorage.setItem('cg_cookie_consent', 'declined');
-            document.getElementById('cookie-banner').style.display = 'none';
-        }
-
-        function resetCookieConsent() {
-            localStorage.removeItem('cg_cookie_consent');
-            document.getElementById('cookie-banner').style.display = 'block';
-        }
     </script>
 
     {# ── PWA Service Worker registration ── #}
@@ -1143,9 +1176,9 @@
         var bannerShown = false;
         function showBanner() {
             if (bannerShown) return;
-            // Non sovrapporsi al cookie banner
-            var cookie = document.getElementById('cookie-banner');
-            if (cookie && cookie.style.display !== 'none' && cookie.style.display !== '') {
+            // Non sovrapporsi al cookie banner (ora iniettato dinamicamente:
+            // se l'elemento esiste nel DOM, è perché sta venendo mostrato).
+            if (document.getElementById('cookie-banner')) {
                 return;
             }
             var b = document.getElementById('install-banner');

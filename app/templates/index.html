@@ -3,7 +3,13 @@
 {% block title %}CosaGuardo{% endblock %}
 
 {% block head_extra %}
-{# style.css è già caricato da base.html con ?v=7 — evitato doppio load #}
+{# style.css è già caricato da base.html — evitato doppio load #}
+{# PRELOAD del primo poster del trending: candidate LCP della home.
+   Senza preload il browser scopre l'URL dopo il parsing della CSS (80KB);
+   con preload, il fetch parte subito dopo il parsing dell'<head>. #}
+{% if top_rated and top_rated[0].poster_url %}
+<link rel="preload" as="image" href="{{ top_rated[0].poster_url }}" fetchpriority="high">
+{% endif %}
 {% endblock %}
 
 {% block content %}
