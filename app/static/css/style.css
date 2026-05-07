@@ -1526,9 +1526,8 @@ button:active {
 
     .hero-copy h1 {
         margin: 0 0 2px;
-        font-size: 30px;
         line-height: 1.02;
-        max-width: 260px;
+        max-width: 100%;
     }
 
     .hero-trending-strip {
@@ -1640,6 +1639,17 @@ button:active {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     margin: 0 0 6px;
+    /* Desktop: ridimensionato per non dominare il fold */
+    font-size: 30px;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+.hero-copy .hero-subtitle {
+    font-size: 16px;
+    line-height: 1.45;
+    color: var(--muted);
+    max-width: 640px;
+    margin: 0 0 4px;
 }
 
 .pick-poster img {
@@ -2851,6 +2861,11 @@ button:active {
 @media (max-width: 760px) {
     .hero-copy h1 {
         font-size: 22px;
+    }
+    .hero-copy .hero-subtitle {
+        font-size: 13px;
+        line-height: 1.4;
+        margin: 2px 0 0;
     }
 
     /* Le label sopra "I più apprezzati" e altre sezioni: tenerle visibili
