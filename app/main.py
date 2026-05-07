@@ -1,6 +1,6 @@
 import os
 import sys
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, Request, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -2168,12 +2168,7 @@ def best_page(request: Request, slug: str):
 
     parsed = parse_best_slug(slug)
     if not parsed:
-        return templates.TemplateResponse(
-            request=request,
-            name="404.html" if os.path.exists("app/templates/404.html") else "index.html",
-            status_code=404,
-            context={"request": request},
-        )
+        raise HTTPException(status_code=404, detail="Pagina non trovata")
 
     tipo, genere, platform = parsed["tipo"], parsed["genere"], parsed["platform"]
     meta  = get_best_meta(tipo, genere, platform)
@@ -2242,12 +2237,7 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
 
     # 404 se slug sconosciuto
     if slug not in PLATFORM_SLUGS:
-        return templates.TemplateResponse(
-            request=request,
-            name="404.html" if os.path.exists("app/templates/404.html") else "index.html",
-            status_code=404,
-            context={"request": request},
-        )
+        raise HTTPException(status_code=404, detail="Piattaforma non trovata")
 
     meta = get_platform_meta(slug)
 
