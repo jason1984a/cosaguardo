@@ -2853,12 +2853,8 @@ button:active {
         font-size: 22px;
     }
 
-    /* La label sopra "I più apprezzati" la nascondo: il carousel di poster
-       parla da solo, e il badge FILM/SERIE TV già etichetta il contenuto. */
-    .hero-trending-strip .personal-strip-header {
-        display: none;
-    }
-    /* "Scelti per te" e altre sezioni: label rimangono (sono utili a distinguere) */
+    /* Le label sopra "I più apprezzati" e altre sezioni: tenerle visibili
+       (importante per orientarsi visivamente sotto la striscia loghi). */
 
     .platform-strip {
         margin: 4px 0 10px;
@@ -2867,5 +2863,30 @@ button:active {
         width: 48px;
         height: 48px;
         border-radius: 10px;
+    }
+
+    /* ── Box "Il tuo algoritmo personale" — riduci spazi morti ──
+       Spazio sopra: ridotto, attaccato al carousel apprezzati.
+       Padding interno: ridotto da 20px a 16/14px.
+       Header interno: kicker, h2, p più stretti tra loro. */
+    .search-panel,
+    .search-panel-v2 {
+        padding: 16px 14px;
+        margin-top: 4px;
+    }
+    .panel-header-v2 {
+        margin-bottom: 8px;
+    }
+    .panel-kicker,
+    .section-kicker {
+        margin-bottom: 4px;
+    }
+    .panel-header-v2 h2 {
+        font-size: 19px;
+        margin: 0 0 4px;
+    }
+    .panel-header-v2 p {
+        font-size: 12px;
+        margin: 0 0 2px;
     }
 }

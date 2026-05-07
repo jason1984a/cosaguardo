@@ -759,6 +759,17 @@ document.addEventListener("DOMContentLoaded", function () {
 
     if (cinemaModal) {
         document.querySelectorAll(".cinema-card").forEach(card => {
+            // Se la card è un <a href="/film/{id}"> (cinema-card con tmdb_id),
+            // NON aggiungere il modal: lascia che il click navighi normalmente
+            // alla scheda completa. Aggiungere il modal causerebbe:
+            //  1. Modal si apre (handler JS gira)
+            //  2. Browser naviga in background (default <a> action)
+            //  3. Back button mostrerebbe scheda vuota a metà caricamento
+            // Il modal resta SOLO per card senza tmdb_id (es. "info-only" con
+            // sola data di uscita, niente scheda dettaglio TMDb disponibile).
+            if (card.tagName === "A" && card.getAttribute("href")) {
+                return;
+            }
             card.addEventListener("click", () => openCinemaModal(card));
         });
         cinemaClose.addEventListener("click", closeCinemaModal);
