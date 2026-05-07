@@ -46,7 +46,10 @@
                        tutte le altre sono lazy. Sotto i 600px su mobile vedi solo 2-3 card,
                        le altre 30+ del carosello caricano on-scroll. #}
                     {% set lcp = namespace(set=false) %}
-                    {% for item in top_rated %}
+                    {# Cap a 10 card: riduce richieste TMDb concorrenti durante la finestra
+                       LCP. Mobile vede 2-3 card per volta, 10 sono ~3 schermate di scroll
+                       orizzontale: piu' che sufficienti. #}
+                    {% for item in top_rated[:10] %}
                         <a href="/{% if item.content_type == 'tv' %}serie{% else %}film{% endif %}/{{ item.tmdb_id }}"
                             class="trend-mini-card trend-mini-card--hot"
                             style="display:block;text-decoration:none;">
@@ -202,7 +205,8 @@
         <div class="personal-strip-wrap">
             <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-np" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="personal-strip-row cinema-strip-row" id="cinema-now-row">
-                {% for item in now_playing %}
+                {# Cap a 8 card per non saturare la banda 4G durante l'LCP window. #}
+                {% for item in now_playing[:8] %}
                 {% if item.tmdb_id %}
                 <a href="/film/{{ item.tmdb_id }}"
                     class="personal-card cinema-card"
@@ -244,7 +248,8 @@
         <div class="personal-strip-wrap">
             <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-up" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="personal-strip-row cinema-strip-row" id="cinema-upcoming-row">
-                {% for item in upcoming %}
+                {# Cap a 8 card per non saturare la banda 4G durante l'LCP window. #}
+                {% for item in upcoming[:8] %}
                 {% if item.tmdb_id %}
                 <a href="/film/{{ item.tmdb_id }}"
                     class="personal-card cinema-card cinema-card--upcoming"
@@ -425,7 +430,13 @@ document.addEventListener("DOMContentLoaded", function () {
     // Carica loghi da TMDb via /home-platforms (server-cached 30gg).
     // Se fallisce, lascia gli skeleton in piedi per qualche secondo e poi
     // nasconde la sezione (no errori visibili).
-    (function loadPlatformStrip() {
+    //
+    // IMPORTANTE: usiamo requestIdleCallback per spostare il fetch + la
+    // mutazione DOM (innerHTML replacement degli skeleton) FUORI dalla
+    // finestra di misurazione LCP. Quando Lighthouse vedeva la mutazione
+    // durante la sua finestra, marcava NO_LCP perche' un possibile
+    // candidate spariva dal DOM senza un sostituto stabile.
+    function loadPlatformStrip() {
         const stripRow = document.getElementById("platform-strip-row");
         if (!stripRow) return;
 
@@ -469,7 +480,15 @@ document.addEventListener("DOMContentLoaded", function () {
                 ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]
             );
         }
-    })();
+    }
+    // Schedula loadPlatformStrip fuori dalla finestra LCP di Lighthouse.
+    // requestIdleCallback con timeout 2.5s garantisce esecuzione anche su
+    // browser saturi (timeout = max wait prima di forzare l'esecuzione).
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(loadPlatformStrip, { timeout: 2500 });
+    } else {
+        setTimeout(loadPlatformStrip, 1800);
+    }
 
     // ── Nav fascia principale "I più apprezzati" ────────────────────────────
     const row      = document.getElementById("hero-trending-row");
