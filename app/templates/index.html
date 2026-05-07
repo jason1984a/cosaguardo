@@ -6,9 +6,12 @@
 {# style.css è già caricato da base.html — evitato doppio load #}
 {# PRELOAD del primo poster del trending: candidate LCP della home.
    Senza preload il browser scopre l'URL dopo il parsing della CSS (80KB);
-   con preload, il fetch parte subito dopo il parsing dell'<head>. #}
+   con preload, il fetch parte subito dopo il parsing dell'<head>.
+   Replace w342→w185: la fonte (core.recommendation_api) restituisce ancora
+   poster a w342 mentre noi li renderizziamo a 140×210 → spreco 3× di pixel.
+   Workaround inline finche' non si fixa il backend. #}
 {% if top_rated and top_rated[0].poster_url %}
-<link rel="preload" as="image" href="{{ top_rated[0].poster_url }}" fetchpriority="high">
+<link rel="preload" as="image" href="{{ top_rated[0].poster_url|replace('/w342/', '/w185/')|replace('/w500/', '/w185/') }}" fetchpriority="high">
 {% endif %}
 {% endblock %}
 
@@ -55,13 +58,13 @@
                             style="display:block;text-decoration:none;">
                             {% if item.poster_url and not lcp.set %}
                                 {% set lcp.set = true %}
-                                <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                                <img src="{{ item.poster_url|replace('/w342/', '/w185/')|replace('/w500/', '/w185/') }}" alt="{{ item.title }}"
                                      width="140" height="210"
                                      fetchpriority="high"
                                      decoding="async"
                                      onerror="this.style.display='none'">
                             {% else %}
-                                <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                                <img src="{{ item.poster_url|replace('/w342/', '/w185/')|replace('/w500/', '/w185/') }}" alt="{{ item.title }}"
                                      width="140" height="210"
                                      loading="lazy" decoding="async"
                                      onerror="this.style.display='none'">
@@ -216,7 +219,7 @@
                     style="display:flex;flex-direction:column;cursor:default;">
                 {% endif %}
                     <div class="personal-card-poster">
-                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+                        <img src="{{ item.poster_url|replace('/w342/', '/w185/')|replace('/w500/', '/w185/') }}" alt="{{ item.title }}" loading="lazy">
                         <span class="personal-card-type badge-movie">Film</span>
                         {% if item.vote_average and item.vote_average > 0 %}
                         <span class="personal-card-score">{{ item.vote_average }}/10</span>
@@ -259,7 +262,7 @@
                     style="display:flex;flex-direction:column;cursor:default;">
                 {% endif %}
                     <div class="personal-card-poster">
-                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+                        <img src="{{ item.poster_url|replace('/w342/', '/w185/')|replace('/w500/', '/w185/') }}" alt="{{ item.title }}" loading="lazy">
                         <span class="personal-card-type badge-upcoming">Prossimamente</span>
                         {% if item.release_date %}
                         <span class="cinema-card-release-overlay">{{ item.release_date[5:] | replace("-", "/") }}</span>
@@ -289,7 +292,7 @@
             {% for item in news %}
             <a href="{{ item.link }}" {% if not item.internal %}target="_blank" rel="noopener"{% endif %} class="news-card">
                 {% if item.thumb %}
-                <div class="news-card-thumb" style="background-image:url('{{ item.thumb }}');"></div>
+                <div class="news-card-thumb" style="background-image:url('{{ item.thumb|replace('/w780/', '/w300/') }}');"></div>
                 {% else %}
                 <div class="news-card-thumb news-card-thumb--empty">
                     <i data-lucide="film" style="width:28px;height:28px;opacity:.3;"></i>
