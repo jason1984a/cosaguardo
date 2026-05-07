@@ -4,6 +4,14 @@ from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from core.explainability import enrich_with_explanations
 from core.tmdb_cache import cached_call
+# Importazione lazy del filtro adult (in funzione per evitare circular imports
+# se mai recommendation_api importasse anche recommendation_tv)
+def _is_adult_content_safe(item):
+    try:
+        from core.recommendation_api import _is_adult_content
+        return _is_adult_content(item)
+    except Exception:
+        return False
 
 
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
@@ -206,6 +214,9 @@ def _get_tv_keywords_uncached(tv_id: int):
 
         results = []
         for item in data.get("results", []):
+            # Filtro contenuti per adulti
+            if _is_adult_content_safe(item):
+                continue
             name = item.get("name")
             if name:
                 results.append(name.strip().lower())
@@ -536,6 +547,9 @@ def _get_similar_tv_uncached(tv_id: int, limit: int = 10):
 
         results = []
         for item in data.get("results", [])[:limit]:
+            # Filtro contenuti per adulti
+            if _is_adult_content_safe(item):
+                continue
             title = item.get("name") or item.get("original_name")
             if not title:
                 continue
@@ -582,6 +596,9 @@ def _get_recommended_tv_uncached(tv_id: int, limit: int = 10):
 
         results = []
         for item in data.get("results", [])[:limit]:
+            # Filtro contenuti per adulti
+            if _is_adult_content_safe(item):
+                continue
             title = item.get("name") or item.get("original_name")
             if not title:
                 continue
@@ -1096,7 +1113,9 @@ def search_tv_series(query: str, limit: int = 8):
         try:
             r = requests.get(
                 "https://api.themoviedb.org/3/search/tv",
-                params={"api_key": TMDB_API_KEY, "query": q, "language": "it-IT"},
+                params={"api_key": TMDB_API_KEY, "query": q, "language": "it-IT",
+                "include_adult":  "false",
+            },
                 timeout=5
             )
             return r.json().get("results", [])

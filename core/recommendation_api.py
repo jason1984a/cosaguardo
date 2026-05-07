@@ -1208,10 +1208,15 @@ def get_top_rated_recent(limit: int = 10) -> list:
             "https://api.themoviedb.org/3/discover/movie",
             params={**base_params,
                     "primary_release_date.gte": six_months_ago,
-                    "region": "IT"},
+                    "region": "IT",
+                    "include_adult":  "false",
+                },
             timeout=6
         )
         for item in r.json().get("results", [])[:25]:
+            # Filtro contenuti per adulti (difensivo)
+            if _is_adult_content(item):
+                continue
             pp = item.get("poster_path")
             title = item.get("title") or item.get("original_title") or ""
             if not pp or not title:
@@ -1236,10 +1241,15 @@ def get_top_rated_recent(limit: int = 10) -> list:
             "https://api.themoviedb.org/3/discover/tv",
             params={**base_params,
                     "first_air_date.gte": six_months_ago,
-                    "watch_region": "IT"},
+                    "watch_region": "IT",
+                    "include_adult":  "false",
+                },
             timeout=6
         )
         for item in r.json().get("results", [])[:25]:
+            # Filtro contenuti per adulti (difensivo)
+            if _is_adult_content(item):
+                continue
             pp = item.get("poster_path")
             title = item.get("name") or item.get("original_name") or ""
             if not pp or not title:
@@ -1333,7 +1343,9 @@ def get_now_playing(limit: int = 8) -> list:
     try:
         resp = requests.get(
             "https://api.themoviedb.org/3/movie/now_playing",
-            params={"api_key": TMDB_API_KEY, "language": "it-IT", "region": "IT"},
+            params={"api_key": TMDB_API_KEY, "language": "it-IT", "region": "IT",
+                "include_adult":  "false",
+            },
             timeout=5
         )
         results = []
@@ -1369,7 +1381,9 @@ def get_upcoming(limit: int = 8) -> list:
     try:
         resp = requests.get(
             "https://api.themoviedb.org/3/movie/upcoming",
-            params={"api_key": TMDB_API_KEY, "language": "it-IT", "region": "IT"},
+            params={"api_key": TMDB_API_KEY, "language": "it-IT", "region": "IT",
+                "include_adult":  "false",
+            },
             timeout=5
         )
         results = []
@@ -1676,10 +1690,14 @@ def get_cinema_news(limit: int = 8) -> list:
                 "sort_by": "popularity.desc",
                 "primary_release_date.gte": sixty_days_ago,
                 "vote_count.gte": 50,
+                "include_adult":  "false",
             },
             timeout=6
         )
         for item in r.json().get("results", [])[:4]:
+            # Filtro contenuti per adulti (difensivo)
+            if _is_adult_content(item):
+                continue
             bp = item.get("backdrop_path") or item.get("poster_path")
             if not bp: continue
             title = item.get("title") or item.get("original_title","")
@@ -1701,10 +1719,15 @@ def get_cinema_news(limit: int = 8) -> list:
     try:
         r = requests.get(
             "https://api.themoviedb.org/3/tv/popular",
-            params={"api_key": TMDB_API_KEY, "language": "it-IT"},
+            params={"api_key": TMDB_API_KEY, "language": "it-IT",
+                "include_adult":  "false",
+            },
             timeout=6
         )
         for item in r.json().get("results", [])[:4]:
+            # Filtro contenuti per adulti (difensivo)
+            if _is_adult_content(item):
+                continue
             bp = item.get("backdrop_path") or item.get("poster_path")
             if not bp: continue
             title = item.get("name") or item.get("original_name","")
@@ -1785,6 +1808,9 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
                 timeout=4
             )
             for item in r.json().get("results", [])[:20]:
+                # Filtro contenuti per adulti (difensivo)
+                if _is_adult_content(item):
+                    continue
                 t_it   = (item.get("title") or "").strip()
                 t_orig = (item.get("original_title") or "").strip()
                 if not t_it and not t_orig:
@@ -2200,6 +2226,9 @@ def _fetch_strip(strip_cfg: dict, tipo: str, limit: int = 12) -> list:
         )
         results = []
         for item in r.json().get("results", [])[:limit]:
+            # Filtro contenuti per adulti (difensivo)
+            if _is_adult_content(item):
+                continue
             pp = item.get("poster_path","")
             title = item.get("title") or item.get("name") or ""
             if not title or not pp:
@@ -2274,11 +2303,16 @@ def get_similar_movies_tmdb(tmdb_id: int, limit: int = 6) -> list:
     try:
         r = requests.get(
             f"https://api.themoviedb.org/3/movie/{tmdb_id}/similar",
-            params={"api_key": TMDB_API_KEY, "language": "it-IT"},
+            params={"api_key": TMDB_API_KEY, "language": "it-IT",
+                "include_adult":  "false",
+            },
             timeout=5
         )
         results = []
         for item in r.json().get("results", [])[:limit]:
+            # Filtro contenuti per adulti (difensivo)
+            if _is_adult_content(item):
+                continue
             pp = item.get("poster_path","")
             title = item.get("title") or item.get("original_title","")
             if not title: continue
@@ -2318,6 +2352,9 @@ def get_popular_by_genre_tmdb(genre_id: int, content_type: str = "movie", limit:
         )
         results = []
         for item in r.json().get("results", [])[:limit]:
+            # Filtro contenuti per adulti (difensivo)
+            if _is_adult_content(item):
+                continue
             pp = item.get("poster_path","")
             title = item.get("title") or item.get("name") or ""
             if not title: continue
@@ -2734,6 +2771,7 @@ def _discover_tmdb(ct: str, with_provider: int = None, limit: int = 60) -> list:
                 "sort_by": "popularity.desc",
                 "page": page,
                 "vote_count.gte": 5,
+                "include_adult": "false",  # Filtra contenuti per adulti lato TMDb
             }
             if with_provider:
                 params["with_watch_providers"] = with_provider
@@ -2743,6 +2781,10 @@ def _discover_tmdb(ct: str, with_provider: int = None, limit: int = 60) -> list:
                 timeout=6,
             )
             for item in r.json().get("results", []):
+                # Doppio filtro post-fetch (difensivo: include_adult può lasciar passare
+                # alcuni titoli adult-adjacent come documentari sul porno)
+                if _is_adult_content(item):
+                    continue
                 tid = item.get("id")
                 if not tid or tid in seen_ids:
                     continue
@@ -2936,6 +2978,9 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
                 timeout=6,
             )
             for item in r.json().get("results", []):
+                # Filtro contenuti per adulti (difensivo)
+                if _is_adult_content(item):
+                    continue
                 tid = item.get("id")
                 if not tid or tid in seen_ids:
                     continue
@@ -3014,3 +3059,66 @@ def get_best_meta(tipo: str, genere: str, platform: str) -> dict:
         "platform_logo":    "",  # popolato dalla view
         "platform_subscribe_link": get_platform_subscribe_link(platform),
     }
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# FILTRO CONTENUTI PER ADULTI
+# ═════════════════════════════════════════════════════════════════════════
+# Tutte le chiamate TMDb passano include_adult=false, ma per sicurezza
+# usiamo un filtro post-fetch difensivo che cattura:
+# - flag `adult` esplicito di TMDb
+# - keyword fortemente associate a porn nel titolo (porn, xxx, ecc.)
+# - production company di etichette adult (Brazzers, Wicked Pictures, ecc.)
+
+# Keyword nel titolo. Volutamente CONSERVATIVE per evitare falsi positivi
+# (es. "hardcore" matcherebbe "Hardcore Henry" che è mainstream).
+# Ricerche con substring su title.lower() — tutte minuscole.
+_ADULT_TITLE_KEYWORDS = {
+    "porn", " xxx", "xxx ", "porno", "erotic", "erotica",
+    "naughty america", "brazzers", "bangbros", "playboy", "hustler",
+    "wicked pictures", "elegant angel", "adult time",
+}
+
+# Production companies di etichette adult.
+_ADULT_PRODUCTION_KEYWORDS = {
+    "vivid entertainment", "evil angel", "wicked pictures",
+    "naughty america", "brazzers", "elegant angel", "hustler video",
+    "adult video news", "girlsway", "bang bros",
+}
+
+
+def _is_adult_content(item: dict) -> bool:
+    """
+    Difensivo: True se l'item TMDb è un contenuto per adulti.
+    Usato come filtro su tutti i risultati TMDb dopo include_adult=false.
+    """
+    if not isinstance(item, dict):
+        return False
+
+    # 1. Flag esplicito TMDb
+    if item.get("adult") is True:
+        return True
+
+    # 2. Title/name keyword
+    title = (item.get("title") or item.get("name") or
+             item.get("original_title") or item.get("original_name") or "")
+    title_l = title.lower()
+    for kw in _ADULT_TITLE_KEYWORDS:
+        if kw in title_l:
+            return True
+
+    # 3. Production companies (presente nei detail completi)
+    for company in (item.get("production_companies") or []):
+        cname = (company.get("name") or "").lower()
+        for kw in _ADULT_PRODUCTION_KEYWORDS:
+            if kw in cname:
+                return True
+
+    return False
+
+
+def filter_adult_results(items: list) -> list:
+    """Rimuove contenuti per adulti da una lista di item TMDb."""
+    if not items:
+        return items
+    return [it for it in items if not _is_adult_content(it)]

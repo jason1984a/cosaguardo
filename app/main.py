@@ -1092,6 +1092,17 @@ def film_detail(request: Request, tmdb_id: int):
     if not detail:
         return RedirectResponse(url="/", status_code=302)
 
+    # Blocco contenuti per adulti: 404 se TMDb segna il film come adult o
+    # se passa il filtro keyword (es. "After Porn Ends 2", produzioni Brazzers).
+    try:
+        from core.recommendation_api import _is_adult_content
+        if _is_adult_content(detail):
+            raise HTTPException(status_code=404, detail="Pagina non trovata")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
+
     user_id = request.session.get("user_id")
     title_state = {}
     if user_id and detail.get("title"):
@@ -1138,6 +1149,16 @@ def serie_detail(request: Request, tmdb_id: int):
     detail = get_detail_tv(tmdb_id)
     if not detail:
         return RedirectResponse(url="/", status_code=302)
+
+    # Blocco contenuti per adulti
+    try:
+        from core.recommendation_api import _is_adult_content
+        if _is_adult_content(detail):
+            raise HTTPException(status_code=404, detail="Pagina non trovata")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
 
     user_id = request.session.get("user_id")
     title_state = {}
@@ -2084,6 +2105,21 @@ def persona_detail(request: Request, person_id: int):
     detail = get_person_detail(person_id)
     if not detail:
         return RedirectResponse(url="/", status_code=302)
+
+    # Blocco persone adult (Lisa Ann, ecc.) — TMDb espone il flag direttamente
+    if detail.get("adult") is True:
+        raise HTTPException(status_code=404, detail="Pagina non trovata")
+
+    # Filtra anche i credits della persona dai film/serie adult
+    # (alcune persone non-adult possono apparire occasionalmente in film adult)
+    try:
+        from core.recommendation_api import _is_adult_content
+        for key in ("movies", "tv", "credits", "filmography"):
+            if isinstance(detail.get(key), list):
+                detail[key] = [c for c in detail[key] if not _is_adult_content(c)]
+    except Exception:
+        pass
+
     return templates.TemplateResponse(
         request=request,
         name="persona.html",
