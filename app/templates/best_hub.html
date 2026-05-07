@@ -92,8 +92,8 @@
     <section class="besthub-platform">
         <h2 class="besthub-platform-name">{{ info.name }}</h2>
         <div class="besthub-grid">
-            {% for item in info.items %}
-            <a href="/migliori-{{ item.slug }}" class="besthub-link">{{ item.title }}</a>
+            {% for link in info.links %}
+            <a href="/migliori-{{ link.slug }}" class="besthub-link">{{ link.title }}</a>
             {% endfor %}
         </div>
     </section>

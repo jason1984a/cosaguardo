@@ -2127,10 +2127,10 @@ def best_hub(request: Request):
     for slug, tipo, genere, platform in iter_all_best_combos():
         if platform not in by_platform:
             _, name, _ = PLATFORM_SLUGS[platform]
-            by_platform[platform] = {"name": name, "items": []}
+            by_platform[platform] = {"name": name, "links": []}
         label = BEST_GENRE_META[genere]["label"]
         h_tipo = "serie TV" if tipo == "serie" else "film"
-        by_platform[platform]["items"].append({
+        by_platform[platform]["links"].append({
             "slug":  slug,
             "title": f"Migliori {h_tipo} {label}",
         })
