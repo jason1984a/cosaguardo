@@ -2145,7 +2145,9 @@ def get_scopri_results(
             results.append({
                 "tmdb_id":      item.get("id"),
                 "title":        title,
-                "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
+                # w300 invece di w342: ~50% peso in meno, qualità invariata sui poster
+                # delle griglie /scopri (il rendering è max ~140-180px lato browser)
+                "poster_url":   f"https://image.tmdb.org/t/p/w300{pp}" if pp else "",
                 "backdrop_url": f"https://image.tmdb.org/t/p/w780{bp}" if bp else "",
                 "vote_average": round(item.get("vote_average",0),1),
                 "vote_count":   item.get("vote_count",0),
@@ -2205,7 +2207,8 @@ def _fetch_strip(strip_cfg: dict, tipo: str, limit: int = 12) -> list:
             results.append({
                 "tmdb_id":      item.get("id"),
                 "title":        title,
-                "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}",
+                # w300 invece di w342: ~50% peso in meno per la griglia /scopri
+                "poster_url":   f"https://image.tmdb.org/t/p/w300{pp}",
                 "vote_average": round(item.get("vote_average",0),1),
                 "release_date": item.get("release_date","") or item.get("first_air_date",""),
                 "content_type": "tv" if is_tv else "movie",

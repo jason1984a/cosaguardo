@@ -40,7 +40,16 @@
                         <a href="/{% if item.content_type == 'tv' %}serie{% else %}film{% endif %}/{{ item.tmdb_id }}"
                             class="trend-mini-card trend-mini-card--hot"
                             style="display:block;text-decoration:none;">
-                            <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" onerror="this.style.display='none'">
+                            {# Le prime 3 card sono above-the-fold:
+                               niente lazy + fetchpriority high sulla prima per LCP. #}
+                            {% if loop.index0 < 3 %}
+                            <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                                 {% if loop.index0 == 0 %}fetchpriority="high"{% endif %}
+                                 decoding="async"
+                                 onerror="this.style.display='none'">
+                            {% else %}
+                            <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" decoding="async" onerror="this.style.display='none'">
+                            {% endif %}
                             <div class="trend-mini-overlay">
                                 <span class="trend-mini-type {{ 'trend-type-tv' if item.content_type == 'tv' else 'trend-type-movie' }}">{{ item.label }}</span>
                                 {% if item.vote_average and item.vote_average > 0 %}

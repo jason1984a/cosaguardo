@@ -149,7 +149,15 @@
                     <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
                        class="scopri-poster-card">
                         {% if item.poster_url %}
-                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+                        {# Prime 3 card di ogni strip above-the-fold: niente lazy.
+                           fetchpriority alta solo sulla 1° card della 1° strip (LCP). #}
+                        {% if loop.index0 < 3 %}
+                        <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                             {% if loop.index0 == 0 and loop.first %}fetchpriority="high"{% endif %}
+                             decoding="async">
+                        {% else %}
+                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" decoding="async">
+                        {% endif %}
                         {% else %}
                         <div class="scopri-noposter">
                             <i data-lucide="film" style="width:24px;height:24px;opacity:.3;"></i>
@@ -181,7 +189,14 @@
         <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
            class="scopri-card">
             {% if item.poster_url %}
-            <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+            {# Prime 6 card above-the-fold: niente lazy, fetchpriority high sulla 1° (LCP target) #}
+            {% if loop.index0 < 6 %}
+            <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                 {% if loop.index0 == 0 %}fetchpriority="high"{% endif %}
+                 decoding="async">
+            {% else %}
+            <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" decoding="async">
+            {% endif %}
             {% else %}
             <div class="scopri-card-noposter">
                 <i data-lucide="film" style="width:28px;height:28px;opacity:.3;"></i>
