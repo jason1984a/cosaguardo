@@ -130,6 +130,12 @@
         </form>
     </div>
 
+    {# Namespace flag globale per LCP: la primissima immagine resa,
+       in qualunque sezione (strips/grid), riceve fetchpriority="high".
+       Tutte le altre above-the-fold sono eager senza priority.
+       Solo 1 LCP candidate → Lighthouse riesce a misurare. #}
+    {% set lcp = namespace(set=false) %}
+
     <!-- MODALITÀ STRIPS (nessun filtro attivo) -->
     {% if not has_filters and strips %}
     <div class="scopri-strips">
@@ -149,12 +155,13 @@
                     <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
                        class="scopri-poster-card">
                         {% if item.poster_url %}
-                        {# Prime 3 card di ogni strip above-the-fold: niente lazy.
-                           fetchpriority alta solo sulla 1° card della 1° strip (LCP). #}
-                        {% if loop.index0 < 3 %}
+                        {% if not lcp.set %}
+                        {% set lcp.set = true %}
                         <img src="{{ item.poster_url }}" alt="{{ item.title }}"
-                             {% if loop.index0 == 0 and loop.first %}fetchpriority="high"{% endif %}
+                             fetchpriority="high"
                              decoding="async">
+                        {% elif loop.index0 < 3 %}
+                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" decoding="async">
                         {% else %}
                         <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" decoding="async">
                         {% endif %}
@@ -189,11 +196,15 @@
         <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
            class="scopri-card">
             {% if item.poster_url %}
-            {# Prime 6 card above-the-fold: niente lazy, fetchpriority high sulla 1° (LCP target) #}
-            {% if loop.index0 < 6 %}
+            {% if not lcp.set %}
+            {# Primissima immagine valida resa: candidata LCP unica. #}
+            {% set lcp.set = true %}
             <img src="{{ item.poster_url }}" alt="{{ item.title }}"
-                 {% if loop.index0 == 0 %}fetchpriority="high"{% endif %}
+                 fetchpriority="high"
                  decoding="async">
+            {% elif loop.index0 < 6 %}
+            {# Altre card above-the-fold: eager senza priority. #}
+            <img src="{{ item.poster_url }}" alt="{{ item.title }}" decoding="async">
             {% else %}
             <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" decoding="async">
             {% endif %}
