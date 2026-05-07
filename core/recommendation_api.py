@@ -2171,9 +2171,10 @@ def get_scopri_results(
             results.append({
                 "tmdb_id":      item.get("id"),
                 "title":        title,
-                # w300 invece di w342: ~50% peso in meno, qualità invariata sui poster
-                # delle griglie /scopri (il rendering è max ~140-180px lato browser)
-                "poster_url":   f"https://image.tmdb.org/t/p/w300{pp}" if pp else "",
+                # w185 (era w300): le card della griglia /scopri sono renderizzate
+                # a 100-180px max, w185 mantiene qualità visiva con peso 30-40% inferiore.
+                # Cruciale per LCP: 92+ poster sulla pagina, ogni KB risparmiato è LCP più veloce.
+                "poster_url":   f"https://image.tmdb.org/t/p/w185{pp}" if pp else "",
                 "backdrop_url": f"https://image.tmdb.org/t/p/w780{bp}" if bp else "",
                 "vote_average": round(item.get("vote_average",0),1),
                 "vote_count":   item.get("vote_count",0),
@@ -2236,8 +2237,8 @@ def _fetch_strip(strip_cfg: dict, tipo: str, limit: int = 12) -> list:
             results.append({
                 "tmdb_id":      item.get("id"),
                 "title":        title,
-                # w300 invece di w342: ~50% peso in meno per la griglia /scopri
-                "poster_url":   f"https://image.tmdb.org/t/p/w300{pp}",
+                # w185 (era w300): cards strip mostrate a ~100px su mobile.
+                "poster_url":   f"https://image.tmdb.org/t/p/w185{pp}",
                 "vote_average": round(item.get("vote_average",0),1),
                 "release_date": item.get("release_date","") or item.get("first_air_date",""),
                 "content_type": "tv" if is_tv else "movie",

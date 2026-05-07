@@ -132,8 +132,8 @@
 
     {# Namespace flag globale per LCP: la primissima immagine resa,
        in qualunque sezione (strips/grid), riceve fetchpriority="high".
-       Tutte le altre above-the-fold sono eager senza priority.
-       Solo 1 LCP candidate → Lighthouse riesce a misurare. #}
+       TUTTE le altre vanno lazy — su mobile vediamo solo 3-4 card above-the-fold,
+       le altre 88+ si possono caricare on-scroll senza penalizzare LCP. #}
     {% set lcp = namespace(set=false) %}
 
     <!-- MODALITÀ STRIPS (nessun filtro attivo) -->
@@ -156,14 +156,18 @@
                        class="scopri-poster-card">
                         {% if item.poster_url %}
                         {% if not lcp.set %}
+                        {# 1° immagine valida = LCP candidate, niente lazy. #}
                         {% set lcp.set = true %}
                         <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                             width="100" height="150"
                              fetchpriority="high"
                              decoding="async">
-                        {% elif loop.index0 < 3 %}
-                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" decoding="async">
                         {% else %}
-                        <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" decoding="async">
+                        {# Tutte le altre: lazy aggressivo. Su mobile la 2° strip è già fuori
+                           viewport iniziale, quindi può caricare on-scroll senza problema. #}
+                        <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                             width="100" height="150"
+                             loading="lazy" decoding="async">
                         {% endif %}
                         {% else %}
                         <div class="scopri-noposter">
@@ -197,16 +201,15 @@
            class="scopri-card">
             {% if item.poster_url %}
             {% if not lcp.set %}
-            {# Primissima immagine valida resa: candidata LCP unica. #}
             {% set lcp.set = true %}
             <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                 width="140" height="210"
                  fetchpriority="high"
                  decoding="async">
-            {% elif loop.index0 < 6 %}
-            {# Altre card above-the-fold: eager senza priority. #}
-            <img src="{{ item.poster_url }}" alt="{{ item.title }}" decoding="async">
             {% else %}
-            <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" decoding="async">
+            <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                 width="140" height="210"
+                 loading="lazy" decoding="async">
             {% endif %}
             {% else %}
             <div class="scopri-card-noposter">

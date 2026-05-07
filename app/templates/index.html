@@ -36,9 +36,9 @@
             <button class="trend-nav trend-nav-left trend-nav-left-main" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="hero-trending-row" id="hero-trending-row">
                 {% if top_rated %}
-                    {# Namespace flag per LCP: la 1ª immagine valida riceve fetchpriority high.
-                       Le altre prime 3 sono eager (no lazy) ma senza priority extra.
-                       Lighthouse cerca UN solo elemento dominante → fix per NO_LCP. #}
+                    {# Namespace flag per LCP: solo la 1ª immagine valida è eager+priority,
+                       tutte le altre sono lazy. Sotto i 600px su mobile vedi solo 2-3 card,
+                       le altre 30+ del carosello caricano on-scroll. #}
                     {% set lcp = namespace(set=false) %}
                     {% for item in top_rated %}
                         <a href="/{% if item.content_type == 'tv' %}serie{% else %}film{% endif %}/{{ item.tmdb_id }}"
@@ -47,15 +47,13 @@
                             {% if item.poster_url and not lcp.set %}
                                 {% set lcp.set = true %}
                                 <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                                     width="140" height="210"
                                      fetchpriority="high"
-                                     decoding="async"
-                                     onerror="this.style.display='none'">
-                            {% elif loop.index0 < 3 %}
-                                <img src="{{ item.poster_url }}" alt="{{ item.title }}"
                                      decoding="async"
                                      onerror="this.style.display='none'">
                             {% else %}
                                 <img src="{{ item.poster_url }}" alt="{{ item.title }}"
+                                     width="140" height="210"
                                      loading="lazy" decoding="async"
                                      onerror="this.style.display='none'">
                             {% endif %}
