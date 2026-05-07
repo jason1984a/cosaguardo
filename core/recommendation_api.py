@@ -2658,54 +2658,85 @@ def get_platform_subscribe_link(slug: str) -> str:
     return fallback_url
 
 
-def get_platform_content(slug: str, content_type: str = "movie", limit: int = 60) -> list:
+def get_platform_content(slug: str, content_type: str = "movie", limit: int = 60) -> tuple:
     """
-    Top 60 film/serie più popolari su una piattaforma streaming.
-    Cache 6h (popolarità fluttua, ma non drasticamente).
+    Top film/serie più popolari su una piattaforma streaming.
+    Cache 6h.
 
-    Args:
-        slug: PLATFORM_SLUGS key (es. "netflix")
-        content_type: "movie" o "tv"
-        limit: max risultati (default 60, ovvero 3 pagine TMDb da 20)
+    Returns: (items, is_fallback)
+        items: lista di dict (tmdb_id, title, poster_url, rating, year, content_type)
+        is_fallback: True se TMDb aveva troppo pochi risultati per questa piattaforma
+                     e abbiamo riempito con i top popolari generali (es. RaiPlay).
 
-    Returns: lista di dict con tmdb_id, title, poster_url, rating, year, type.
+    Soglia fallback: <12 risultati = piattaforma "povera" su TMDb.
     """
     if slug not in PLATFORM_SLUGS or not TMDB_API_KEY:
-        return []
+        return [], False
 
     pid, _, _ = PLATFORM_SLUGS[slug]
     ct = "tv" if content_type == "tv" else "movie"
 
-    cache_key = f"platform_content:v1:{slug}:{ct}:{limit}"
+    cache_key = f"platform_content:v2:{slug}:{ct}:{limit}"
     try:
         from core.tmdb_cache import cache_get, cache_set
         cached = cache_get(cache_key)
         if cached is not None:
-            return cached
+            # cached è [items, is_fallback]
+            if isinstance(cached, list) and len(cached) == 2 and isinstance(cached[0], list):
+                return cached[0], cached[1]
+            # retrocompatibilità v1 cache: era una lista flat
+            return cached, False
     except Exception:
         cache_get = None
         cache_set = None
 
-    results = []
+    # 1. Tentativo standard: filtro per piattaforma
+    results = _discover_tmdb(ct=ct, with_provider=pid, limit=limit)
+
+    # 2. Se troppo pochi → fallback "popolari in Italia"
+    is_fallback = False
+    if len(results) < 12:
+        is_fallback = True
+        seen_ids = {r["tmdb_id"] for r in results}
+        extra = _discover_tmdb(ct=ct, with_provider=None, limit=limit + 5)
+        for r in extra:
+            if r["tmdb_id"] not in seen_ids:
+                results.append(r)
+                seen_ids.add(r["tmdb_id"])
+                if len(results) >= limit:
+                    break
+
+    if cache_set and results:
+        try:
+            cache_set(cache_key, [results, is_fallback], ttl=6 * 60 * 60)
+        except Exception:
+            pass
+
+    return results, is_fallback
+
+
+def _discover_tmdb(ct: str, with_provider: int = None, limit: int = 60) -> list:
+    """Helper: chiama TMDb /discover su 3 pagine, restituisce lista normalizzata."""
+    out = []
     seen_ids = set()
 
-    # 3 pagine TMDb da 20 = 60 risultati. Ogni chiamata ~200-400ms cache miss.
     for page in range(1, 4):
-        if len(results) >= limit:
+        if len(out) >= limit:
             break
         try:
+            params = {
+                "api_key": TMDB_API_KEY,
+                "language": "it-IT",
+                "watch_region": "IT",
+                "sort_by": "popularity.desc",
+                "page": page,
+                "vote_count.gte": 5,
+            }
+            if with_provider:
+                params["with_watch_providers"] = with_provider
             r = requests.get(
                 f"https://api.themoviedb.org/3/discover/{ct}",
-                params={
-                    "api_key": TMDB_API_KEY,
-                    "language": "it-IT",
-                    "watch_region": "IT",
-                    "with_watch_providers": pid,
-                    "sort_by": "popularity.desc",
-                    "page": page,
-                    # Filtro qualità minima: scarta titoli con voti irrisori
-                    "vote_count.gte": 5,
-                },
+                params=params,
                 timeout=6,
             )
             for item in r.json().get("results", []):
@@ -2713,10 +2744,9 @@ def get_platform_content(slug: str, content_type: str = "movie", limit: int = 60
                 if not tid or tid in seen_ids:
                     continue
                 seen_ids.add(tid)
-
                 poster = item.get("poster_path")
                 if not poster:
-                    continue  # senza poster la card sarebbe brutta
+                    continue
 
                 if ct == "movie":
                     title = item.get("title") or item.get("original_title", "")
@@ -2727,27 +2757,20 @@ def get_platform_content(slug: str, content_type: str = "movie", limit: int = 60
                 if not title:
                     continue
 
-                year = date[:4] if date else ""
-                results.append({
-                    "tmdb_id":     tid,
-                    "title":       title,
-                    "poster_url":  f"https://image.tmdb.org/t/p/w342{poster}",
-                    "rating":      round(float(item.get("vote_average") or 0), 1),
-                    "year":        year,
+                out.append({
+                    "tmdb_id":      tid,
+                    "title":        title,
+                    "poster_url":   f"https://image.tmdb.org/t/p/w342{poster}",
+                    "rating":       round(float(item.get("vote_average") or 0), 1),
+                    "year":         date[:4] if date else "",
                     "content_type": ct,
                 })
-                if len(results) >= limit:
+                if len(out) >= limit:
                     break
         except Exception:
             continue
 
-    if cache_set and results:
-        try:
-            cache_set(cache_key, results, ttl=6 * 60 * 60)  # 6h
-        except Exception:
-            pass
-
-    return results
+    return out
 
 
 def get_platform_meta(slug: str) -> dict:

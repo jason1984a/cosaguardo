@@ -2127,13 +2127,19 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
 
     meta = get_platform_meta(slug)
 
-    # Carica contenuti in base al tab attivo. Per "tutti" mergeamo film+serie
-    # ordinandoli alternati (TMDb non offre un endpoint unificato).
+    # Carica contenuti in base al tab attivo. get_platform_content restituisce
+    # una tupla (items, is_fallback). Se TMDb ha pochi dati per quella piattaforma,
+    # is_fallback=True e gli items sono "popolari in Italia" come ripiego.
     items = []
+    is_fallback = False
     if tipo in ("tutti", "film"):
-        items.extend(get_platform_content(slug, content_type="movie", limit=60))
+        m_items, m_fb = get_platform_content(slug, content_type="movie", limit=60)
+        items.extend(m_items)
+        is_fallback = is_fallback or m_fb
     if tipo in ("tutti", "serie"):
-        items.extend(get_platform_content(slug, content_type="tv", limit=60))
+        s_items, s_fb = get_platform_content(slug, content_type="tv", limit=60)
+        items.extend(s_items)
+        is_fallback = is_fallback or s_fb
 
     # Se "tutti": ordina per popolarità approx (i risultati TMDb sono già pop-sorted
     # internamente per tipo, ma vanno mescolati). Usiamo rating come proxy.
@@ -2158,12 +2164,13 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
         request=request,
         name="platform.html",
         context={
-            "request":   request,
-            "meta":      meta,
-            "items":     items,
-            "tipo":      tipo if tipo in ("tutti","film","serie") else "tutti",
-            "seo_title": seo_title,
-            "seo_desc":  seo_desc,
+            "request":     request,
+            "meta":        meta,
+            "items":       items,
+            "tipo":        tipo if tipo in ("tutti","film","serie") else "tutti",
+            "is_fallback": is_fallback,
+            "seo_title":   seo_title,
+            "seo_desc":    seo_desc,
         },
     )
 
