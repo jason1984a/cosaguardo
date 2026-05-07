@@ -1872,6 +1872,14 @@ def sitemap():
         ("/termini",         "yearly",  "0.3"),
     ]
 
+    # Pagine /piattaforma/{slug} — 10 hub piattaforme con contenuti curati
+    try:
+        from core.recommendation_api import PLATFORM_SLUGS
+        for slug in PLATFORM_SLUGS:
+            static_urls.append((f"/piattaforma/{slug}", "daily", "0.8"))
+    except Exception:
+        pass
+
     # Tutti gli slug /dove-vedere/* e /come/* dal DB locale (~750+750)
     seo_entries = []
     try:
@@ -2093,6 +2101,71 @@ def _scopri_seo(tipo, genere, mood, piattaforma, anno, voto=""):
         title = f"Scopri {tipo_label} — CosaGuardo"
         desc  = f"Esplora {tipo_label} consigliati in base al tuo gusto su CosaGuardo."
     return title, desc
+
+
+@app.get("/piattaforma/{slug}", response_class=HTMLResponse)
+def platform_page(request: Request, slug: str, tipo: str = "tutti"):
+    """
+    Pagina filtro per piattaforma streaming.
+    URL pattern: /piattaforma/{slug} (es. /piattaforma/netflix)
+    Query param: ?tipo=tutti|film|serie
+
+    Usato anche dalle tile della striscia loghi nella home (cliccabili).
+    """
+    from core.recommendation_api import (
+        PLATFORM_SLUGS, get_platform_meta, get_platform_content,
+    )
+
+    # 404 se slug sconosciuto
+    if slug not in PLATFORM_SLUGS:
+        return templates.TemplateResponse(
+            request=request,
+            name="404.html" if os.path.exists("app/templates/404.html") else "index.html",
+            status_code=404,
+            context={"request": request},
+        )
+
+    meta = get_platform_meta(slug)
+
+    # Carica contenuti in base al tab attivo. Per "tutti" mergeamo film+serie
+    # ordinandoli alternati (TMDb non offre un endpoint unificato).
+    items = []
+    if tipo in ("tutti", "film"):
+        items.extend(get_platform_content(slug, content_type="movie", limit=60))
+    if tipo in ("tutti", "serie"):
+        items.extend(get_platform_content(slug, content_type="tv", limit=60))
+
+    # Se "tutti": ordina per popolarità approx (i risultati TMDb sono già pop-sorted
+    # internamente per tipo, ma vanno mescolati). Usiamo rating come proxy.
+    if tipo == "tutti":
+        # Interleaving alternato (1 movie, 1 tv, 1 movie...) per varietà visiva
+        movies = [i for i in items if i.get("content_type") == "movie"]
+        series = [i for i in items if i.get("content_type") == "tv"]
+        merged = []
+        for i in range(max(len(movies), len(series))):
+            if i < len(movies): merged.append(movies[i])
+            if i < len(series): merged.append(series[i])
+        items = merged[:60]
+
+    # SEO meta
+    seo_title = f"Cosa vedere su {meta['name']} | CosaGuardo"
+    seo_desc  = (
+        f"I migliori film e serie TV su {meta['name']} oggi in Italia. "
+        f"Ordinati per popolarità — scopri cosa guardare stasera."
+    )
+
+    return templates.TemplateResponse(
+        request=request,
+        name="platform.html",
+        context={
+            "request":   request,
+            "meta":      meta,
+            "items":     items,
+            "tipo":      tipo if tipo in ("tutti","film","serie") else "tutti",
+            "seo_title": seo_title,
+            "seo_desc":  seo_desc,
+        },
+    )
 
 
 @app.get("/scopri", response_class=HTMLResponse)

@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+
+{% block title %}{{ seo_title }}{% endblock %}
+
+{% block head_extra %}
+<meta name="description" content="{{ seo_desc }}">
+<meta name="cg-content-type" content="platform">
+<meta property="og:title" content="{{ seo_title }}">
+<meta property="og:description" content="{{ seo_desc }}">
+{% if meta.logo_url %}<meta property="og:image" content="{{ meta.logo_url }}">{% endif %}
+<style>
+    /* ── Pagina Piattaforma — header con logo + CTA ───────────────────── */
+    .platform-header {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 24px 0 18px;
+        margin-bottom: 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .platform-header-logo {
+        flex-shrink: 0;
+        width: 84px;
+        height: 84px;
+        border-radius: 18px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        box-shadow: 0 6px 18px rgba(0,0,0,0.3);
+    }
+    .platform-header-logo img {
+        width: 100%; height: 100%;
+        object-fit: cover; display: block;
+    }
+    .platform-header-text { flex: 1; min-width: 0; }
+    .platform-header-text h1 {
+        margin: 0 0 4px;
+        font-size: 28px;
+        line-height: 1.05;
+        background: linear-gradient(90deg, #ffffff, #93c5fd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .platform-header-text p {
+        margin: 0;
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.45;
+    }
+    .platform-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 18px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        color: #fff !important;
+        font-weight: 700;
+        font-size: 13px;
+        text-decoration: none;
+        white-space: nowrap;
+        box-shadow: 0 8px 24px rgba(37,99,235,0.35);
+        transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    .platform-cta:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 28px rgba(37,99,235,0.5);
+    }
+
+    /* Tab "Tutti / Film / Serie TV" */
+    .platform-tabs {
+        display: flex;
+        gap: 8px;
+        margin: 0 0 18px;
+        flex-wrap: wrap;
+    }
+    .platform-tab {
+        padding: 8px 16px;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        color: var(--muted);
+        font-size: 0.88rem;
+        text-decoration: none;
+        transition: 0.15s ease;
+    }
+    .platform-tab:hover {
+        background: rgba(255,255,255,0.08);
+        color: var(--text);
+    }
+    .platform-tab.is-active {
+        background: rgba(110,168,254,0.18);
+        border-color: rgba(110,168,254,0.45);
+        color: #cfe2ff;
+    }
+
+    /* Stato vuoto */
+    .platform-empty {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--muted);
+    }
+    .platform-empty h2 {
+        font-size: 20px;
+        margin: 0 0 8px;
+        color: var(--text);
+    }
+    .platform-empty p {
+        font-size: 14px;
+        margin: 0 0 16px;
+    }
+
+    /* Mobile compaction */
+    @media (max-width: 760px) {
+        .platform-header {
+            padding: 16px 0 12px;
+            gap: 14px;
+        }
+        .platform-header-logo {
+            width: 60px; height: 60px;
+            border-radius: 14px;
+        }
+        .platform-header-text h1 { font-size: 22px; }
+        .platform-header-text p { font-size: 12px; }
+        .platform-cta {
+            padding: 8px 14px;
+            font-size: 12px;
+        }
+        .platform-tab {
+            padding: 6px 12px;
+            font-size: 0.82rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page page-platform">
+
+    <!-- HEADER PIATTAFORMA -->
+    <header class="platform-header">
+        {% if meta.logo_url %}
+        <div class="platform-header-logo">
+            <img src="{{ meta.logo_url }}" alt="Logo {{ meta.name }}" width="84" height="84">
+        </div>
+        {% endif %}
+        <div class="platform-header-text">
+            <h1>Cosa vedere su {{ meta.name }}</h1>
+            <p>I film e le serie TV più popolari oggi su {{ meta.name }} in Italia.</p>
+        </div>
+        {% if meta.subscribe_link %}
+        <a href="{{ meta.subscribe_link }}"
+           class="platform-cta"
+           target="_blank"
+           rel="nofollow noopener noreferrer">
+            <i data-lucide="external-link" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
+            Abbonati a {{ meta.name }}
+        </a>
+        {% endif %}
+    </header>
+
+    <!-- TAB TIPO CONTENUTO -->
+    <nav class="platform-tabs" aria-label="Filtra per tipo">
+        <a href="/piattaforma/{{ meta.slug }}?tipo=tutti"
+           class="platform-tab {% if tipo == 'tutti' %}is-active{% endif %}">Tutti</a>
+        <a href="/piattaforma/{{ meta.slug }}?tipo=film"
+           class="platform-tab {% if tipo == 'film' %}is-active{% endif %}">Film</a>
+        <a href="/piattaforma/{{ meta.slug }}?tipo=serie"
+           class="platform-tab {% if tipo == 'serie' %}is-active{% endif %}">Serie TV</a>
+    </nav>
+
+    <!-- GRIGLIA CONTENUTI (riusa stili .scopri-grid esistenti) -->
+    {% if items %}
+    <div class="scopri-grid">
+        {% for item in items %}
+        <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
+           class="scopri-card">
+            <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+            <div class="scopri-card-overlay">
+                <span class="scopri-card-type {{ 'badge-tv' if item.content_type == 'tv' else 'badge-movie' }}">
+                    {{ "Serie" if item.content_type == "tv" else "Film" }}
+                </span>
+                {% if item.rating and item.rating > 0 %}
+                <span class="scopri-card-score">★ {{ item.rating }}</span>
+                {% endif %}
+                <div class="scopri-card-title">{{ item.title }}</div>
+                {% if item.year %}
+                <div class="scopri-card-year">{{ item.year }}</div>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="platform-empty">
+        <h2>Nessun contenuto trovato</h2>
+        <p>Stiamo arricchendo il catalogo per questa piattaforma. Riprova tra qualche giorno.</p>
+        <a href="/" class="platform-tab">Torna alla home</a>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    if (window.lucide) lucide.createIcons();
+});
+</script>
+{% endblock %}

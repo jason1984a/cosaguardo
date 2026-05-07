@@ -417,16 +417,24 @@ document.addEventListener("DOMContentLoaded", function () {
                     return;
                 }
                 // Sostituisce skeleton con tile reali.
-                // Per ora decorative: <div title="...">. Click handler verrà aggiunto
-                // quando implementeremo la pagina filtro.
-                stripRow.innerHTML = platforms.map(p => `
-                    <div class="platform-tile" title="${escapeAttr(p.name || '')}">
+                // Tile cliccabili: <a href="/piattaforma/{slug}"> per le piattaforme
+                // con slug noto. Se il backend non restituisce slug (provider non
+                // mappato in PLATFORM_SLUGS), tile resta decorativa.
+                stripRow.innerHTML = platforms.map(p => {
+                    const slug = p.slug || '';
+                    const tileInner = `
                         <img src="${escapeAttr(p.logo_url)}"
                              alt="${escapeAttr(p.name || '')}"
                              loading="lazy" decoding="async"
                              onerror="this.parentElement.style.display='none'">
-                    </div>
-                `).join("");
+                    `;
+                    if (slug) {
+                        return `<a class="platform-tile" href="/piattaforma/${escapeAttr(slug)}"
+                                   title="Cosa vedere su ${escapeAttr(p.name || '')}"
+                                   aria-label="Cosa vedere su ${escapeAttr(p.name || '')}">${tileInner}</a>`;
+                    }
+                    return `<div class="platform-tile" title="${escapeAttr(p.name || '')}">${tileInner}</div>`;
+                }).join("");
             })
             .catch(() => {
                 const section = stripRow.closest(".platform-strip");

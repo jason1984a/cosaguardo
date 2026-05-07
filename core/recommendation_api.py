@@ -2564,7 +2564,7 @@ def get_home_platforms() -> list[dict]:
     Ordine: HOME_PLATFORM_IDS (manualmente curato per rilevanza IT).
     Se TMDb non risponde o non ha un provider, viene saltato.
     """
-    cache_key = "home:platforms:v1:IT:movie"
+    cache_key = "home:platforms:v2:IT:movie"
     try:
         from core.tmdb_cache import cache_get, cache_set
         cached = cache_get(cache_key)
@@ -2597,6 +2597,7 @@ def get_home_platforms() -> list[dict]:
                 if pid in HOME_PLATFORM_IDS and pid not in by_id:
                     by_id[pid] = {
                         "provider_id": pid,
+                        "slug":        PLATFORM_ID_TO_SLUG.get(pid, ""),
                         "name":        p.get("provider_name") or "",
                         "logo_url":    f"https://image.tmdb.org/t/p/original{p.get('logo_path','')}"
                                        if p.get("logo_path") else "",
@@ -2614,3 +2615,165 @@ def get_home_platforms() -> list[dict]:
             pass
 
     return ordered
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# PAGINA FILTRO PIATTAFORMA — /piattaforma/{slug}
+# ═════════════════════════════════════════════════════════════════════════
+
+# Mappa slug URL → (provider_id TMDb, nome display, URL ufficiale per CTA)
+# Slug volutamente in italiano, semplice, SEO-friendly. Sono URL stabili.
+PLATFORM_SLUGS = {
+    "netflix":            (8,   "Netflix",            "https://www.netflix.com/it/"),
+    "prime-video":        (119, "Prime Video",        "https://www.primevideo.com/"),
+    "disney-plus":        (337, "Disney+",            "https://www.disneyplus.com/it-it"),
+    "now":                (39,  "NOW",                "https://www.nowtv.it/"),
+    "apple-tv-plus":      (350, "Apple TV+",          "https://tv.apple.com/it"),
+    "paramount-plus":     (531, "Paramount+",         "https://www.paramountplus.com/it/"),
+    "raiplay":            (261, "RaiPlay",            "https://www.raiplay.it/"),
+    "mediaset-infinity":  (484, "Mediaset Infinity",  "https://mediasetinfinity.mediaset.it/"),
+    "sky-go":             (29,  "Sky Go",             "https://www.sky.it/sky-go"),
+    "crunchyroll":        (283, "Crunchyroll",        "https://www.crunchyroll.com/it/"),
+}
+
+# Mappa inversa per URL building dalla home (provider_id → slug)
+PLATFORM_ID_TO_SLUG = {pid: slug for slug, (pid, _, _) in PLATFORM_SLUGS.items()}
+
+
+def get_platform_subscribe_link(slug: str) -> str:
+    """
+    Costruisce il CTA "Abbonati a X" per la pagina piattaforma.
+    Usa _build_affiliate_link se programma attivo, altrimenti link ufficiale.
+    """
+    if slug not in PLATFORM_SLUGS:
+        return ""
+    pid, name, fallback_url = PLATFORM_SLUGS[slug]
+
+    # Prova affiliate (vuota se non configurato)
+    aff = _build_affiliate_link(name, title="", tmdb_id=None)
+    if aff:
+        return aff
+
+    # Fallback: link ufficiale alla piattaforma
+    return fallback_url
+
+
+def get_platform_content(slug: str, content_type: str = "movie", limit: int = 60) -> list:
+    """
+    Top 60 film/serie più popolari su una piattaforma streaming.
+    Cache 6h (popolarità fluttua, ma non drasticamente).
+
+    Args:
+        slug: PLATFORM_SLUGS key (es. "netflix")
+        content_type: "movie" o "tv"
+        limit: max risultati (default 60, ovvero 3 pagine TMDb da 20)
+
+    Returns: lista di dict con tmdb_id, title, poster_url, rating, year, type.
+    """
+    if slug not in PLATFORM_SLUGS or not TMDB_API_KEY:
+        return []
+
+    pid, _, _ = PLATFORM_SLUGS[slug]
+    ct = "tv" if content_type == "tv" else "movie"
+
+    cache_key = f"platform_content:v1:{slug}:{ct}:{limit}"
+    try:
+        from core.tmdb_cache import cache_get, cache_set
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+    except Exception:
+        cache_get = None
+        cache_set = None
+
+    results = []
+    seen_ids = set()
+
+    # 3 pagine TMDb da 20 = 60 risultati. Ogni chiamata ~200-400ms cache miss.
+    for page in range(1, 4):
+        if len(results) >= limit:
+            break
+        try:
+            r = requests.get(
+                f"https://api.themoviedb.org/3/discover/{ct}",
+                params={
+                    "api_key": TMDB_API_KEY,
+                    "language": "it-IT",
+                    "watch_region": "IT",
+                    "with_watch_providers": pid,
+                    "sort_by": "popularity.desc",
+                    "page": page,
+                    # Filtro qualità minima: scarta titoli con voti irrisori
+                    "vote_count.gte": 5,
+                },
+                timeout=6,
+            )
+            for item in r.json().get("results", []):
+                tid = item.get("id")
+                if not tid or tid in seen_ids:
+                    continue
+                seen_ids.add(tid)
+
+                poster = item.get("poster_path")
+                if not poster:
+                    continue  # senza poster la card sarebbe brutta
+
+                if ct == "movie":
+                    title = item.get("title") or item.get("original_title", "")
+                    date  = item.get("release_date", "")
+                else:
+                    title = item.get("name") or item.get("original_name", "")
+                    date  = item.get("first_air_date", "")
+                if not title:
+                    continue
+
+                year = date[:4] if date else ""
+                results.append({
+                    "tmdb_id":     tid,
+                    "title":       title,
+                    "poster_url":  f"https://image.tmdb.org/t/p/w342{poster}",
+                    "rating":      round(float(item.get("vote_average") or 0), 1),
+                    "year":        year,
+                    "content_type": ct,
+                })
+                if len(results) >= limit:
+                    break
+        except Exception:
+            continue
+
+    if cache_set and results:
+        try:
+            cache_set(cache_key, results, ttl=6 * 60 * 60)  # 6h
+        except Exception:
+            pass
+
+    return results
+
+
+def get_platform_meta(slug: str) -> dict:
+    """
+    Metadata per l'header pagina piattaforma:
+    nome display, logo TMDb (recuperato da get_home_platforms cache), CTA abbonamento.
+    """
+    if slug not in PLATFORM_SLUGS:
+        return {}
+    pid, name, _ = PLATFORM_SLUGS[slug]
+
+    # Riusa la cache di get_home_platforms per il logo
+    logo_url = ""
+    try:
+        platforms = get_home_platforms()
+        for p in platforms:
+            if p.get("provider_id") == pid:
+                logo_url = p.get("logo_url", "")
+                break
+    except Exception:
+        pass
+
+    return {
+        "slug":            slug,
+        "provider_id":     pid,
+        "name":            name,
+        "logo_url":        logo_url,
+        "subscribe_link":  get_platform_subscribe_link(slug),
+    }
