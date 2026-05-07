@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block title %}{{ seo_title }}{% endblock %}
+
+{% block head_extra %}
+<meta name="description" content="{{ seo_desc }}">
+<meta name="cg-content-type" content="best-hub">
+<style>
+    .besthub-header {
+        padding: 24px 0 18px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .besthub-header h1 {
+        margin: 0 0 6px;
+        font-size: 28px;
+        background: linear-gradient(90deg, #ffffff, #93c5fd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .besthub-header p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.5;
+    }
+
+    .besthub-platform {
+        margin-bottom: 28px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .besthub-platform:last-child { border-bottom: none; }
+
+    .besthub-platform-name {
+        font-size: 18px;
+        font-weight: 800;
+        margin: 0 0 12px;
+        color: var(--text);
+    }
+
+    .besthub-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 8px;
+    }
+    .besthub-link {
+        display: block;
+        padding: 10px 14px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 10px;
+        color: var(--text);
+        text-decoration: none;
+        font-size: 14px;
+        transition: 0.15s ease;
+    }
+    .besthub-link:hover {
+        background: rgba(110,168,254,0.10);
+        border-color: rgba(110,168,254,0.3);
+        color: #cfe2ff;
+    }
+
+    @media (max-width: 760px) {
+        .besthub-header { padding: 16px 0 12px; margin-bottom: 14px; }
+        .besthub-header h1 { font-size: 22px; }
+        .besthub-header p { font-size: 12px; }
+        .besthub-platform { margin-bottom: 22px; }
+        .besthub-platform-name { font-size: 16px; }
+        .besthub-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+        }
+        .besthub-link {
+            font-size: 12px;
+            padding: 8px 10px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page page-besthub">
+
+    <header class="besthub-header">
+        <h1>Le migliori classifiche per piattaforma</h1>
+        <p>Trova i migliori film e serie TV per genere, su Netflix, Prime Video, Disney+, Apple TV+ e Paramount+.</p>
+    </header>
+
+    {% for platform_slug, info in by_platform.items() %}
+    <section class="besthub-platform">
+        <h2 class="besthub-platform-name">{{ info.name }}</h2>
+        <div class="besthub-grid">
+            {% for item in info.items %}
+            <a href="/migliori-{{ item.slug }}" class="besthub-link">{{ item.title }}</a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endfor %}
+
+</div>
+{% endblock %}

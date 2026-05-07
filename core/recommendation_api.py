@@ -2800,3 +2800,214 @@ def get_platform_meta(slug: str) -> dict:
         "logo_url":        logo_url,
         "subscribe_link":  get_platform_subscribe_link(slug),
     }
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# PAGINE SEO "/migliori-{tipo}-{genere}-su-{piattaforma}"
+# ═════════════════════════════════════════════════════════════════════════
+
+# Selezione pilot: 6 generi × 2 tipi × 5 piattaforme = 60 pagine.
+# Limitato alle piattaforme con catalogo TMDb completo (le big 5).
+BEST_PILOT_GENRES = ["thriller", "comedy", "drammatici", "azione", "fantasy", "horror"]
+
+# Mappa genere "pilot" → (genre_id_movie, genre_id_tv, label_singolare, label_plurale)
+# Label per i titoli SEO ("migliori film thriller", "migliori serie TV comedy")
+BEST_GENRE_META = {
+    "thriller":    {"movie_id": 53,  "tv_id": 9648, "label": "thriller"},
+    "comedy":      {"movie_id": 35,  "tv_id": 35,   "label": "commedia"},
+    "drammatici":  {"movie_id": 18,  "tv_id": 18,   "label": "drammatici"},
+    "azione":      {"movie_id": 28,  "tv_id": 10759,"label": "d'azione"},
+    "fantasy":     {"movie_id": 14,  "tv_id": 10765,"label": "fantasy"},
+    "horror":      {"movie_id": 27,  "tv_id": 9648, "label": "horror"},
+}
+
+BEST_PILOT_PLATFORMS = [
+    "netflix", "prime-video", "disney-plus", "apple-tv-plus", "paramount-plus",
+]
+
+
+def parse_best_slug(slug: str) -> dict | None:
+    """
+    Decompone uno slug "/migliori-{slug}" nei suoi componenti.
+
+    Esempi accettati:
+        film-thriller-su-netflix       → {tipo:film, genere:thriller, platform:netflix}
+        serie-tv-comedy-su-prime-video → {tipo:serie, genere:comedy, platform:prime-video}
+
+    Restituisce None se il pattern non matcha (404).
+    """
+    if not slug or "-su-" not in slug:
+        return None
+
+    left, _, platform = slug.partition("-su-")
+    if platform not in BEST_PILOT_PLATFORMS:
+        return None
+
+    # left è "{tipo}-{genere}". Tipo può essere "film" o "serie-tv".
+    if left.startswith("serie-tv-"):
+        tipo = "serie"
+        genere = left[len("serie-tv-"):]
+    elif left.startswith("film-"):
+        tipo = "film"
+        genere = left[len("film-"):]
+    else:
+        return None
+
+    if genere not in BEST_PILOT_GENRES:
+        return None
+
+    return {"tipo": tipo, "genere": genere, "platform": platform}
+
+
+def build_best_slug(tipo: str, genere: str, platform: str) -> str:
+    """Inverso di parse_best_slug. Costruisce lo slug canonico."""
+    type_part = "serie-tv" if tipo == "serie" else "film"
+    return f"{type_part}-{genere}-su-{platform}"
+
+
+def iter_all_best_combos():
+    """
+    Itera tutte le 60 combinazioni pilot.
+    Yields: (slug, tipo, genere, platform) per ognuna.
+    Usato dalla sitemap.
+    """
+    for tipo in ("film", "serie"):
+        for genere in BEST_PILOT_GENRES:
+            for platform in BEST_PILOT_PLATFORMS:
+                slug = build_best_slug(tipo, genere, platform)
+                yield slug, tipo, genere, platform
+
+
+def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> list:
+    """
+    Top {limit} titoli per la combinazione tipo+genere+piattaforma.
+    Cache 6h (popolarità fluttua poco).
+
+    Usa _discover_tmdb come backbone (estensione di /piattaforma/).
+    Ritorna lista di dict con: tmdb_id, title, poster_url, rating, year,
+    content_type, overview (per le top 5 con descrizione).
+    """
+    if not TMDB_API_KEY:
+        return []
+
+    if platform not in PLATFORM_SLUGS or genere not in BEST_GENRE_META:
+        return []
+
+    pid, _, _ = PLATFORM_SLUGS[platform]
+    ct = "tv" if tipo == "serie" else "movie"
+
+    genre_id = BEST_GENRE_META[genere].get("tv_id" if ct == "tv" else "movie_id")
+    if not genre_id:
+        return []
+
+    cache_key = f"best:v1:{tipo}:{genere}:{platform}:{limit}"
+    try:
+        from core.tmdb_cache import cache_get, cache_set
+        cached = cache_get(cache_key)
+        if cached is not None:
+            return cached
+    except Exception:
+        cache_get = None
+        cache_set = None
+
+    # Chiamata TMDb con doppio filtro: provider + genre
+    out = []
+    seen_ids = set()
+    for page in range(1, 4):
+        if len(out) >= limit:
+            break
+        try:
+            r = requests.get(
+                f"https://api.themoviedb.org/3/discover/{ct}",
+                params={
+                    "api_key": TMDB_API_KEY,
+                    "language": "it-IT",
+                    "watch_region": "IT",
+                    "with_watch_providers": pid,
+                    "with_genres": genre_id,
+                    "sort_by": "popularity.desc",
+                    "page": page,
+                    "vote_count.gte": 50,  # qualità più stretta delle pagine piattaforma
+                    "vote_average.gte": 6.0,  # solo "buoni"/"ottimi"
+                },
+                timeout=6,
+            )
+            for item in r.json().get("results", []):
+                tid = item.get("id")
+                if not tid or tid in seen_ids:
+                    continue
+                seen_ids.add(tid)
+                poster = item.get("poster_path")
+                if not poster:
+                    continue
+
+                if ct == "movie":
+                    title = item.get("title") or item.get("original_title", "")
+                    date  = item.get("release_date", "")
+                else:
+                    title = item.get("name") or item.get("original_name", "")
+                    date  = item.get("first_air_date", "")
+                if not title:
+                    continue
+
+                out.append({
+                    "tmdb_id":      tid,
+                    "title":        title,
+                    "poster_url":   f"https://image.tmdb.org/t/p/w342{poster}",
+                    "rating":       round(float(item.get("vote_average") or 0), 1),
+                    "year":         date[:4] if date else "",
+                    "content_type": ct,
+                    "overview":     (item.get("overview") or "").strip(),
+                })
+                if len(out) >= limit:
+                    break
+        except Exception:
+            continue
+
+    if cache_set and out:
+        try:
+            cache_set(cache_key, out, ttl=6 * 60 * 60)
+        except Exception:
+            pass
+
+    return out
+
+
+def get_best_meta(tipo: str, genere: str, platform: str) -> dict:
+    """
+    Metadata SEO + display per la pagina "I migliori {tipo} {genere} su {platform}".
+    """
+    if platform not in PLATFORM_SLUGS or genere not in BEST_GENRE_META:
+        return {}
+
+    _, platform_name, _ = PLATFORM_SLUGS[platform]
+    genre_label = BEST_GENRE_META[genere]["label"]
+
+    # "I migliori film thriller su Netflix" / "Le migliori serie TV thriller su Netflix"
+    if tipo == "serie":
+        h1   = f"Le migliori serie TV {genre_label} su {platform_name}"
+        seo_title = f"Migliori serie TV {genre_label} su {platform_name} | CosaGuardo"
+        seo_desc  = (
+            f"Le migliori serie TV {genre_label} disponibili su {platform_name} oggi in Italia. "
+            f"Classifica aggiornata in base alla popolarità e ai voti del pubblico."
+        )
+    else:
+        h1   = f"I migliori film {genre_label} su {platform_name}"
+        seo_title = f"Migliori film {genre_label} su {platform_name} | CosaGuardo"
+        seo_desc  = (
+            f"I migliori film {genre_label} disponibili su {platform_name} oggi in Italia. "
+            f"Classifica aggiornata in base alla popolarità e ai voti del pubblico."
+        )
+
+    return {
+        "h1":               h1,
+        "seo_title":        seo_title,
+        "seo_desc":         seo_desc,
+        "tipo":             tipo,
+        "genere":           genere,
+        "genre_label":      genre_label,
+        "platform":         platform,
+        "platform_name":    platform_name,
+        "platform_logo":    "",  # popolato dalla view
+        "platform_subscribe_link": get_platform_subscribe_link(platform),
+    }

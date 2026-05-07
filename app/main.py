@@ -1880,6 +1880,15 @@ def sitemap():
     except Exception:
         pass
 
+    # Pagine /migliori-* — 60 pagine SEO programmatiche
+    static_urls.append(("/migliori", "weekly", "0.7"))
+    try:
+        from core.recommendation_api import iter_all_best_combos
+        for slug, _, _, _ in iter_all_best_combos():
+            static_urls.append((f"/migliori-{slug}", "weekly", "0.65"))
+    except Exception:
+        pass
+
     # Tutti gli slug /dove-vedere/* e /come/* dal DB locale (~750+750)
     seo_entries = []
     try:
@@ -2103,6 +2112,121 @@ def _scopri_seo(tipo, genere, mood, piattaforma, anno, voto=""):
     return title, desc
 
 
+@app.get("/migliori", response_class=HTMLResponse)
+def best_hub(request: Request):
+    """
+    Hub /migliori — lista tutte le 60 categorie pilot raggruppate per piattaforma.
+    SEO + UX: punto di ingresso unico per il blocco "/migliori-..." pages.
+    """
+    from core.recommendation_api import (
+        iter_all_best_combos, BEST_GENRE_META, PLATFORM_SLUGS,
+    )
+
+    # Raggruppa per piattaforma → lista di {slug, tipo, genere, label}
+    by_platform = {}
+    for slug, tipo, genere, platform in iter_all_best_combos():
+        if platform not in by_platform:
+            _, name, _ = PLATFORM_SLUGS[platform]
+            by_platform[platform] = {"name": name, "items": []}
+        label = BEST_GENRE_META[genere]["label"]
+        h_tipo = "serie TV" if tipo == "serie" else "film"
+        by_platform[platform]["items"].append({
+            "slug":  slug,
+            "title": f"Migliori {h_tipo} {label}",
+        })
+
+    return templates.TemplateResponse(
+        request=request,
+        name="best_hub.html",
+        context={
+            "request":     request,
+            "by_platform": by_platform,
+            "seo_title":   "Le classifiche migliori per piattaforma | CosaGuardo",
+            "seo_desc":    (
+                "Le migliori liste film e serie TV per genere e piattaforma streaming. "
+                "Thriller, commedie, drammatici, azione, fantasy, horror su Netflix, "
+                "Prime Video, Disney+, Apple TV+ e Paramount+."
+            ),
+        },
+    )
+
+
+@app.get("/migliori-{slug}", response_class=HTMLResponse)
+def best_page(request: Request, slug: str):
+    """
+    Pagina SEO "/migliori-{tipo}-{genere}-su-{platform}".
+    Es: /migliori-film-thriller-su-netflix
+        /migliori-serie-tv-comedy-su-prime-video
+
+    Usa parse_best_slug per validare lo slug.
+    """
+    from core.recommendation_api import (
+        parse_best_slug, get_best_content, get_best_meta,
+        get_home_platforms, BEST_PILOT_GENRES, BEST_GENRE_META,
+        build_best_slug,
+    )
+
+    parsed = parse_best_slug(slug)
+    if not parsed:
+        return templates.TemplateResponse(
+            request=request,
+            name="404.html" if os.path.exists("app/templates/404.html") else "index.html",
+            status_code=404,
+            context={"request": request},
+        )
+
+    tipo, genere, platform = parsed["tipo"], parsed["genere"], parsed["platform"]
+    meta  = get_best_meta(tipo, genere, platform)
+    items = get_best_content(tipo, genere, platform, limit=30)
+
+    # Logo piattaforma (riusa cache /home-platforms)
+    try:
+        for p in get_home_platforms():
+            if p.get("slug") == platform:
+                meta["platform_logo"] = p.get("logo_url", "")
+                break
+    except Exception:
+        pass
+
+    # Linking interno: altri generi sulla stessa piattaforma (5 generi diversi)
+    related_genres = []
+    for g in BEST_PILOT_GENRES:
+        if g == genere:
+            continue
+        related_genres.append({
+            "label": BEST_GENRE_META[g]["label"],
+            "slug":  build_best_slug(tipo, g, platform),
+        })
+
+    # Linking interno: stesso genere su altre piattaforme
+    related_platforms = []
+    from core.recommendation_api import BEST_PILOT_PLATFORMS, PLATFORM_SLUGS
+    for plat in BEST_PILOT_PLATFORMS:
+        if plat == platform:
+            continue
+        _, plat_name, _ = PLATFORM_SLUGS[plat]
+        related_platforms.append({
+            "name": plat_name,
+            "slug": build_best_slug(tipo, genere, plat),
+        })
+
+    return templates.TemplateResponse(
+        request=request,
+        name="best.html",
+        context={
+            "request":           request,
+            "meta":              meta,
+            "items":             items,
+            "top5":              items[:5],
+            "rest":              items[5:30],
+            "related_genres":    related_genres,
+            "related_platforms": related_platforms,
+            "seo_title":         meta.get("seo_title", ""),
+            "seo_desc":          meta.get("seo_desc",  ""),
+        },
+    )
+
+
 @app.get("/piattaforma/{slug}", response_class=HTMLResponse)
 def platform_page(request: Request, slug: str, tipo: str = "tutti"):
     """
@@ -2160,17 +2284,41 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
         f"Ordinati per popolarità — scopri cosa guardare stasera."
     )
 
+    # Linking interno alle pagine "/migliori-..." per questa piattaforma
+    # (solo se la piattaforma è tra le 5 pilot — Netflix, Prime, Disney+, Apple, Paramount)
+    related_best = []
+    try:
+        from core.recommendation_api import (
+            BEST_PILOT_PLATFORMS, BEST_PILOT_GENRES, BEST_GENRE_META,
+            build_best_slug,
+        )
+        if slug in BEST_PILOT_PLATFORMS:
+            for g in BEST_PILOT_GENRES:
+                label = BEST_GENRE_META[g]["label"]
+                # Mostriamo entrambi tipi (film + serie) per ogni genere
+                related_best.append({
+                    "title": f"Migliori film {label}",
+                    "slug":  build_best_slug("film", g, slug),
+                })
+                related_best.append({
+                    "title": f"Migliori serie TV {label}",
+                    "slug":  build_best_slug("serie", g, slug),
+                })
+    except Exception:
+        pass
+
     return templates.TemplateResponse(
         request=request,
         name="platform.html",
         context={
-            "request":     request,
-            "meta":        meta,
-            "items":       items,
-            "tipo":        tipo if tipo in ("tutti","film","serie") else "tutti",
-            "is_fallback": is_fallback,
-            "seo_title":   seo_title,
-            "seo_desc":    seo_desc,
+            "request":      request,
+            "meta":         meta,
+            "items":        items,
+            "tipo":         tipo if tipo in ("tutti","film","serie") else "tutti",
+            "is_fallback":  is_fallback,
+            "related_best": related_best,
+            "seo_title":    seo_title,
+            "seo_desc":     seo_desc,
         },
     )
 

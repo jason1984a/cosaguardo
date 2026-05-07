@@ -1,0 +1,398 @@
+{% extends "base.html" %}
+
+{% block title %}{{ seo_title }}{% endblock %}
+
+{% block head_extra %}
+<meta name="description" content="{{ seo_desc }}">
+<meta name="cg-content-type" content="best">
+<meta property="og:title" content="{{ seo_title }}">
+<meta property="og:description" content="{{ seo_desc }}">
+{% if meta.platform_logo %}<meta property="og:image" content="{{ meta.platform_logo }}">{% endif %}
+<style>
+    /* ──────────────────────────────────────────────────────────────────
+       PAGINA "/migliori-..." — autocontenuta
+       ────────────────────────────────────────────────────────────── */
+
+    .best-header {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 0 16px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .best-platform-badge {
+        width: 64px; height: 64px;
+        border-radius: 14px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        flex-shrink: 0;
+    }
+    .best-platform-badge img {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .best-header-text h1 {
+        margin: 0 0 4px;
+        font-size: 26px;
+        line-height: 1.1;
+        background: linear-gradient(90deg, #ffffff, #93c5fd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .best-header-text p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--muted);
+    }
+    .best-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        color: #fff !important;
+        font-weight: 700;
+        font-size: 12px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    /* TOP 5 con descrizione editoriale */
+    .best-section-title {
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #93c5fd;
+        margin: 8px 0 12px;
+    }
+    .best-top5 {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-bottom: 28px;
+    }
+    .best-top5-item {
+        display: grid;
+        grid-template-columns: 100px 1fr;
+        gap: 14px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 12px;
+        text-decoration: none;
+        color: var(--text);
+        transition: 0.18s ease;
+        position: relative;
+    }
+    .best-top5-item:hover {
+        background: rgba(255,255,255,0.06);
+        border-color: rgba(110,168,254,0.25);
+        transform: translateY(-1px);
+    }
+    .best-top5-rank {
+        position: absolute;
+        top: 8px; left: 8px;
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        color: #000;
+        font-weight: 900;
+        font-size: 12px;
+        width: 24px; height: 24px;
+        border-radius: 6px;
+        display: grid; place-items: center;
+        z-index: 2;
+    }
+    .best-top5-poster {
+        position: relative;
+        aspect-ratio: 2/3;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #0d1224;
+    }
+    .best-top5-poster img {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .best-top5-content { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+    .best-top5-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 0 0 4px;
+        line-height: 1.15;
+    }
+    .best-top5-meta {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+    }
+    .best-top5-rating {
+        color: #fcd34d;
+        font-weight: 700;
+    }
+    .best-top5-overview {
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--muted);
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+    }
+
+    /* GRIGLIA "altri" — riusa pattern .pf-grid */
+    .best-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 14px;
+    }
+    .bg-card {
+        position: relative;
+        aspect-ratio: 2/3;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #0d1224;
+        text-decoration: none;
+        display: block;
+        transition: 0.18s ease;
+    }
+    .bg-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.4);
+    }
+    .bg-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .bg-card-overlay {
+        position: absolute;
+        inset: auto 0 0 0;
+        padding: 22px 8px 8px;
+        background: linear-gradient(to top, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0) 100%);
+        pointer-events: none;
+    }
+    .bg-card-rating {
+        font-size: 9px;
+        font-weight: 700;
+        color: #fcd34d;
+        margin-bottom: 3px;
+    }
+    .bg-card-title {
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    /* LINKING INTERNO */
+    .best-related {
+        margin-top: 36px;
+        padding-top: 24px;
+        border-top: 1px solid rgba(255,255,255,0.07);
+    }
+    .best-related-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin: 0 0 10px;
+        color: var(--text);
+    }
+    .best-related-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 18px;
+    }
+    .best-chip {
+        display: inline-block;
+        padding: 7px 14px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 999px;
+        color: var(--text);
+        font-size: 0.85rem;
+        text-decoration: none;
+        transition: 0.15s ease;
+    }
+    .best-chip:hover {
+        background: rgba(110,168,254,0.12);
+        border-color: rgba(110,168,254,0.4);
+        color: #cfe2ff;
+    }
+
+    .best-empty {
+        text-align: center;
+        padding: 48px 20px;
+        color: var(--muted);
+    }
+    .best-empty h2 { font-size: 18px; margin: 0 0 6px; color: var(--text); }
+    .best-empty p { font-size: 13px; margin: 0 0 12px; }
+
+    /* MOBILE */
+    @media (max-width: 760px) {
+        .best-header {
+            grid-template-columns: auto 1fr;
+            grid-template-rows: auto auto;
+            gap: 8px 12px;
+            padding: 12px 0;
+        }
+        .best-platform-badge {
+            width: 48px; height: 48px;
+            border-radius: 11px;
+        }
+        .best-header-text h1 { font-size: 18px; line-height: 1.1; }
+        .best-header-text p { font-size: 11px; }
+        .best-cta {
+            grid-column: 1 / -1;
+            justify-content: center;
+            padding: 8px 14px;
+            font-size: 11px;
+        }
+        .best-top5-item {
+            grid-template-columns: 80px 1fr;
+            gap: 10px;
+            padding: 10px;
+        }
+        .best-top5-title { font-size: 14px; }
+        .best-top5-overview {
+            font-size: 12px;
+            -webkit-line-clamp: 2;
+        }
+        .best-top5-meta { font-size: 11px; gap: 8px; }
+        .best-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page page-best">
+
+    <header class="best-header">
+        {% if meta.platform_logo %}
+        <div class="best-platform-badge">
+            <img src="{{ meta.platform_logo }}" alt="Logo {{ meta.platform_name }}" width="64" height="64">
+        </div>
+        {% endif %}
+        <div class="best-header-text">
+            <h1>{{ meta.h1 }}</h1>
+            <p>Classifica aggiornata in base a popolarità e voti del pubblico.</p>
+        </div>
+        {% if meta.platform_subscribe_link %}
+        <a href="{{ meta.platform_subscribe_link }}"
+           class="best-cta"
+           target="_blank"
+           rel="nofollow noopener noreferrer">
+            <i data-lucide="external-link" style="width:13px;height:13px;stroke:currentColor;stroke-width:2;"></i>
+            Vai a {{ meta.platform_name }}
+        </a>
+        {% endif %}
+    </header>
+
+    {% if items %}
+
+    <!-- TOP 5 con descrizione -->
+    {% if top5 %}
+    <h2 class="best-section-title">⭐ Top 5</h2>
+    <div class="best-top5">
+        {% for item in top5 %}
+        <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
+           class="best-top5-item">
+            <div class="best-top5-rank">{{ loop.index }}</div>
+            <div class="best-top5-poster">
+                <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">{{ item.title }}</h3>
+                <div class="best-top5-meta">
+                    {% if item.year %}<span>{{ item.year }}</span>{% endif %}
+                    {% if item.rating and item.rating > 0 %}
+                    <span class="best-top5-rating">★ {{ item.rating }}</span>
+                    {% endif %}
+                </div>
+                {% if item.overview %}
+                <p class="best-top5-overview">{{ item.overview }}</p>
+                {% endif %}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- GRIGLIA "altri" -->
+    {% if rest %}
+    <h2 class="best-section-title">🎬 Altri titoli consigliati</h2>
+    <div class="best-grid">
+        {% for item in rest %}
+        <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
+           class="bg-card"
+           title="{{ item.title }}">
+            <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
+            <div class="bg-card-overlay">
+                {% if item.rating and item.rating > 0 %}
+                <div class="bg-card-rating">★ {{ item.rating }}</div>
+                {% endif %}
+                <div class="bg-card-title">{{ item.title }}</div>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="best-empty">
+        <h2>Nessun titolo trovato</h2>
+        <p>Stiamo arricchendo questa classifica.</p>
+        <a href="/migliori" class="best-chip">← Vedi tutte le classifiche</a>
+    </div>
+    {% endif %}
+
+    <!-- LINKING INTERNO -->
+    <section class="best-related">
+        {% if related_genres %}
+        <h3 class="best-related-title">Esplora altri generi su {{ meta.platform_name }}</h3>
+        <div class="best-related-row">
+            {% for g in related_genres %}
+            <a href="/migliori-{{ g.slug }}" class="best-chip">
+                {% if meta.tipo == "serie" %}Serie TV {{ g.label }}{% else %}Film {{ g.label }}{% endif %}
+            </a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if related_platforms %}
+        <h3 class="best-related-title">
+            {% if meta.tipo == "serie" %}Le migliori serie TV {{ meta.genre_label }}{% else %}I migliori film {{ meta.genre_label }}{% endif %}
+            su altre piattaforme
+        </h3>
+        <div class="best-related-row">
+            {% for p in related_platforms %}
+            <a href="/migliori-{{ p.slug }}" class="best-chip">{{ p.name }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <h3 class="best-related-title">Vedi anche</h3>
+        <div class="best-related-row">
+            <a href="/piattaforma/{{ meta.platform }}" class="best-chip">
+                Cosa vedere su {{ meta.platform_name }}
+            </a>
+            <a href="/migliori" class="best-chip">Tutte le classifiche</a>
+        </div>
+    </section>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    if (window.lucide) lucide.createIcons();
+});
+</script>
+{% endblock %}
