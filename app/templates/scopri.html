@@ -163,7 +163,13 @@
             <div class="scopri-strip-wrap">
                 <button class="trend-nav trend-nav-left scopri-nav-left" data-strip="{{ strip.id }}" type="button">‹</button>
                 <div class="scopri-strip-row" id="strip-{{ strip.id }}">
-                    {% for item in strip.cards %}
+                    {# Cap a 8 card per strip: riduce DOM da ~1000 a ~500 elementi
+                       e immagini TMDb da ~120 a ~48. Lighthouse aveva NO_LCP perche'
+                       la navigazione non completava nella finestra di trace.
+                       Su mobile 3 card sono visibili contemporaneamente, 8 sono ~2.5
+                       schermate di scroll orizzontale: piu' che sufficienti.
+                       Per piu' contenuto c'e' il link "Vedi tutti" gia' presente. #}
+                    {% for item in strip.cards[:8] %}
                     <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.tmdb_id }}"
                        class="scopri-poster-card">
                         {% if item.poster_url %}
