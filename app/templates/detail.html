@@ -720,22 +720,20 @@ html, body {
     color: var(--text);
 }
 .tracking-popover {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
+    /* Posizionamento (position/top/left/etc) gestito INTERAMENTE da JS al click,
+       per evitare conflitti con qualunque altra regola CSS della pagina.
+       Qui solo stili visivi. */
     min-width: 240px;
     background: rgba(17, 24, 50, 0.98);
     backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 12px;
     box-shadow: 0 12px 36px rgba(0,0,0,0.45);
     padding: 6px;
-    z-index: 50;
-    display: flex;
     flex-direction: column;
     gap: 2px;
 }
-.tracking-popover[hidden] { display: none; }
 .tracking-option {
     display: flex;
     align-items: center;
@@ -771,7 +769,6 @@ html, body {
 }
 .tracking-season-row {
     padding: 4px 12px 8px;
-    display: flex;
     flex-direction: column;
     gap: 6px;
 }
@@ -791,22 +788,66 @@ html, body {
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
+    width: 100%;
 }
 .tracking-season-select:focus {
     outline: 1px solid var(--primary);
     border-color: var(--primary);
 }
 
-/* Su mobile il popover si allarga e si centra in fondo */
-@media (max-width: 480px) {
-    .tracking-popover {
-        position: fixed;
-        left: 8px;
-        right: 8px;
-        bottom: 8px;
-        top: auto;
-        min-width: 0;
-    }
+/* Backdrop scuro dietro al popover — inserito dinamicamente dal JS */
+.cg-popover-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 9998;
+}
+
+/* Login prompt toast (per non-loggati che cliccano il widget) */
+.cg-login-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(8,16,31,0.98);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(110,168,254,0.4);
+    border-radius: 14px;
+    padding: 14px 16px;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: calc(100vw - 24px);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.55);
+    font-size: 14px;
+    color: #fff;
+    animation: cg-toast-up 0.22s ease-out;
+}
+.cg-login-toast a {
+    background: var(--primary, #6ea8fe);
+    color: #08101f;
+    padding: 7px 14px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 13px;
+    white-space: nowrap;
+}
+.cg-login-toast a:hover { filter: brightness(1.08); }
+.cg-login-toast .cg-toast-close {
+    background: transparent;
+    border: 0;
+    color: rgba(255,255,255,0.55);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+@keyframes cg-toast-up {
+    from { opacity: 0; transform: translate(-50%, 12px); }
+    to   { opacity: 1; transform: translate(-50%, 0); }
 }
 </style>
 {% endblock %}
@@ -952,8 +993,23 @@ html, body {
                     {{ "Nei preferiti" if is_liked else "Aggiungi ai preferiti" }}
                 </button>
 
+                {% if detail.content_type != "tv" %}
+                {# ─── Movie: pulsante "Visto" classico (binario) ─── #}
+                <button class="detail-btn {% if is_seen %}detail-btn-seen{% else %}detail-btn-secondary{% endif %}"
+                    id="btn-seen"
+                    data-title="{{ detail.title | e }}"
+                    data-type="{{ detail.content_type }}"
+                    onclick="toggleFeedback(this, 'seen')">
+                    <i data-lucide="{{ 'check-circle' if is_seen else 'eye' }}" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                    {{ "Già visto" if is_seen else "Segna come visto" }}
+                </button>
+                {% endif %}
+                {% endif %}{# /is_logged_in #}
+
                 {% if detail.content_type == "tv" %}
-                {# ─── TV: widget tracking 3-stati con selettore stagione ─── #}
+                {# ─── TV: widget tracking 3-stati ─── #}
+                {# SEMPRE visibile (anche guest) per spingere alla registrazione: #}
+                {# se non loggato il click apre un prompt "accedi", non il popover. #}
                 {% set _tr_status = series_tracking.status if series_tracking else None %}
                 {% set _tr_season = series_tracking.current_season if series_tracking else None %}
                 {% set _tr_total  = detail.seasons or 0 %}
@@ -963,7 +1019,8 @@ html, body {
                      data-poster="{{ detail.poster_url }}"
                      data-total-seasons="{{ _tr_total }}"
                      data-current-status="{{ _tr_status or '' }}"
-                     data-current-season="{{ _tr_season or '' }}">
+                     data-current-season="{{ _tr_season or '' }}"
+                     data-logged-in="{% if is_logged_in %}true{% else %}false{% endif %}">
 
                     <button type="button" class="detail-btn tracking-trigger
                             {% if _tr_status %}tracking-trigger--active{% else %}detail-btn-secondary{% endif %}"
@@ -986,7 +1043,11 @@ html, body {
                         <i data-lucide="chevron-down" style="width:13px;height:13px;stroke:currentColor;stroke-width:2;pointer-events:none;margin-left:2px;opacity:0.7;"></i>
                     </button>
 
-                    <div class="tracking-popover" id="tracking-popover" hidden role="menu">
+                    {# Posizione viene impostata via JS al momento dell'apertura
+                       (position:fixed, bottom-sheet su mobile, popover sotto trigger su desktop).
+                       Niente posizionamento qui: evita conflitti con il media query. #}
+                    <div class="tracking-popover" id="tracking-popover" role="menu"
+                         style="display: none;">
                         <button type="button" class="tracking-option"
                                 onclick="cgTrackingPick(event, 'watchlist')" role="menuitem">
                             <i data-lucide="bookmark" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
@@ -998,7 +1059,7 @@ html, body {
                             <span style="pointer-events:none;">Sto guardando</span>
                         </button>
 
-                        <div class="tracking-season-row" id="tracking-season-row" hidden>
+                        <div class="tracking-season-row" id="tracking-season-row" style="display: none;">
                             <label for="tracking-season-select">A che stagione sei?</label>
                             <select id="tracking-season-select" class="tracking-season-select"
                                     onchange="cgTrackingSeasonChange(event)">
@@ -1026,17 +1087,6 @@ html, body {
                         {% endif %}
                     </div>
                 </div>
-                {% else %}
-                {# ─── Movie: pulsante "Visto" classico (binario) ─── #}
-                <button class="detail-btn {% if is_seen %}detail-btn-seen{% else %}detail-btn-secondary{% endif %}"
-                    id="btn-seen"
-                    data-title="{{ detail.title | e }}"
-                    data-type="{{ detail.content_type }}"
-                    onclick="toggleFeedback(this, 'seen')">
-                    <i data-lucide="{{ 'check-circle' if is_seen else 'eye' }}" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
-                    {{ "Già visto" if is_seen else "Segna come visto" }}
-                </button>
-                {% endif %}
                 {% endif %}
 
                 <a href="/?prefill={{ detail.title | urlencode }}&type={{ detail.content_type }}"
@@ -1337,41 +1387,107 @@ function cgPlayTrailer(button) {
 }
 
 // ─── Tracking widget (solo TV) ──────────────────────────────────────
-// Funzioni GLOBALI chiamate via onclick inline (stesso pattern di
-// toggleFeedback) — robusto contro errori in altre funzioni del file.
-// Stato letto/scritto direttamente sui data-* attributes del wrap.
+// Il posizionamento è gestito INTERAMENTE qui, niente CSS di posizione,
+// così niente regola esterna può rompere il layout. position:fixed +
+// coordinate calcolate da getBoundingClientRect.
 //
-// API: POST /api/series/track, DELETE /api/series/track/{id}
-// Triggered da onclick="cgTrackingToggle(event)" sul trigger,
-// onclick="cgTrackingPick(event, 'watching')" sulle option.
+// Chi non è loggato vede il bottone (spinta a registrarsi); cliccando
+// appare un toast che lo invita ad accedere — niente popover.
+
 function cgTrackingToggle(e) {
     if (e && e.stopPropagation) e.stopPropagation();
+    var w = document.getElementById('tracking-wrap');
+    if (!w) return;
+
+    // ── Guest: mostra prompt login, niente popover
+    if (w.getAttribute('data-logged-in') !== 'true') {
+        cgShowLoginToast('Accedi per tracciare le tue serie e ricevere notifiche sulle nuove stagioni.');
+        return;
+    }
+
     var p = document.getElementById('tracking-popover');
     if (!p) return;
-    if (p.hasAttribute('hidden')) {
-        p.removeAttribute('hidden');
+    var isOpen = p.style.display && p.style.display !== 'none';
+    if (isOpen) {
+        cgTrackingClose();
+    } else {
+        cgTrackingPosition();      // calcola top/left/etc su position:fixed
+        cgTrackingShowBackdrop();  // overlay scuro cliccabile per chiudere
+        p.style.display = 'flex';
         var t = document.getElementById('tracking-trigger');
         if (t) t.setAttribute('aria-expanded', 'true');
-        // Click fuori chiude (registrato dopo, così non chiude subito da solo)
+        // Click fuori chiude (registrato dopo per evitare auto-close immediato)
         setTimeout(function() {
             document.addEventListener('click', cgTrackingDocClick);
         }, 0);
-    } else {
-        cgTrackingClose();
     }
+}
+
+function cgTrackingPosition() {
+    var p = document.getElementById('tracking-popover');
+    var t = document.getElementById('tracking-trigger');
+    if (!p || !t) return;
+
+    p.style.position = 'fixed';
+    p.style.zIndex   = '9999';
+
+    var isMobile = window.innerWidth <= 560;
+    if (isMobile) {
+        // Bottom-sheet: full width inferiore, centrato
+        p.style.left   = '8px';
+        p.style.right  = '8px';
+        p.style.bottom = '8px';
+        p.style.top    = 'auto';
+        p.style.minWidth = '0';
+        p.style.maxWidth = 'calc(100vw - 16px)';
+    } else {
+        // Desktop: float subito sotto il trigger
+        var rect = t.getBoundingClientRect();
+        var popoverWidth = 260;
+        var top  = rect.bottom + 6;
+        var left = rect.left;
+        // Se uscirebbe dal viewport a destra, allinea col bordo destro del trigger
+        if (left + popoverWidth > window.innerWidth - 16) {
+            left = Math.max(16, rect.right - popoverWidth);
+        }
+        p.style.top      = top + 'px';
+        p.style.left     = left + 'px';
+        p.style.right    = 'auto';
+        p.style.bottom   = 'auto';
+        p.style.minWidth = popoverWidth + 'px';
+        p.style.maxWidth = '';
+    }
+}
+
+function cgTrackingShowBackdrop() {
+    if (document.getElementById('cg-popover-backdrop')) return;
+    var b = document.createElement('div');
+    b.id = 'cg-popover-backdrop';
+    b.className = 'cg-popover-backdrop';
+    b.onclick = function() { cgTrackingClose(); };
+    document.body.appendChild(b);
+}
+
+function cgTrackingHideBackdrop() {
+    var b = document.getElementById('cg-popover-backdrop');
+    if (b) b.remove();
 }
 
 function cgTrackingClose() {
     var p = document.getElementById('tracking-popover');
-    if (p) p.setAttribute('hidden', '');
+    if (p) p.style.display = 'none';
     var t = document.getElementById('tracking-trigger');
     if (t) t.setAttribute('aria-expanded', 'false');
     document.removeEventListener('click', cgTrackingDocClick);
+    cgTrackingHideBackdrop();
 }
 
 function cgTrackingDocClick(e) {
     var w = document.getElementById('tracking-wrap');
-    if (w && !w.contains(e.target)) cgTrackingClose();
+    var p = document.getElementById('tracking-popover');
+    // Click fuori da wrap E da popover → chiudi
+    if (!w || !p) return;
+    if (!w.contains(e.target) && !p.contains(e.target)) cgTrackingClose();
 }
 
 function cgTrackingPick(e, newStatus) {
@@ -1382,17 +1498,14 @@ function cgTrackingPick(e, newStatus) {
         return;
     }
 
-    // Per 'watching' mostriamo il selettore stagione e salviamo subito
-    // con la stagione attualmente selezionata (default S1).
+    var row = document.getElementById('tracking-season-row');
     if (newStatus === 'watching') {
-        var row = document.getElementById('tracking-season-row');
-        if (row) row.removeAttribute('hidden');
+        if (row) row.style.display = 'flex';
         var sel = document.getElementById('tracking-season-select');
         var s = sel ? (parseInt(sel.value, 10) || 1) : 1;
         cgTrackingDoTrack('watching', s);
     } else {
-        var row2 = document.getElementById('tracking-season-row');
-        if (row2) row2.setAttribute('hidden', '');
+        if (row) row.style.display = 'none';
         cgTrackingDoTrack(newStatus, null);
     }
     cgTrackingMarkActive(newStatus);
@@ -1410,7 +1523,6 @@ function cgTrackingMarkActive(status) {
     if (!p) return;
     var btns = p.querySelectorAll('.tracking-option');
     for (var i = 0; i < btns.length; i++) {
-        // I bottoni hanno onclick="cgTrackingPick(event, 'X')" — estraiamo X
         var oc = btns[i].getAttribute('onclick') || '';
         var m = oc.match(/'([^']+)'/);
         var s = m ? m[1] : '';
@@ -1440,7 +1552,6 @@ function cgTrackingRefreshTrigger(status, season) {
         t.classList.remove('tracking-trigger--active');
         t.classList.add('detail-btn-secondary');
     }
-    // Sync stato sul wrap (così la prossima POST riceve i dati giusti)
     var w = document.getElementById('tracking-wrap');
     if (w) {
         w.setAttribute('data-current-status', status || '');
@@ -1471,18 +1582,23 @@ function cgTrackingDoTrack(status, season) {
         }),
     })
     .then(function(r) {
+        if (r.status === 401) {
+            // Sessione scaduta in mezzo: degrade graceful → prompt login
+            cgShowLoginToast('La sessione è scaduta. Accedi di nuovo per continuare.');
+            cgTrackingClose();
+            throw new Error('not-authenticated');
+        }
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
     })
     .then(function() {
         cgTrackingRefreshTrigger(status, season);
-        // Tieni il popover aperto se watching (per vedere il select),
-        // altrimenti chiudi dopo un attimo (feedback visivo)
         if (status !== 'watching') {
             setTimeout(cgTrackingClose, 350);
         }
     })
     .catch(function(err) {
+        if (err.message === 'not-authenticated') return;
         console.error('cgTrackingDoTrack failed:', err);
         alert('Salvataggio non riuscito. Riprova.');
     });
@@ -1505,9 +1621,8 @@ function cgTrackingDoUntrack() {
     .then(function() {
         cgTrackingRefreshTrigger('', null);
         var row = document.getElementById('tracking-season-row');
-        if (row) row.setAttribute('hidden', '');
+        if (row) row.style.display = 'none';
         cgTrackingMarkActive('');
-        // Rimuove l'opzione "Rimuovi" che non ha più senso
         var p = document.getElementById('tracking-popover');
         if (p) {
             var rm = p.querySelector('.tracking-option--remove');
@@ -1519,6 +1634,42 @@ function cgTrackingDoUntrack() {
         console.error('cgTrackingDoUntrack failed:', err);
         alert('Rimozione non riuscita. Riprova.');
     });
+}
+
+// ─── Login prompt toast ──────────────────────────────────────────────
+// Mostrato quando un guest clicca un'azione che richiede login.
+// Si auto-chiude dopo 8s, ha bottone Accedi che porta a /login con redirect back.
+function cgShowLoginToast(message) {
+    var existing = document.getElementById('cg-login-toast');
+    if (existing) existing.remove();
+
+    var toast = document.createElement('div');
+    toast.id = 'cg-login-toast';
+    toast.className = 'cg-login-toast';
+    toast.setAttribute('role', 'alert');
+
+    var msg = document.createElement('span');
+    msg.textContent = message || 'Accedi per usare questa funzione.';
+
+    var loginLink = document.createElement('a');
+    loginLink.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+    loginLink.textContent = 'Accedi →';
+
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'cg-toast-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.setAttribute('aria-label', 'Chiudi');
+    closeBtn.onclick = function() { toast.remove(); };
+
+    toast.appendChild(msg);
+    toast.appendChild(loginLink);
+    toast.appendChild(closeBtn);
+    document.body.appendChild(toast);
+
+    setTimeout(function() {
+        if (toast.parentNode) toast.remove();
+    }, 8000);
 }
 </script>
 {% endblock %}
