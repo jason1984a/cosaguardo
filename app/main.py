@@ -135,6 +135,15 @@ def get_toprated_cached(limit: int = 10) -> list:
     return fresh or _toprated_cache.get("data") or []
 # ──────────────────────────────────────────────────────────────────────────
 
+# Logger di modulo per main.py.
+# Eccezioni che prima venivano silenziosamente swallow ora finiscono nei log
+# di Render (visibili con grep "[cosaguardo]"). Severità:
+#   - DEBUG: fallimenti previsti/normali (es. 1 poster mancante in un batch)
+#   - WARNING: anomalie recuperate dal fallback (es. enrichment template fallito)
+#   - ERROR/exception: bug veri da investigare
+import logging as _logging_main
+log = _logging_main.getLogger("cosaguardo")
+
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SECRET_KEY", "cosaguardo-secret-key"))
 
@@ -247,6 +256,8 @@ async def perf_logger(request: Request, call_next):
         status = response.status_code
         return response
     except Exception:
+        # Volutamente broad: marchiamo lo status come "EXC" per il log e
+        # ri-sollieviamo - l'eccezione vera la gestisce FastAPI a valle.
         status = "EXC"
         raise
     finally:
@@ -257,7 +268,10 @@ async def perf_logger(request: Request, call_next):
         try:
             _perf_record(path, dur_ms, status, ua_kind)
         except Exception:
-            pass  # mai rompere la richiesta per il logger
+            # Volutamente broad: il logger non deve MAI poter rompere la
+            # richiesta. Se _perf_record ha un bug, la pagina deve servire
+            # comunque. Niente log qui per evitare ricorsione.
+            pass
         print(f"[perf] {request.method} {path} status={status} dur={dur_ms}ms ua={ua_kind}{slow_marker}")
 
 
@@ -499,8 +513,12 @@ def home_picks(request: Request):
     if needs:
         with ThreadPoolExecutor(max_workers=8) as ex:
             for fut in as_completed({ex.submit(fetch_poster, i): i for i in needs}):
-                try: fut.result()
-                except Exception: pass
+                try:
+                    fut.result()
+                except Exception as e:
+                    # Un poster mancante in un batch è normale (TMDb timeout,
+                    # titolo non in catalogo): logga DEBUG, non rompere la lista.
+                    log.debug("home-picks: fetch_poster fallita: %s", e)
 
     picks = build_dashboard_recommendations(
         user_id=user_id,
@@ -679,7 +697,10 @@ def save_feedback(request: Request, data: dict = Body(...)):
         try:
             from app.db import get_title_state
             current_state = get_title_state(user_id, title, content_type)
-        except Exception:
+        except Exception as e:
+            # DB momentaneamente non raggiungibile o riga corrotta:
+            # toggling parte da 0 (= "non visto"), comportamento accettabile.
+            log.warning("save_feedback: get_title_state fallita per uid=%s: %s", user_id, e)
             current_state = None
 
         current_seen = current_state["seen"] if current_state else 0
@@ -830,8 +851,10 @@ def recommend(
                 try:
                     rec, tmdb_info = fut.result()
                     tmdb_results[rec["title"]] = tmdb_info
-                except Exception:
-                    pass
+                except Exception as e:
+                    # 1 titolo TMDb non risolto su 12+ è normale; il rec
+                    # resta con poster vuoto. DEBUG perché frequente.
+                    log.debug("recommend: _fetch_tmdb fallita: %s", e)
 
     for rec in recommendations:
         if content_type == "movie":
@@ -1009,8 +1032,9 @@ def recommend(
                         for g in genres:
                             gid = g_map.get(g.lower())
                             if gid: genre_id = gid; break
-                except Exception:
-                    pass
+                except Exception as e:
+                    # Genere non risolvibile: cadiamo sul default (dramma).
+                    log.debug("fallback recs: get_movie_genres fallita: %s", e)
             elif content_type == "tv":
                 genre_id = 18  # dramma TV
 
@@ -1130,8 +1154,10 @@ def film_detail(request: Request, tmdb_id: int):
             raise HTTPException(status_code=404, detail="Pagina non trovata")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        # _is_adult_content non disponibile o crasha: meglio mostrare il film
+        # (fail-open per non rompere la navigazione su contenuti legittimi).
+        log.warning("film_detail: adult-content check fallito su tmdb_id=%s: %s", tmdb_id, e)
 
     user_id = request.session.get("user_id")
     title_state = {}
@@ -1156,8 +1182,9 @@ def film_detail(request: Request, tmdb_id: int):
                         "tmdb_id":    tmdb_info.get("tmdb_id"),
                         "content_type": "movie",
                     })
-        except Exception:
-            pass
+        except Exception as e:
+            # Sezione "simili" è opzionale: la pagina detail funziona senza.
+            log.warning("film_detail: similar build fallito per '%s': %s", detail.get("title"), e)
 
     return templates.TemplateResponse(
         request=request,
@@ -1187,8 +1214,9 @@ def serie_detail(request: Request, tmdb_id: int):
             raise HTTPException(status_code=404, detail="Pagina non trovata")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        # Stesso fail-open di film_detail.
+        log.warning("serie_detail: adult-content check fallito su tmdb_id=%s: %s", tmdb_id, e)
 
     user_id = request.session.get("user_id")
     title_state = {}
@@ -1211,8 +1239,8 @@ def serie_detail(request: Request, tmdb_id: int):
                     "tmdb_id":      rec.get("tv_id"),
                     "content_type": "tv",
                 })
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning("serie_detail: similar build fallito per '%s': %s", detail.get("title"), e)
 
     return templates.TemplateResponse(
         request=request,
@@ -1289,8 +1317,11 @@ def profilo(request: Request):
         with ThreadPoolExecutor(max_workers=10) as ex:
             futures = {ex.submit(_enrich_item, item): item for item in needs_fetch}
             for fut in as_completed(futures):
-                try: fut.result()
-                except Exception: pass
+                try:
+                    fut.result()
+                except Exception as e:
+                    # Lookup TMDb opzionale per arricchire la cache.
+                    log.debug("dashboard: _enrich_item fallita: %s", e)
 
         # 3. Salva nuovi risultati in cache
         save_poster_cache([
@@ -1346,13 +1377,15 @@ def get_tmdb_id(title: str = "", content_type: str = "movie"):
         try:
             result = find_tv_by_title(title)
             tmdb_id = result.get("id") or result.get("tv_id") if result else None
-        except Exception:
+        except Exception as e:
+            log.debug("get_tmdb_id: find_tv_by_title('%s') fallita: %s", title, e)
             tmdb_id = None
     else:
         try:
             info = get_movie_tmdb_info(title)
             tmdb_id = info.get("tmdb_id") if info else None
-        except Exception:
+        except Exception as e:
+            log.debug("get_tmdb_id: get_movie_tmdb_info('%s') fallita: %s", title, e)
             tmdb_id = None
 
     return {"tmdb_id": tmdb_id}
@@ -1574,8 +1607,9 @@ def dove_vedere_detail(request: Request, slug: str):
         # Filtra fuori se stesso e prendi i primi 8 (non è raccomandazione algoritmica
         # ma copre il caso generale ed è utile per internal linking SEO)
         similar_titles = [c for c in candidates if c["slug"] != item["slug"]][:8]
-    except Exception:
-        pass
+    except Exception as e:
+        # Sezione "altri titoli simili" è opzionale per la pagina dove-vedere.
+        log.warning("dove_vedere: similar_titles fallback per slug=%s: %s", item.get("slug"), e)
 
     return templates.TemplateResponse(
         request=request,
@@ -1659,6 +1693,7 @@ def admin_refresh_seo(request: Request):
         result = populate_seo_titles_db()
         return {"status": "ok", **result}
     except Exception as e:
+        log.exception("admin_refresh_seo: %s", e)
         return {"status": "error", "message": str(e)}
 
 
@@ -1720,6 +1755,7 @@ def admin_debug_come(request: Request, slug: str):
         }
     except Exception as e:
         import traceback
+        log.exception("admin_debug_come step 1 (motore): %s", e)
         out["steps"]["1_motore_ERROR"] = {"error": str(e), "traceback": traceback.format_exc()}
 
     # Step 3: TMDb similar/recommended (per fallback)
@@ -1747,6 +1783,7 @@ def admin_debug_come(request: Request, slug: str):
             }
     except Exception as e:
         import traceback
+        log.exception("admin_debug_come step 2 (tmdb): %s", e)
         out["steps"]["2_tmdb_ERROR"] = {"error": str(e), "traceback": traceback.format_exc()}
 
     # Step 4: chiamata completa
@@ -1760,6 +1797,7 @@ def admin_debug_come(request: Request, slug: str):
         }
     except Exception as e:
         import traceback
+        log.exception("admin_debug_come step 3 (finale): %s", e)
         out["steps"]["3_finale_ERROR"] = {"error": str(e), "traceback": traceback.format_exc()}
 
     # Step 5: cache check — c'è una entry stale?
@@ -1776,6 +1814,7 @@ def admin_debug_come(request: Request, slug: str):
         ]
         conn.close()
     except Exception as e:
+        log.exception("admin_debug_come step 4 (cache): %s", e)
         out["steps"]["4_cache_ERROR"] = str(e)
 
     return out
@@ -1818,6 +1857,7 @@ def admin_cache_purge_come(request: Request, slug: str):
             "cleared_memory_keys": len(keys_to_remove),
         }
     except Exception as e:
+        log.exception("admin_cache_purge_come fallita per slug=%s: %s", slug, e)
         return {"error": str(e)}
 
 
@@ -1844,7 +1884,9 @@ def admin_memory_stats(request: Request):
             try:
                 cache_size_bytes = sum(sys.getsizeof(v) for v in _mem_cache.values())
                 cache_size_mb = round(cache_size_bytes / (1024*1024), 2)
-            except Exception:
+            except (TypeError, AttributeError) as e:
+                # getsizeof non supporta certi tipi custom: -1 = non calcolabile.
+                log.debug("admin_memory_stats: getsizeof fallita: %s", e)
                 cache_size_mb = -1
 
         return {
@@ -1859,6 +1901,7 @@ def admin_memory_stats(request: Request):
             "warning": "Process > 80% del limite" if rss_mb > 410 else None,
         }
     except Exception as e:
+        log.exception("admin_memory_stats fallita: %s", e)
         return {"error": str(e)}
 
 
@@ -1928,8 +1971,9 @@ def sitemap():
         from core.recommendation_api import PLATFORM_SLUGS
         for slug in PLATFORM_SLUGS:
             static_urls.append((f"/piattaforma/{slug}", "daily", "0.8"))
-    except Exception:
-        pass
+    except (ImportError, AttributeError) as e:
+        # Modulo non installato o costante rinominata: sitemap parziale è meglio di crash.
+        log.warning("sitemap: PLATFORM_SLUGS import fallito: %s", e)
 
     # Pagine /migliori-* — 60 pagine SEO programmatiche
     static_urls.append(("/migliori", "weekly", "0.7"))
@@ -1937,15 +1981,17 @@ def sitemap():
         from core.recommendation_api import iter_all_best_combos
         for slug, _, _, _ in iter_all_best_combos():
             static_urls.append((f"/migliori-{slug}", "weekly", "0.65"))
-    except Exception:
-        pass
+    except (ImportError, AttributeError) as e:
+        log.warning("sitemap: iter_all_best_combos import fallito: %s", e)
 
     # Tutti gli slug /dove-vedere/* e /come/* dal DB locale (~750+750)
     seo_entries = []
     try:
         seo_entries = list_all_slugs_for_sitemap()
-    except Exception:
-        pass
+    except Exception as e:
+        # DB SEO momentaneamente non leggibile: sitemap senza queste 1500 URL
+        # è meglio di crash totale (Google riprende al fetch successivo).
+        log.warning("sitemap: list_all_slugs_for_sitemap fallita: %s", e)
 
     xml_parts = ['<?xml version="1.0" encoding="UTF-8"?>',
                  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
@@ -1961,7 +2007,8 @@ def sitemap():
     for slug, ctype, updated_at in seo_entries:
         try:
             lastmod = datetime.fromtimestamp(updated_at).strftime("%Y-%m-%d") if updated_at else today
-        except Exception:
+        except (ValueError, OSError, TypeError):
+            # Timestamp invalido (None/0/negativo/troppo grande): default a oggi.
             lastmod = today
         xml_parts.append(
             f"  <url><loc>{base}/dove-vedere/{slug}</loc><lastmod>{lastmod}</lastmod>"
@@ -1972,7 +2019,7 @@ def sitemap():
     for slug, ctype, updated_at in seo_entries:
         try:
             lastmod = datetime.fromtimestamp(updated_at).strftime("%Y-%m-%d") if updated_at else today
-        except Exception:
+        except (ValueError, OSError, TypeError):
             lastmod = today
         xml_parts.append(
             f"  <url><loc>{base}/come/{slug}</loc><lastmod>{lastmod}</lastmod>"
@@ -2147,8 +2194,10 @@ def persona_detail(request: Request, person_id: int):
         for key in ("movies", "tv", "credits", "filmography"):
             if isinstance(detail.get(key), list):
                 detail[key] = [c for c in detail[key] if not _is_adult_content(c)]
-    except Exception:
-        pass
+    except Exception as e:
+        # Filtro adult opzionale: se _is_adult_content rompe, mostriamo
+        # comunque la pagina (TMDb già flagga le persone adult col blocco sopra).
+        log.warning("persona_detail: filtro credits adult fallito su person_id=%s: %s", person_id, e)
 
     return templates.TemplateResponse(
         request=request,
@@ -2246,8 +2295,9 @@ def best_page(request: Request, slug: str):
             if p.get("slug") == platform:
                 meta["platform_logo"] = p.get("logo_url", "")
                 break
-    except Exception:
-        pass
+    except Exception as e:
+        # Logo è cosmetico, non rompiamo la pagina /migliori-* per mancanza icona.
+        log.debug("best_page: get_home_platforms fallita per %s: %s", platform, e)
 
     # Linking interno: altri generi sulla stessa piattaforma (5 generi diversi)
     related_genres = []
@@ -2360,8 +2410,10 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
                     "title": f"Migliori serie TV {label}",
                     "slug":  build_best_slug("serie", g, slug),
                 })
-    except Exception:
-        pass
+    except (ImportError, KeyError, AttributeError) as e:
+        # Modulo non installato o BEST_GENRE_META[g] mancante:
+        # related_best resta vuoto, la pagina funziona comunque.
+        log.warning("platform_page: related_best fallback per slug=%s: %s", slug, e)
 
     return templates.TemplateResponse(
         request=request,
