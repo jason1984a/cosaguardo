@@ -1,0 +1,540 @@
+{% extends "base.html" %}
+
+{% block title %}La mia raccolta | CosaGuardo{% endblock %}
+{% block meta_description %}Tieni traccia dei film e delle serie TV che stai guardando, vuoi guardare, hai visto o ami. Notifiche quando esce una nuova stagione delle tue serie.{% endblock %}
+
+{% block content %}
+<style>
+    .lmr-page {
+        max-width: 1100px;
+        margin: 24px auto 60px;
+        padding: 0 16px;
+    }
+    .lmr-header { margin-bottom: 22px; }
+    .lmr-header h1 {
+        font-size: clamp(22px, 4vw, 32px);
+        font-weight: 800;
+        margin: 0 0 6px;
+        background: linear-gradient(90deg, #ffffff, #93c5fd);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.02em;
+    }
+    .lmr-subtitle {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+    }
+
+    /* ── Tabs scrollabili orizzontalmente su mobile ─────────────────── */
+    .lmr-tabs-wrap {
+        margin: 20px -16px 18px;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+    .lmr-tabs-wrap::-webkit-scrollbar { display: none; }
+    .lmr-tabs {
+        display: flex;
+        gap: 4px;
+        padding: 0 16px;
+        white-space: nowrap;
+        min-width: max-content;
+    }
+    .lmr-tab {
+        background: transparent;
+        border: 0;
+        color: var(--muted);
+        padding: 10px 14px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: color 0.15s ease, border-color 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+    .lmr-tab:hover { color: var(--text); }
+    .lmr-tab.is-active {
+        color: var(--text);
+        border-bottom-color: var(--primary);
+    }
+    .lmr-tab-count {
+        background: rgba(255,255,255,0.06);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .lmr-tab.is-active .lmr-tab-count {
+        background: rgba(110,168,254,0.16);
+        color: var(--primary);
+    }
+
+    .lmr-panel { display: none; }
+    .lmr-panel.is-active { display: block; }
+
+    /* ── Grid card ──────────────────────────────────────────────────── */
+    .lmr-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 16px;
+    }
+    @media (max-width: 480px) {
+        .lmr-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+    }
+
+    .lmr-card {
+        position: relative;
+        border-radius: 14px;
+        overflow: hidden;
+        background: rgba(17,24,39,0.6);
+        border: 1px solid var(--border);
+        transition: transform 0.18s ease, border-color 0.18s ease;
+    }
+    @media (hover: hover) {
+        .lmr-card:hover { transform: translateY(-3px); border-color: rgba(110,168,254,0.35); }
+    }
+    .lmr-card-link { display: block; text-decoration: none; color: inherit; }
+    .lmr-card-poster {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 2/3;
+        background: rgba(255,255,255,0.03);
+    }
+    .lmr-card-poster img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .lmr-card-placeholder {
+        display: flex; align-items: center; justify-content: center;
+        height: 100%; padding: 12px; text-align: center;
+        color: var(--muted); font-size: 12px; font-weight: 600;
+    }
+    .lmr-card-badge {
+        position: absolute; top: 8px; left: 8px;
+        background: rgba(8,16,31,0.85);
+        backdrop-filter: blur(6px);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .lmr-card-type {
+        position: absolute; top: 8px; right: 8px;
+        background: rgba(110,168,254,0.85);
+        color: #08101f;
+        font-size: 10px;
+        font-weight: 800;
+        padding: 3px 7px;
+        border-radius: 999px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+    .lmr-card-body { padding: 8px 10px 10px; }
+    .lmr-card-title {
+        font-size: 13px; font-weight: 700; line-height: 1.25; color: var(--text);
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .lmr-card-remove {
+        position: absolute; top: 6px; right: 6px;
+        width: 26px; height: 26px;
+        border-radius: 50%;
+        background: rgba(8,16,31,0.85);
+        border: 1px solid rgba(255,255,255,0.12);
+        color: var(--text);
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        opacity: 0; transition: opacity 0.15s ease, background 0.15s ease;
+        z-index: 2;
+    }
+    .lmr-card:hover .lmr-card-remove,
+    .lmr-card-remove:focus { opacity: 1; }
+    @media (hover: none) { .lmr-card-remove { opacity: 0.85; } }
+    .lmr-card-remove:hover { background: rgba(239,68,68,0.85); border-color: rgba(239,68,68,0.95); }
+    /* Quando c'è anche il chip "type" in alto a destra, sposta il bottone rimuovi */
+    .lmr-card.has-type-badge .lmr-card-remove { top: 30px; }
+
+    /* ── Empty state per tab vuoto ─────────────────────────────────── */
+    .lmr-empty {
+        text-align: center;
+        padding: 50px 16px;
+        max-width: 480px;
+        margin: 0 auto;
+    }
+    .lmr-empty-icon { font-size: 38px; margin-bottom: 10px; opacity: 0.6; }
+    .lmr-empty-title {
+        font-size: 16px; font-weight: 700; margin: 0 0 8px; color: var(--text);
+    }
+    .lmr-empty-text {
+        color: var(--muted); font-size: 14px; line-height: 1.55; margin: 0 0 18px;
+    }
+
+    /* ── Onboarding (utente loggato senza alcun contenuto) ─────────── */
+    .lmr-onboarding {
+        text-align: center;
+        padding: 50px 20px;
+        max-width: 580px;
+        margin: 20px auto;
+        background: linear-gradient(135deg, rgba(110,168,254,0.06), rgba(155,123,255,0.04));
+        border: 1px solid rgba(110,168,254,0.18);
+        border-radius: 18px;
+    }
+    .lmr-onboarding h2 {
+        font-size: 20px; font-weight: 800; margin: 0 0 10px; color: var(--text);
+    }
+    .lmr-onboarding p {
+        color: var(--muted); font-size: 14px; line-height: 1.55; margin: 0 0 18px;
+    }
+    .lmr-onboarding-features {
+        text-align: left; max-width: 380px; margin: 0 auto 22px;
+        list-style: none; padding: 0;
+    }
+    .lmr-onboarding-features li {
+        padding: 6px 0; color: var(--muted); font-size: 13.5px;
+    }
+    .lmr-onboarding-features li::before {
+        content: "✓"; color: var(--primary); font-weight: 800; margin-right: 10px;
+    }
+
+    /* ── Guest CTA (utente non loggato) ──────────────────────────── */
+    .lmr-guest {
+        text-align: center;
+        max-width: 580px;
+        margin: 30px auto 60px;
+        padding: 40px 24px;
+        background: linear-gradient(135deg, rgba(110,168,254,0.08), rgba(155,123,255,0.05));
+        border: 1px solid rgba(110,168,254,0.2);
+        border-radius: 22px;
+    }
+    .lmr-guest-icon {
+        width: 64px; height: 64px;
+        margin: 0 auto 18px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, var(--primary), #9b7bff);
+        display: flex; align-items: center; justify-content: center;
+        color: #08101f;
+    }
+    .lmr-guest h1 {
+        font-size: clamp(22px, 4.5vw, 30px);
+        font-weight: 800; margin: 0 0 12px; color: var(--text);
+        letter-spacing: -0.02em;
+    }
+    .lmr-guest-lead {
+        color: var(--muted); font-size: 15px; line-height: 1.55;
+        max-width: 460px; margin: 0 auto 26px;
+    }
+    .lmr-guest-features {
+        display: grid; grid-template-columns: 1fr; gap: 14px;
+        max-width: 440px; margin: 0 auto 28px; text-align: left;
+    }
+    .lmr-guest-feature {
+        display: flex; gap: 14px; align-items: flex-start;
+        padding: 14px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 14px;
+    }
+    .lmr-guest-feature-icon {
+        width: 36px; height: 36px;
+        border-radius: 10px;
+        background: rgba(110,168,254,0.14); color: var(--primary);
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .lmr-guest-feature-text strong {
+        display: block; font-size: 14px; color: var(--text); margin-bottom: 2px;
+    }
+    .lmr-guest-feature-text span {
+        font-size: 13px; color: var(--muted); line-height: 1.4;
+    }
+    .lmr-guest-cta {
+        display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;
+    }
+    .lmr-guest-cta a { text-decoration: none; }
+</style>
+
+<div class="lmr-page">
+
+    {% if not is_logged_in %}
+    {# ─── Guest: pagina di conversione ─────────────────────────────── #}
+    <div class="lmr-guest">
+        <div class="lmr-guest-icon" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+        </div>
+        <h1>La tua raccolta personale</h1>
+        <p class="lmr-guest-lead">
+            Crea un account gratuito e trasforma CosaGuardo nel tuo registro:
+            preferiti, già visti, serie in corso e watchlist sempre a portata di mano.
+            Nessun film più dimenticato, nessuna stagione nuova che ti sfugge.
+        </p>
+
+        <div class="lmr-guest-features">
+            <div class="lmr-guest-feature">
+                <span class="lmr-guest-feature-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="10 8 16 12 10 16 10 8"/></svg>
+                </span>
+                <div class="lmr-guest-feature-text">
+                    <strong>Sai sempre a che stagione sei</strong>
+                    <span>Niente più Wikipedia per ricordarti dove ti eri fermato.</span>
+                </div>
+            </div>
+            <div class="lmr-guest-feature">
+                <span class="lmr-guest-feature-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                </span>
+                <div class="lmr-guest-feature-text">
+                    <strong>Avviso quando esce una nuova stagione</strong>
+                    <span>Niente più scoperte casuali a 6 mesi dall'uscita.</span>
+                </div>
+            </div>
+            <div class="lmr-guest-feature">
+                <span class="lmr-guest-feature-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                </span>
+                <div class="lmr-guest-feature-text">
+                    <strong>I tuoi preferiti tutti in un posto</strong>
+                    <span>Film e serie che ami, sempre a portata di mano.</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="lmr-guest-cta">
+            <a href="/register?next=/la-mia-raccolta" class="btn btn-primary">Crea un account</a>
+            <a href="/login?next=/la-mia-raccolta" class="btn btn-secondary">Ho già un account</a>
+        </div>
+    </div>
+    {% else %}
+
+    <div class="lmr-header">
+        <h1>La mia raccolta</h1>
+        <p class="lmr-subtitle">
+            {% if total > 0 %}
+                Tutto quello che stai guardando, vuoi guardare, hai già visto o ami — in un unico posto.
+            {% else %}
+                Non hai ancora aggiunto contenuti. Inizia esplorando il catalogo.
+            {% endif %}
+        </p>
+    </div>
+
+    {% if total == 0 %}
+    {# ─── Onboarding: utente loggato totalmente vuoto ─────────────── #}
+    <div class="lmr-onboarding">
+        <h2>La tua raccolta è ancora vuota</h2>
+        <p>
+            Quando aggiungi un contenuto alla tua raccolta, succedono cose utili:
+        </p>
+        <ul class="lmr-onboarding-features">
+            <li>Ti ricordi cosa stai guardando e a che stagione sei</li>
+            <li>Salvi le serie e i film che vorresti vedere senza dimenticartele</li>
+            <li>Ricevi un avviso quando esce una nuova stagione delle tue serie</li>
+            <li>Ritrovi sempre i tuoi preferiti e gli ultimi visti</li>
+        </ul>
+        <a href="/scopri" class="btn btn-primary">Esplora il catalogo</a>
+    </div>
+    {% else %}
+
+    {# ─── Tabs ─────────────────────────────────────────────────────── #}
+    <div class="lmr-tabs-wrap">
+        <div class="lmr-tabs" role="tablist">
+            <button class="lmr-tab is-active" role="tab" data-tab="watching"
+                    aria-selected="true" aria-controls="panel-watching">
+                Sto guardando
+                <span class="lmr-tab-count">{{ watching|length }}</span>
+            </button>
+            <button class="lmr-tab" role="tab" data-tab="watchlist"
+                    aria-selected="false" aria-controls="panel-watchlist">
+                Voglio guardare
+                <span class="lmr-tab-count">{{ watchlist|length }}</span>
+            </button>
+            <button class="lmr-tab" role="tab" data-tab="visti"
+                    aria-selected="false" aria-controls="panel-visti">
+                Visti
+                <span class="lmr-tab-count">{{ visti|length }}</span>
+            </button>
+            <button class="lmr-tab" role="tab" data-tab="preferiti"
+                    aria-selected="false" aria-controls="panel-preferiti">
+                Preferiti
+                <span class="lmr-tab-count">{{ preferiti|length }}</span>
+            </button>
+        </div>
+    </div>
+
+    {# Macro per renderizzare una card. content_type può essere "movie" o "tv".
+       has_remove=true → mostra il bottone × per rimozione (solo per series tracking) #}
+    {% macro card(item, has_remove=false, show_season=false, show_type=false) %}
+    {% set ctype = item.content_type or 'tv' %}
+    {% set href = ('/serie/' if ctype == 'tv' else '/film/') ~ (item.tmdb_id or '') %}
+    <div class="lmr-card {% if show_type %}has-type-badge{% endif %}" data-tmdb-id="{{ item.tmdb_id or '' }}">
+        {% if has_remove %}
+        <button class="lmr-card-remove" type="button"
+                data-tmdb-id="{{ item.tmdb_id }}"
+                title="Rimuovi dalla raccolta" aria-label="Rimuovi {{ item.title }}">×</button>
+        {% endif %}
+        {% if item.tmdb_id %}<a href="{{ href }}" class="lmr-card-link">{% else %}<div class="lmr-card-link">{% endif %}
+            <div class="lmr-card-poster">
+                {% if item.poster_url %}
+                <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy" decoding="async">
+                {% else %}
+                <div class="lmr-card-placeholder">{{ item.title }}</div>
+                {% endif %}
+                {% if show_season and item.current_season %}
+                <span class="lmr-card-badge">
+                    S{{ item.current_season }}{% if item.total_seasons_at_save %} / {{ item.total_seasons_at_save }}{% endif %}
+                </span>
+                {% endif %}
+                {% if show_type %}
+                <span class="lmr-card-type">{{ 'Film' if ctype == 'movie' else 'Serie' }}</span>
+                {% endif %}
+            </div>
+            <div class="lmr-card-body">
+                <div class="lmr-card-title">{{ item.title }}</div>
+            </div>
+        {% if item.tmdb_id %}</a>{% else %}</div>{% endif %}
+    </div>
+    {% endmacro %}
+
+    {# ─── Panel: Sto guardando (solo serie) ───────────────────────── #}
+    <div class="lmr-panel is-active" id="panel-watching" role="tabpanel">
+        {% if watching %}
+        <div class="lmr-grid">
+            {% for s in watching %}
+                {{ card(s, has_remove=true, show_season=true) }}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="lmr-empty">
+            <div class="lmr-empty-icon">📺</div>
+            <h3 class="lmr-empty-title">Nessuna serie in corso</h3>
+            <p class="lmr-empty-text">Quando inizi una nuova serie, aggiungila qui dalla sua pagina con "Sto guardando" e ti ricorderai a che stagione sei.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ─── Panel: Voglio guardare (solo serie) ─────────────────────── #}
+    <div class="lmr-panel" id="panel-watchlist" role="tabpanel" hidden>
+        {% if watchlist %}
+        <div class="lmr-grid">
+            {% for s in watchlist %}
+                {{ card(s, has_remove=true) }}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="lmr-empty">
+            <div class="lmr-empty-icon">📌</div>
+            <h3 class="lmr-empty-title">Nessuna serie salvata</h3>
+            <p class="lmr-empty-text">Salva qui le serie che vorresti vedere — tornerai a trovarle quando avrai voglia di iniziare qualcosa di nuovo.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ─── Panel: Visti (serie completate + film visti) ────────────── #}
+    <div class="lmr-panel" id="panel-visti" role="tabpanel" hidden>
+        {% if visti %}
+        <div class="lmr-grid">
+            {% for v in visti %}
+                {# Le serie tracciate hanno status='completed' (dict da list_series_tracking),
+                   i film vengono da get_seen_titles_full. Mostro il chip "Film/Serie" per
+                   distinguerli visivamente. Niente bottone rimuovi qui per ora — l'utente
+                   gestisce dalla detail page. #}
+                {{ card(v, show_type=true) }}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="lmr-empty">
+            <div class="lmr-empty-icon">✅</div>
+            <h3 class="lmr-empty-title">Nessun contenuto visto</h3>
+            <p class="lmr-empty-text">Quando finisci una serie segnala come "Completata" o segna un film come "Visto" dalla loro pagina: avrai sempre uno storico di cosa hai guardato.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ─── Panel: Preferiti (film + serie) ─────────────────────────── #}
+    <div class="lmr-panel" id="panel-preferiti" role="tabpanel" hidden>
+        {% if preferiti %}
+        <div class="lmr-grid">
+            {% for p in preferiti %}
+                {{ card(p, show_type=true) }}
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="lmr-empty">
+            <div class="lmr-empty-icon">❤️</div>
+            <h3 class="lmr-empty-title">Nessun preferito ancora</h3>
+            <p class="lmr-empty-text">Quando trovi un film o una serie che ami, clicca "Aggiungi ai preferiti" sulla sua pagina: lo ritrovi sempre qui.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% endif %}{# /total > 0 #}
+    {% endif %}{# /is_logged_in #}
+
+</div>
+
+{% if is_logged_in and total > 0 %}
+<script>
+(function() {
+    'use strict';
+
+    // ─── Tab switching ──────────────────────────────────────────────
+    var tabs   = document.querySelectorAll('.lmr-tab');
+    var panels = document.querySelectorAll('.lmr-panel');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            var target = tab.getAttribute('data-tab');
+            tabs.forEach(function(t) {
+                var active = t === tab;
+                t.classList.toggle('is-active', active);
+                t.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            panels.forEach(function(p) {
+                var active = p.id === 'panel-' + target;
+                p.classList.toggle('is-active', active);
+                if (active) p.removeAttribute('hidden');
+                else        p.setAttribute('hidden', '');
+            });
+        });
+    });
+
+    // ─── Remove from list (DELETE /api/series/track/{id}) ──────────
+    // Solo per le card delle serie tracciate (Sto guardando / Voglio guardare).
+    document.querySelectorAll('.lmr-card-remove').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var tmdbId = btn.getAttribute('data-tmdb-id');
+            if (!tmdbId) return;
+            if (!confirm('Rimuovere questa serie dalla raccolta?')) return;
+
+            btn.disabled = true;
+            fetch('/api/series/track/' + encodeURIComponent(tmdbId), {
+                method: 'DELETE',
+                credentials: 'same-origin',
+            })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function() {
+                var card = btn.closest('.lmr-card');
+                if (card) {
+                    card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.96)';
+                    setTimeout(function() { card.remove(); }, 220);
+                }
+            })
+            .catch(function(err) {
+                console.error('untrack failed:', err);
+                btn.disabled = false;
+                alert('Non è stato possibile rimuovere la serie. Riprova.');
+            });
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

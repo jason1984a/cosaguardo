@@ -37,6 +37,7 @@ from app.db import (
     delete_series_tracking,
     get_series_tracking,
     list_series_tracking,
+    get_seen_titles_full,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -815,42 +816,99 @@ def api_series_untrack(request: Request, tmdb_id: int):
     return {"status": "ok", "deleted": deleted}
 
 
-@app.get("/le-mie-serie", response_class=HTMLResponse)
-def le_mie_serie(request: Request):
+def _enrich_titles_with_posters(items):
+    """Items: list di sqlite3.Row o dict che contengono almeno 'title' e
+    'content_type'. Aggiunge poster_url e tmdb_id (best-effort) leggendo
+    da poster_cache in batch. Non fa chiamate TMDb live, quindi è veloce.
+    Items senza poster in cache restano senza poster (renderizzano placeholder).
+    """
+    if not items:
+        return []
+    out = [dict(r) for r in items]
+    needs = [(d['title'], d['content_type']) for d in out if not d.get('poster_url')]
+    if not needs:
+        return out
+    try:
+        cache = get_poster_cache(needs)
+    except Exception as e:
+        log.warning("_enrich_titles_with_posters: get_poster_cache fallita: %s", e)
+        return out
+    for d in out:
+        if d.get('poster_url'):
+            continue
+        cached = cache.get((d['title'], d['content_type']))
+        if cached:
+            d['poster_url'] = cached.get('poster_url', '')
+            if not d.get('tmdb_id'):
+                d['tmdb_id'] = cached.get('tmdb_id')
+    return out
+
+
+@app.get("/le-mie-serie")
+def le_mie_serie_redirect():
+    """Vecchio URL: 301 → nuovo /la-mia-raccolta. SEO-friendly + non rompe
+    eventuali bookmark/condivisioni dei primi utenti."""
+    return RedirectResponse(url="/la-mia-raccolta", status_code=301)
+
+
+@app.get("/la-mia-raccolta", response_class=HTMLResponse)
+def la_mia_raccolta(request: Request):
     user_id = request.session.get("user_id")
 
-    # Guest: render una pagina di "registrazione invitante" invece di
-    # redirectare a /login. Il template gestisce sia logged-in che guest:
-    # passiamo is_logged_in al context e il template biforca.
+    # Guest: render la pagina con CTA registrazione (no login redirect, più
+    # persuasivo della pagina di login spogliata).
     if not user_id:
         return templates.TemplateResponse(
             request=request,
-            name="le_mie_serie.html",
+            name="la_mia_raccolta.html",
             context={
                 "request":   request,
                 "is_logged_in": False,
-                "watchlist": [],
                 "watching":  [],
-                "completed": [],
+                "watchlist": [],
+                "visti":     [],
+                "preferiti": [],
                 "total":     0,
             },
         )
 
-    watchlist = list_series_tracking(user_id, "watchlist")
-    watching  = list_series_tracking(user_id, "watching")
-    completed = list_series_tracking(user_id, "completed")
+    # ── Series tracking (ha già poster_url e tmdb_id salvati al track)
+    watching  = [dict(r) for r in list_series_tracking(user_id, "watching")]
+    watchlist = [dict(r) for r in list_series_tracking(user_id, "watchlist")]
+    completed_series = [dict(r) for r in list_series_tracking(user_id, "completed")]
 
-    total = len(watchlist) + len(watching) + len(completed)
+    # ── Film visti (binario, dal vecchio user_title_state)
+    seen_films = []
+    try:
+        seen_raw = get_seen_titles_full(user_id, content_type="movie")
+        seen_films = _enrich_titles_with_posters(seen_raw)
+    except Exception as e:
+        log.warning("la-mia-raccolta: get_seen_titles_full fallita uid=%s: %s", user_id, e)
+
+    # ── Tab "Visti" = serie completate + film visti, ordinato per recency
+    visti = completed_series + seen_films
+    visti.sort(key=lambda x: x.get('updated_at') or '', reverse=True)
+
+    # ── Preferiti (film + serie con preference='liked')
+    preferiti = []
+    try:
+        liked_raw = get_liked_states_by_user(user_id)
+        preferiti = _enrich_titles_with_posters(liked_raw)
+    except Exception as e:
+        log.warning("la-mia-raccolta: get_liked_states_by_user fallita uid=%s: %s", user_id, e)
+
+    total = len(watching) + len(watchlist) + len(visti) + len(preferiti)
 
     return templates.TemplateResponse(
         request=request,
-        name="le_mie_serie.html",
+        name="la_mia_raccolta.html",
         context={
             "request":   request,
             "is_logged_in": True,
-            "watchlist": watchlist,
             "watching":  watching,
-            "completed": completed,
+            "watchlist": watchlist,
+            "visti":     visti,
+            "preferiti": preferiti,
             "total":     total,
         },
     )

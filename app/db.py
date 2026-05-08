@@ -505,6 +505,39 @@ def get_seen_titles_by_user(user_id: int, content_type: str):
     return [row["title"].strip().lower() for row in rows]
 
 
+def get_seen_titles_full(user_id: int, content_type: str | None = None):
+    """Variante "ricca" di get_seen_titles_by_user: ritorna dict con
+    title, content_type, updated_at, ordinati per updated_at desc.
+    Usata da /la-mia-raccolta per il tab "Visti" che combina film visti
+    e serie completate.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    if content_type:
+        cur.execute(
+            """
+            SELECT title, content_type, updated_at
+            FROM user_title_state
+            WHERE user_id = ? AND content_type = ? AND seen = 1
+            ORDER BY updated_at DESC
+            """,
+            (user_id, content_type)
+        )
+    else:
+        cur.execute(
+            """
+            SELECT title, content_type, updated_at
+            FROM user_title_state
+            WHERE user_id = ? AND seen = 1
+            ORDER BY updated_at DESC
+            """,
+            (user_id,)
+        )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
 def get_disliked_titles_by_user(user_id: int, content_type: str):
     conn = get_connection()
     cur = conn.cursor()
