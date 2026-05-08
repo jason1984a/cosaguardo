@@ -1411,6 +1411,18 @@ function cgTrackingToggle(e) {
     if (isOpen) {
         cgTrackingClose();
     } else {
+        // FIX stacking context: il popover sta dentro N div annidati
+        // (detail-hero, detail-actions, tracking-wrap), alcuni dei quali
+        // creano sub-stacking context. Il backdrop è figlio diretto di body.
+        // Anche con z-index 9999 sul popover, il browser lo confina nello
+        // stacking context del suo parent → finisce SOTTO al backdrop.
+        // Soluzione: portiamo il popover come figlio diretto di body, così
+        // condivide lo stesso stacking context del backdrop e l'ordine
+        // z-index funziona come atteso. appendChild è idempotente: se
+        // l'elemento ha già body come parent, non fa nulla.
+        if (p.parentNode !== document.body) {
+            document.body.appendChild(p);
+        }
         cgTrackingPosition();      // calcola top/left/etc su position:fixed
         cgTrackingShowBackdrop();  // overlay scuro cliccabile per chiudere
         p.style.display = 'flex';
