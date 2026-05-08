@@ -968,10 +968,11 @@ html, body {
                     <button type="button" class="detail-btn tracking-trigger
                             {% if _tr_status %}tracking-trigger--active{% else %}detail-btn-secondary{% endif %}"
                             id="tracking-trigger"
-                            aria-haspopup="true" aria-expanded="false">
+                            aria-haspopup="true" aria-expanded="false"
+                            onclick="cgTrackingToggle(event)">
                         <i data-lucide="{% if _tr_status == 'watching' %}play-circle{% elif _tr_status == 'completed' %}check-circle{% elif _tr_status == 'watchlist' %}bookmark{% else %}plus-circle{% endif %}"
                            style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
-                        <span id="tracking-trigger-label">
+                        <span id="tracking-trigger-label" style="pointer-events:none;">
                         {% if _tr_status == "watching" %}
                             {% if _tr_season %}Sto guardando · S{{ _tr_season }}{% else %}Sto guardando{% endif %}
                         {% elif _tr_status == "completed" %}
@@ -986,21 +987,24 @@ html, body {
                     </button>
 
                     <div class="tracking-popover" id="tracking-popover" hidden role="menu">
-                        <button type="button" class="tracking-option" data-status="watchlist" role="menuitem">
-                            <i data-lucide="bookmark" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
-                            <span>Voglio guardarla</span>
+                        <button type="button" class="tracking-option"
+                                onclick="cgTrackingPick(event, 'watchlist')" role="menuitem">
+                            <i data-lucide="bookmark" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                            <span style="pointer-events:none;">Voglio guardarla</span>
                         </button>
-                        <button type="button" class="tracking-option" data-status="watching" role="menuitem">
-                            <i data-lucide="play-circle" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
-                            <span>Sto guardando</span>
+                        <button type="button" class="tracking-option"
+                                onclick="cgTrackingPick(event, 'watching')" role="menuitem">
+                            <i data-lucide="play-circle" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                            <span style="pointer-events:none;">Sto guardando</span>
                         </button>
 
                         <div class="tracking-season-row" id="tracking-season-row" hidden>
                             <label for="tracking-season-select">A che stagione sei?</label>
-                            <select id="tracking-season-select" class="tracking-season-select">
+                            <select id="tracking-season-select" class="tracking-season-select"
+                                    onchange="cgTrackingSeasonChange(event)">
                                 {% if _tr_total and _tr_total > 0 %}
                                     {% for n in range(1, _tr_total + 1) %}
-                                    <option value="{{ n }}">Stagione {{ n }}</option>
+                                    <option value="{{ n }}"{% if _tr_season == n %} selected{% endif %}>Stagione {{ n }}</option>
                                     {% endfor %}
                                 {% else %}
                                     <option value="1">Stagione 1</option>
@@ -1008,14 +1012,16 @@ html, body {
                             </select>
                         </div>
 
-                        <button type="button" class="tracking-option" data-status="completed" role="menuitem">
-                            <i data-lucide="check-circle" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
-                            <span>Completata</span>
+                        <button type="button" class="tracking-option"
+                                onclick="cgTrackingPick(event, 'completed')" role="menuitem">
+                            <i data-lucide="check-circle" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                            <span style="pointer-events:none;">Completata</span>
                         </button>
                         {% if _tr_status %}
-                        <button type="button" class="tracking-option tracking-option--remove" data-status="remove" role="menuitem">
-                            <i data-lucide="x-circle" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
-                            <span>Rimuovi dalle mie serie</span>
+                        <button type="button" class="tracking-option tracking-option--remove"
+                                onclick="cgTrackingPick(event, 'remove')" role="menuitem">
+                            <i data-lucide="x-circle" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+                            <span style="pointer-events:none;">Rimuovi dalle mie serie</span>
                         </button>
                         {% endif %}
                     </div>
@@ -1331,186 +1337,188 @@ function cgPlayTrailer(button) {
 }
 
 // ─── Tracking widget (solo TV) ──────────────────────────────────────
-// Popover con 3 stati + selettore stagione quando "watching".
-// Le chiamate API: POST /api/series/track, DELETE /api/series/track/{id}
-(function() {
-    var wrap = document.getElementById('tracking-wrap');
-    if (!wrap) return; // non è una pagina TV o utente non loggato
+// Funzioni GLOBALI chiamate via onclick inline (stesso pattern di
+// toggleFeedback) — robusto contro errori in altre funzioni del file.
+// Stato letto/scritto direttamente sui data-* attributes del wrap.
+//
+// API: POST /api/series/track, DELETE /api/series/track/{id}
+// Triggered da onclick="cgTrackingToggle(event)" sul trigger,
+// onclick="cgTrackingPick(event, 'watching')" sulle option.
+function cgTrackingToggle(e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    var p = document.getElementById('tracking-popover');
+    if (!p) return;
+    if (p.hasAttribute('hidden')) {
+        p.removeAttribute('hidden');
+        var t = document.getElementById('tracking-trigger');
+        if (t) t.setAttribute('aria-expanded', 'true');
+        // Click fuori chiude (registrato dopo, così non chiude subito da solo)
+        setTimeout(function() {
+            document.addEventListener('click', cgTrackingDocClick);
+        }, 0);
+    } else {
+        cgTrackingClose();
+    }
+}
 
-    var trigger     = document.getElementById('tracking-trigger');
-    var popover     = document.getElementById('tracking-popover');
-    var triggerLbl  = document.getElementById('tracking-trigger-label');
-    var seasonRow   = document.getElementById('tracking-season-row');
-    var seasonSel   = document.getElementById('tracking-season-select');
+function cgTrackingClose() {
+    var p = document.getElementById('tracking-popover');
+    if (p) p.setAttribute('hidden', '');
+    var t = document.getElementById('tracking-trigger');
+    if (t) t.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', cgTrackingDocClick);
+}
 
-    var tmdbId      = parseInt(wrap.getAttribute('data-tmdb-id'), 10);
-    var title       = wrap.getAttribute('data-title') || '';
-    var poster      = wrap.getAttribute('data-poster') || '';
-    var totalSeasons = parseInt(wrap.getAttribute('data-total-seasons'), 10) || 0;
-    var currentStatus = wrap.getAttribute('data-current-status') || '';
-    var currentSeason = parseInt(wrap.getAttribute('data-current-season'), 10) || null;
+function cgTrackingDocClick(e) {
+    var w = document.getElementById('tracking-wrap');
+    if (w && !w.contains(e.target)) cgTrackingClose();
+}
 
+function cgTrackingPick(e, newStatus) {
+    if (e && e.stopPropagation) e.stopPropagation();
+
+    if (newStatus === 'remove') {
+        cgTrackingDoUntrack();
+        return;
+    }
+
+    // Per 'watching' mostriamo il selettore stagione e salviamo subito
+    // con la stagione attualmente selezionata (default S1).
+    if (newStatus === 'watching') {
+        var row = document.getElementById('tracking-season-row');
+        if (row) row.removeAttribute('hidden');
+        var sel = document.getElementById('tracking-season-select');
+        var s = sel ? (parseInt(sel.value, 10) || 1) : 1;
+        cgTrackingDoTrack('watching', s);
+    } else {
+        var row2 = document.getElementById('tracking-season-row');
+        if (row2) row2.setAttribute('hidden', '');
+        cgTrackingDoTrack(newStatus, null);
+    }
+    cgTrackingMarkActive(newStatus);
+}
+
+function cgTrackingSeasonChange(e) {
+    var sel = e && e.target ? e.target : document.getElementById('tracking-season-select');
+    if (!sel) return;
+    var s = parseInt(sel.value, 10) || 1;
+    cgTrackingDoTrack('watching', s);
+}
+
+function cgTrackingMarkActive(status) {
+    var p = document.getElementById('tracking-popover');
+    if (!p) return;
+    var btns = p.querySelectorAll('.tracking-option');
+    for (var i = 0; i < btns.length; i++) {
+        // I bottoni hanno onclick="cgTrackingPick(event, 'X')" — estraiamo X
+        var oc = btns[i].getAttribute('onclick') || '';
+        var m = oc.match(/'([^']+)'/);
+        var s = m ? m[1] : '';
+        btns[i].classList.toggle('is-current', s === status);
+    }
+}
+
+function cgTrackingRefreshTrigger(status, season) {
+    var lbl = document.getElementById('tracking-trigger-label');
+    var t   = document.getElementById('tracking-trigger');
+    if (!lbl || !t) return;
+    var text;
+    if (status === 'watching') {
+        text = season ? ('Sto guardando · S' + season) : 'Sto guardando';
+    } else if (status === 'completed') {
+        text = 'Completata';
+    } else if (status === 'watchlist') {
+        text = 'Nella watchlist';
+    } else {
+        text = 'Aggiungi alle mie serie';
+    }
+    lbl.textContent = text;
+    if (status) {
+        t.classList.add('tracking-trigger--active');
+        t.classList.remove('detail-btn-secondary');
+    } else {
+        t.classList.remove('tracking-trigger--active');
+        t.classList.add('detail-btn-secondary');
+    }
+    // Sync stato sul wrap (così la prossima POST riceve i dati giusti)
+    var w = document.getElementById('tracking-wrap');
+    if (w) {
+        w.setAttribute('data-current-status', status || '');
+        w.setAttribute('data-current-season', season || '');
+    }
+}
+
+function cgTrackingDoTrack(status, season) {
+    var w = document.getElementById('tracking-wrap');
+    if (!w) return;
+    var tmdbId = parseInt(w.getAttribute('data-tmdb-id'), 10);
+    if (!tmdbId) return;
+    var title  = w.getAttribute('data-title') || '';
+    var poster = w.getAttribute('data-poster') || '';
+    var totalSeasons = parseInt(w.getAttribute('data-total-seasons'), 10) || null;
+
+    fetch('/api/series/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+            tmdb_id: tmdbId,
+            title: title,
+            poster_url: poster,
+            status: status,
+            current_season: season,
+            total_seasons: totalSeasons,
+        }),
+    })
+    .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
+    .then(function() {
+        cgTrackingRefreshTrigger(status, season);
+        // Tieni il popover aperto se watching (per vedere il select),
+        // altrimenti chiudi dopo un attimo (feedback visivo)
+        if (status !== 'watching') {
+            setTimeout(cgTrackingClose, 350);
+        }
+    })
+    .catch(function(err) {
+        console.error('cgTrackingDoTrack failed:', err);
+        alert('Salvataggio non riuscito. Riprova.');
+    });
+}
+
+function cgTrackingDoUntrack() {
+    var w = document.getElementById('tracking-wrap');
+    if (!w) return;
+    var tmdbId = parseInt(w.getAttribute('data-tmdb-id'), 10);
     if (!tmdbId) return;
 
-    // Pre-seleziona la stagione corrente nel select se "watching"
-    if (currentStatus === 'watching' && currentSeason && seasonSel) {
-        var opt = seasonSel.querySelector('option[value="' + currentSeason + '"]');
-        if (opt) seasonSel.value = String(currentSeason);
-    }
-
-    // Mostra/nascondi season-row in base allo status corrente
-    function refreshSeasonRow(status) {
-        if (!seasonRow) return;
-        if (status === 'watching') seasonRow.removeAttribute('hidden');
-        else                       seasonRow.setAttribute('hidden', '');
-    }
-    refreshSeasonRow(currentStatus);
-
-    // Marca l'opzione attiva nel popover
-    function refreshActiveOption(status) {
-        popover.querySelectorAll('.tracking-option').forEach(function(b) {
-            b.classList.toggle('is-current', b.getAttribute('data-status') === status);
-        });
-    }
-    refreshActiveOption(currentStatus);
-
-    // Aggiorna il bottone trigger (label + classe attiva)
-    function refreshTrigger(status, season) {
-        if (status === 'watching') {
-            triggerLbl.textContent = season
-                ? ('Sto guardando · S' + season)
-                : 'Sto guardando';
-        } else if (status === 'completed') {
-            triggerLbl.textContent = 'Completata';
-        } else if (status === 'watchlist') {
-            triggerLbl.textContent = 'Nella watchlist';
-        } else {
-            triggerLbl.textContent = 'Aggiungi alle mie serie';
-        }
-        if (status) trigger.classList.add('tracking-trigger--active');
-        else        trigger.classList.remove('tracking-trigger--active');
-    }
-
-    // ─── Apri/chiudi popover ───────────────────────────────────────
-    function openPopover() {
-        popover.removeAttribute('hidden');
-        trigger.setAttribute('aria-expanded', 'true');
-        // Click fuori → chiude
-        setTimeout(function() {
-            document.addEventListener('click', onDocClick);
-        }, 0);
-    }
-    function closePopover() {
-        popover.setAttribute('hidden', '');
-        trigger.setAttribute('aria-expanded', 'false');
-        document.removeEventListener('click', onDocClick);
-    }
-    function onDocClick(e) {
-        if (!wrap.contains(e.target)) closePopover();
-    }
-    trigger.addEventListener('click', function(e) {
-        e.stopPropagation();
-        if (popover.hasAttribute('hidden')) openPopover();
-        else                                closePopover();
-    });
-
-    // ─── Gestione click sulle opzioni ─────────────────────────────
-    popover.querySelectorAll('.tracking-option').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var newStatus = btn.getAttribute('data-status');
-
-            if (newStatus === 'remove') {
-                doUntrack();
-                return;
-            }
-
-            if (newStatus === 'watching') {
-                // Mostra il selettore stagione e aspetta scelta
-                refreshSeasonRow('watching');
-                refreshActiveOption('watching');
-                // Salva subito con la stagione attualmente selezionata
-                var s = parseInt(seasonSel.value, 10) || 1;
-                doTrack('watching', s);
-            } else {
-                refreshSeasonRow(newStatus);
-                refreshActiveOption(newStatus);
-                doTrack(newStatus, null);
-            }
-        });
-    });
-
-    // Se l'utente cambia il selettore di stagione, aggiorna subito (debounce minimo)
-    var seasonDebounce;
-    if (seasonSel) {
-        seasonSel.addEventListener('change', function() {
-            clearTimeout(seasonDebounce);
-            seasonDebounce = setTimeout(function() {
-                var s = parseInt(seasonSel.value, 10) || 1;
-                doTrack('watching', s);
-            }, 120);
-        });
-    }
-
-    // ─── API calls ────────────────────────────────────────────────
-    function doTrack(status, season) {
-        fetch('/api/series/track', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({
-                tmdb_id: tmdbId,
-                title: title,
-                poster_url: poster,
-                status: status,
-                current_season: season,
-                total_seasons: totalSeasons || null,
-            }),
-        })
-        .then(function(r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        })
-        .then(function() {
-            currentStatus = status;
-            currentSeason = season;
-            refreshTrigger(status, season);
-            // Tieni il popover aperto solo se status=watching (così l'utente vede il select)
-            if (status !== 'watching') {
-                setTimeout(closePopover, 400);
-            }
-        })
-        .catch(function(err) {
-            console.error('track failed:', err);
-            alert('Salvataggio non riuscito. Riprova.');
-        });
-    }
-
-    function doUntrack() {
-        fetch('/api/series/track/' + tmdbId, {
-            method: 'DELETE',
-            credentials: 'same-origin',
-        })
-        .then(function(r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        })
-        .then(function() {
-            currentStatus = '';
-            currentSeason = null;
-            refreshTrigger('', null);
-            refreshSeasonRow('');
-            refreshActiveOption('');
-            // Rimuove l'opzione "Rimuovi dalla lista" che adesso non ha più senso
-            var rm = popover.querySelector('.tracking-option--remove');
+    fetch('/api/series/track/' + tmdbId, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+    })
+    .then(function(r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+    })
+    .then(function() {
+        cgTrackingRefreshTrigger('', null);
+        var row = document.getElementById('tracking-season-row');
+        if (row) row.setAttribute('hidden', '');
+        cgTrackingMarkActive('');
+        // Rimuove l'opzione "Rimuovi" che non ha più senso
+        var p = document.getElementById('tracking-popover');
+        if (p) {
+            var rm = p.querySelector('.tracking-option--remove');
             if (rm) rm.remove();
-            closePopover();
-        })
-        .catch(function(err) {
-            console.error('untrack failed:', err);
-            alert('Rimozione non riuscita. Riprova.');
-        });
-    }
-})();
+        }
+        cgTrackingClose();
+    })
+    .catch(function(err) {
+        console.error('cgTrackingDoUntrack failed:', err);
+        alert('Rimozione non riuscita. Riprova.');
+    });
+}
 </script>
 {% endblock %}
