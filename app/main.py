@@ -33,6 +33,10 @@ from app.db import (
     save_poster_cache,
     get_search_cache,
     save_search_cache,
+    set_series_tracking,
+    delete_series_tracking,
+    get_series_tracking,
+    list_series_tracking,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -720,6 +724,124 @@ def save_feedback(request: Request, data: dict = Body(...)):
 
     return {"status": "ok"}
 
+
+# ─── Series tracking API ────────────────────────────────────────────────
+# Permette all'utente di mantenere una lista delle serie con stato:
+#   watchlist  voglio guardare
+#   watching   sto guardando (con current_season)
+#   completed  finito
+# Usato dal widget tracking sulla detail page e dalla pagina /le-mie-serie.
+_VALID_TRACKING_STATUSES = ("watchlist", "watching", "completed")
+
+
+@app.post("/api/series/track")
+def api_series_track(request: Request, data: dict = Body(...)):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="login richiesto")
+
+    try:
+        tmdb_id = int(data.get("tmdb_id") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="tmdb_id non valido")
+    if tmdb_id <= 0:
+        raise HTTPException(status_code=400, detail="tmdb_id non valido")
+
+    title = (data.get("title") or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="title mancante")
+
+    status = (data.get("status") or "").strip()
+    if status not in _VALID_TRACKING_STATUSES:
+        raise HTTPException(status_code=400, detail="status non valido")
+
+    # current_season ha senso solo per 'watching'; per gli altri stati lo forziamo a None
+    current_season = None
+    if status == "watching":
+        try:
+            cs = data.get("current_season")
+            current_season = int(cs) if cs is not None else None
+            if current_season is not None and current_season < 0:
+                current_season = None
+        except (TypeError, ValueError):
+            current_season = None
+
+    # total_seasons_at_save: snapshot dal client (preso da detail.seasons).
+    # Serve in Phase 2 per detection "nuova stagione disponibile".
+    total_seasons = None
+    try:
+        ts = data.get("total_seasons")
+        total_seasons = int(ts) if ts is not None else None
+        if total_seasons is not None and total_seasons < 0:
+            total_seasons = None
+    except (TypeError, ValueError):
+        total_seasons = None
+
+    poster_url = (data.get("poster_url") or "").strip()
+
+    try:
+        set_series_tracking(
+            user_id=user_id, tmdb_id=tmdb_id, title=title,
+            status=status, current_season=current_season,
+            total_seasons_at_save=total_seasons, poster_url=poster_url,
+        )
+    except ValueError as e:
+        # Difesa in profondità: db rifiuta status invalidi anche se l'API li ha accettati
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        log.exception("api_series_track: set fallita uid=%s tmdb_id=%s: %s",
+                      user_id, tmdb_id, e)
+        raise HTTPException(status_code=500, detail="errore salvataggio")
+
+    return {"status": "ok", "tracking": {
+        "tmdb_id": tmdb_id, "status": status,
+        "current_season": current_season,
+    }}
+
+
+@app.delete("/api/series/track/{tmdb_id}")
+def api_series_untrack(request: Request, tmdb_id: int):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="login richiesto")
+
+    try:
+        deleted = delete_series_tracking(user_id, tmdb_id)
+    except Exception as e:
+        log.exception("api_series_untrack: delete fallita uid=%s tmdb_id=%s: %s",
+                      user_id, tmdb_id, e)
+        raise HTTPException(status_code=500, detail="errore cancellazione")
+
+    return {"status": "ok", "deleted": deleted}
+
+
+@app.get("/le-mie-serie", response_class=HTMLResponse)
+def le_mie_serie(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        # Non loggato → login con next per tornare qui post-login
+        return RedirectResponse(url="/login?next=/le-mie-serie", status_code=302)
+
+    watchlist = list_series_tracking(user_id, "watchlist")
+    watching  = list_series_tracking(user_id, "watching")
+    completed = list_series_tracking(user_id, "completed")
+
+    total = len(watchlist) + len(watching) + len(completed)
+
+    return templates.TemplateResponse(
+        request=request,
+        name="le_mie_serie.html",
+        context={
+            "request":   request,
+            "watchlist": watchlist,
+            "watching":  watching,
+            "completed": completed,
+            "total":     total,
+        },
+    )
+# ────────────────────────────────────────────────────────────────────────
+
+
 @app.post("/logout")
 def logout(request: Request):
     request.session.clear()
@@ -1242,6 +1364,16 @@ def serie_detail(request: Request, tmdb_id: int):
         except Exception as e:
             log.warning("serie_detail: similar build fallito per '%s': %s", detail.get("title"), e)
 
+    # Tracking utente (sto guardando / voglio guardare / completata).
+    # None se non loggato o se non ha mai tracciato questa serie.
+    series_tracking = None
+    if user_id:
+        try:
+            series_tracking = get_series_tracking(user_id, tmdb_id)
+        except Exception as e:
+            log.warning("serie_detail: get_series_tracking uid=%s tmdb_id=%s: %s",
+                        user_id, tmdb_id, e)
+
     return templates.TemplateResponse(
         request=request,
         name="detail.html",
@@ -1253,6 +1385,7 @@ def serie_detail(request: Request, tmdb_id: int):
             "is_liked":   title_state.get("preference") == "liked",
             "is_seen":    title_state.get("seen", 0) == 1,
             "seo_slug":   get_slug_by_tmdb_id(tmdb_id, "tv"),
+            "series_tracking": series_tracking,
         },
     )
 

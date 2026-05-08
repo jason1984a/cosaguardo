@@ -1,0 +1,450 @@
+{% extends "base.html" %}
+
+{% block title %}Le mie serie | CosaGuardo{% endblock %}
+{% block meta_description %}Tieni traccia delle serie TV che stai guardando, vuoi guardare o hai completato. Notifiche quando esce una nuova stagione.{% endblock %}
+
+{% block content %}
+<style>
+    .lms-page {
+        max-width: 1100px;
+        margin: 24px auto 60px;
+        padding: 0 16px;
+    }
+    .lms-header {
+        margin-bottom: 22px;
+    }
+    .lms-header h1 {
+        font-size: clamp(22px, 4vw, 32px);
+        font-weight: 800;
+        margin: 0 0 6px;
+        background: linear-gradient(90deg, #ffffff, #93c5fd);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.02em;
+    }
+    .lms-subtitle {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+    }
+
+    .lms-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 20px 0 18px;
+        border-bottom: 1px solid var(--border);
+    }
+    .lms-tab {
+        background: transparent;
+        border: 0;
+        color: var(--muted);
+        padding: 10px 14px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: color 0.15s ease, border-color 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .lms-tab:hover { color: var(--text); }
+    .lms-tab.is-active {
+        color: var(--text);
+        border-bottom-color: var(--primary);
+    }
+    .lms-tab .lms-tab-count {
+        background: rgba(255,255,255,0.06);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 700;
+    }
+    .lms-tab.is-active .lms-tab-count {
+        background: rgba(110,168,254,0.16);
+        color: var(--primary);
+    }
+
+    .lms-tab-panel { display: none; }
+    .lms-tab-panel.is-active { display: block; }
+
+    .lms-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 16px;
+    }
+    @media (max-width: 480px) {
+        .lms-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 12px; }
+    }
+
+    .lms-card {
+        position: relative;
+        border-radius: 14px;
+        overflow: hidden;
+        background: rgba(17,24,39,0.6);
+        border: 1px solid var(--border);
+        transition: transform 0.18s ease, border-color 0.18s ease;
+    }
+    @media (hover: hover) {
+        .lms-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(110,168,254,0.35);
+        }
+    }
+    .lms-card-link {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+    }
+    .lms-card-poster {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 2/3;
+        background: rgba(255,255,255,0.03);
+    }
+    .lms-card-poster img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+    .lms-card-season {
+        position: absolute;
+        top: 8px;
+        left: 8px;
+        background: rgba(8,16,31,0.85);
+        backdrop-filter: blur(6px);
+        color: var(--text);
+        font-size: 11px;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .lms-card-body {
+        padding: 8px 10px 10px;
+    }
+    .lms-card-title {
+        font-size: 13px;
+        font-weight: 700;
+        line-height: 1.25;
+        color: var(--text);
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+    .lms-card-remove {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: rgba(8,16,31,0.85);
+        border: 1px solid rgba(255,255,255,0.12);
+        color: var(--text);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        transition: opacity 0.15s ease, background 0.15s ease;
+        z-index: 2;
+    }
+    .lms-card:hover .lms-card-remove,
+    .lms-card-remove:focus {
+        opacity: 1;
+    }
+    @media (hover: none) {
+        /* Su touch lo mostriamo sempre, niente hover */
+        .lms-card-remove { opacity: 0.85; }
+    }
+    .lms-card-remove:hover {
+        background: rgba(239,68,68,0.85);
+        border-color: rgba(239,68,68,0.95);
+    }
+
+    /* Empty state per tab vuoti */
+    .lms-empty {
+        text-align: center;
+        padding: 50px 16px;
+        max-width: 480px;
+        margin: 0 auto;
+    }
+    .lms-empty-icon {
+        font-size: 38px;
+        margin-bottom: 10px;
+        opacity: 0.6;
+    }
+    .lms-empty-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 0 0 8px;
+        color: var(--text);
+    }
+    .lms-empty-text {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+        margin: 0 0 18px;
+    }
+
+    /* Empty state globale (utente senza ALCUNA serie) */
+    .lms-onboarding {
+        text-align: center;
+        padding: 50px 20px;
+        max-width: 580px;
+        margin: 20px auto;
+        background: linear-gradient(135deg, rgba(110,168,254,0.06), rgba(155,123,255,0.04));
+        border: 1px solid rgba(110,168,254,0.18);
+        border-radius: 18px;
+    }
+    .lms-onboarding h2 {
+        font-size: 20px;
+        font-weight: 800;
+        margin: 0 0 10px;
+        color: var(--text);
+    }
+    .lms-onboarding p {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+        margin: 0 0 18px;
+    }
+    .lms-onboarding-features {
+        text-align: left;
+        max-width: 380px;
+        margin: 0 auto 22px;
+        list-style: none;
+        padding: 0;
+    }
+    .lms-onboarding-features li {
+        padding: 6px 0;
+        color: var(--muted);
+        font-size: 13.5px;
+    }
+    .lms-onboarding-features li::before {
+        content: "✓";
+        color: var(--primary);
+        font-weight: 800;
+        margin-right: 10px;
+    }
+</style>
+
+<div class="lms-page">
+
+    <div class="lms-header">
+        <h1>Le mie serie</h1>
+        <p class="lms-subtitle">
+            {% if total > 0 %}
+                Tieni traccia di cosa stai guardando, di cosa vuoi vedere e delle serie già completate.
+            {% else %}
+                Non hai ancora aggiunto serie. Esplora il catalogo e segna quelle che ti interessano.
+            {% endif %}
+        </p>
+    </div>
+
+    {% if total == 0 %}
+    {# ─── Onboarding: utente totalmente vuoto ──────────────────────────── #}
+    <div class="lms-onboarding">
+        <h2>Crea la tua collezione</h2>
+        <p>
+            Quando aggiungi una serie alle tue, succedono cose utili:
+        </p>
+        <ul class="lms-onboarding-features">
+            <li>Ti ricordi cosa stai guardando e a che stagione sei</li>
+            <li>Salvi le serie che vorresti vedere senza dimenticartele</li>
+            <li>Avrai un avviso quando esce una nuova stagione</li>
+        </ul>
+        <a href="/scopri?tipo=serie" class="btn btn-primary">Esplora le serie TV</a>
+    </div>
+    {% else %}
+
+    {# ─── Tabs ────────────────────────────────────────────────────────── #}
+    <div class="lms-tabs" role="tablist">
+        <button class="lms-tab is-active" role="tab" data-tab="watching"
+                aria-selected="true" aria-controls="panel-watching">
+            Sto guardando
+            <span class="lms-tab-count">{{ watching|length }}</span>
+        </button>
+        <button class="lms-tab" role="tab" data-tab="watchlist"
+                aria-selected="false" aria-controls="panel-watchlist">
+            Voglio guardare
+            <span class="lms-tab-count">{{ watchlist|length }}</span>
+        </button>
+        <button class="lms-tab" role="tab" data-tab="completed"
+                aria-selected="false" aria-controls="panel-completed">
+            Completate
+            <span class="lms-tab-count">{{ completed|length }}</span>
+        </button>
+    </div>
+
+    {# ─── Panel: Sto guardando ─────────────────────────────────────────── #}
+    <div class="lms-tab-panel is-active" id="panel-watching" role="tabpanel">
+        {% if watching %}
+        <div class="lms-grid">
+            {% for s in watching %}
+            <div class="lms-card" data-tmdb-id="{{ s.tmdb_id }}">
+                <button class="lms-card-remove" type="button"
+                        data-tmdb-id="{{ s.tmdb_id }}"
+                        title="Rimuovi dalla lista" aria-label="Rimuovi {{ s.title }}">×</button>
+                <a href="/serie/{{ s.tmdb_id }}" class="lms-card-link">
+                    <div class="lms-card-poster">
+                        {% if s.poster_url %}
+                        <img src="{{ s.poster_url }}" alt="{{ s.title }}" loading="lazy" decoding="async">
+                        {% endif %}
+                        {% if s.current_season %}
+                        <span class="lms-card-season">
+                            S{{ s.current_season }}{% if s.total_seasons_at_save %} di {{ s.total_seasons_at_save }}{% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <div class="lms-card-body">
+                        <div class="lms-card-title">{{ s.title }}</div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="lms-empty">
+            <div class="lms-empty-icon">📺</div>
+            <h3 class="lms-empty-title">Nessuna serie in corso</h3>
+            <p class="lms-empty-text">Quando inizi una nuova serie, aggiungila qui dalla sua pagina con il pulsante "Sto guardando" e ti ricorderai a che punto sei.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ─── Panel: Voglio guardare ──────────────────────────────────────── #}
+    <div class="lms-tab-panel" id="panel-watchlist" role="tabpanel" hidden>
+        {% if watchlist %}
+        <div class="lms-grid">
+            {% for s in watchlist %}
+            <div class="lms-card" data-tmdb-id="{{ s.tmdb_id }}">
+                <button class="lms-card-remove" type="button"
+                        data-tmdb-id="{{ s.tmdb_id }}"
+                        title="Rimuovi dalla lista" aria-label="Rimuovi {{ s.title }}">×</button>
+                <a href="/serie/{{ s.tmdb_id }}" class="lms-card-link">
+                    <div class="lms-card-poster">
+                        {% if s.poster_url %}
+                        <img src="{{ s.poster_url }}" alt="{{ s.title }}" loading="lazy" decoding="async">
+                        {% endif %}
+                    </div>
+                    <div class="lms-card-body">
+                        <div class="lms-card-title">{{ s.title }}</div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="lms-empty">
+            <div class="lms-empty-icon">📌</div>
+            <h3 class="lms-empty-title">Nessuna serie salvata</h3>
+            <p class="lms-empty-text">Salva qui le serie che vorresti vedere — tornerai a trovarle quando avrai voglia di iniziare qualcosa di nuovo.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ─── Panel: Completate ───────────────────────────────────────────── #}
+    <div class="lms-tab-panel" id="panel-completed" role="tabpanel" hidden>
+        {% if completed %}
+        <div class="lms-grid">
+            {% for s in completed %}
+            <div class="lms-card" data-tmdb-id="{{ s.tmdb_id }}">
+                <button class="lms-card-remove" type="button"
+                        data-tmdb-id="{{ s.tmdb_id }}"
+                        title="Rimuovi dalla lista" aria-label="Rimuovi {{ s.title }}">×</button>
+                <a href="/serie/{{ s.tmdb_id }}" class="lms-card-link">
+                    <div class="lms-card-poster">
+                        {% if s.poster_url %}
+                        <img src="{{ s.poster_url }}" alt="{{ s.title }}" loading="lazy" decoding="async">
+                        {% endif %}
+                    </div>
+                    <div class="lms-card-body">
+                        <div class="lms-card-title">{{ s.title }}</div>
+                    </div>
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="lms-empty">
+            <div class="lms-empty-icon">✅</div>
+            <h3 class="lms-empty-title">Nessuna serie completata</h3>
+            <p class="lms-empty-text">Quando finisci una serie, segnala come "Completata" dalla sua pagina: avrai sempre uno storico di cosa hai guardato.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    {% endif %}{# /total > 0 #}
+
+</div>
+
+{% if total > 0 %}
+<script>
+(function() {
+    'use strict';
+
+    // ─── Tab switching ─────────────────────────────────────────────────
+    var tabs   = document.querySelectorAll('.lms-tab');
+    var panels = document.querySelectorAll('.lms-tab-panel');
+    tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+            var target = tab.getAttribute('data-tab');
+            tabs.forEach(function(t) {
+                var active = t === tab;
+                t.classList.toggle('is-active', active);
+                t.setAttribute('aria-selected', active ? 'true' : 'false');
+            });
+            panels.forEach(function(p) {
+                var active = p.id === 'panel-' + target;
+                p.classList.toggle('is-active', active);
+                if (active) p.removeAttribute('hidden');
+                else        p.setAttribute('hidden', '');
+            });
+        });
+    });
+
+    // ─── Remove from list (DELETE /api/series/track/{id}) ──────────────
+    document.querySelectorAll('.lms-card-remove').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var tmdbId = btn.getAttribute('data-tmdb-id');
+            if (!tmdbId) return;
+            if (!confirm('Rimuovere questa serie dalla tua lista?')) return;
+
+            btn.disabled = true;
+            fetch('/api/series/track/' + encodeURIComponent(tmdbId), {
+                method: 'DELETE',
+                credentials: 'same-origin',
+            })
+            .then(function(r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            })
+            .then(function() {
+                // Rimozione DOM con piccola animazione
+                var card = btn.closest('.lms-card');
+                if (card) {
+                    card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                    card.style.opacity = '0';
+                    card.style.transform = 'scale(0.96)';
+                    setTimeout(function() { card.remove(); }, 220);
+                }
+            })
+            .catch(function(err) {
+                console.error('untrack failed:', err);
+                btn.disabled = false;
+                alert('Non è stato possibile rimuovere la serie. Riprova.');
+            });
+        });
+    });
+})();
+</script>
+{% endif %}
+{% endblock %}

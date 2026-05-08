@@ -281,6 +281,31 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_uts_user_ctype
         ON user_title_state (user_id, content_type)
     """)
+
+    # ─── Tracking serie TV: watchlist / watching / completed ─────────────
+    # Usato dalla pagina /le-mie-serie e dalle notifiche "nuova stagione".
+    # Sostituisce il binario `seen` di user_title_state per le serie (i film
+    # restano sul vecchio modello). PRIMARY KEY composta = upsert nativo.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS user_series_tracking (
+            user_id               INTEGER NOT NULL,
+            tmdb_id               INTEGER NOT NULL,
+            title                 TEXT NOT NULL,
+            poster_url            TEXT,
+            status                TEXT NOT NULL,
+            current_season        INTEGER,
+            total_seasons_at_save INTEGER,
+            created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (user_id, tmdb_id),
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+    """)
+    # Index per /le-mie-serie filter by status
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_user_series_tracking_status
+        ON user_series_tracking (user_id, status, updated_at DESC)
+    """)
     # ───────────────────────────────────────────────────────────────────────
 
     conn.commit()
@@ -565,6 +590,115 @@ def get_title_states_map(user_id: int, content_type: str):
         }
 
     return result
+
+
+# ─── Series tracking helpers ────────────────────────────────────────────
+# Tabella user_series_tracking: vedi schema in init_db().
+# 3 stati ammessi (validati lato API in main.py prima di chiamare set_):
+#   - 'watchlist'  voglio guardare
+#   - 'watching'   sto guardando (current_season indica dove sono arrivato)
+#   - 'completed'  finito
+# total_seasons_at_save è uno snapshot del numero di stagioni TMDb al momento
+# del set: usato in Phase 2 per detection "nuova stagione disponibile".
+
+_SERIES_TRACKING_STATUSES = ("watchlist", "watching", "completed")
+
+def set_series_tracking(user_id: int, tmdb_id: int, title: str,
+                        status: str, current_season: int | None = None,
+                        total_seasons_at_save: int | None = None,
+                        poster_url: str = ""):
+    """Upsert su (user_id, tmdb_id). Idempotente.
+    Solleva ValueError se status non valido (linea di difesa: l'API valida già).
+    """
+    if status not in _SERIES_TRACKING_STATUSES:
+        raise ValueError(f"status invalido: {status}")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO user_series_tracking
+            (user_id, tmdb_id, title, poster_url, status,
+             current_season, total_seasons_at_save, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id, tmdb_id) DO UPDATE SET
+            title                 = excluded.title,
+            poster_url            = excluded.poster_url,
+            status                = excluded.status,
+            current_season        = excluded.current_season,
+            total_seasons_at_save = excluded.total_seasons_at_save,
+            updated_at            = CURRENT_TIMESTAMP
+        """,
+        (user_id, tmdb_id, title, poster_url, status,
+         current_season, total_seasons_at_save)
+    )
+    conn.commit()
+    conn.close()
+
+
+def delete_series_tracking(user_id: int, tmdb_id: int) -> bool:
+    """Rimuove la serie dal tracking. Ritorna True se cancellata, False se assente."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM user_series_tracking WHERE user_id = ? AND tmdb_id = ?",
+        (user_id, tmdb_id)
+    )
+    deleted = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    return deleted
+
+
+def get_series_tracking(user_id: int, tmdb_id: int):
+    """Riga singola, None se assente. Usato dalla detail page per pre-popolare il widget."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT user_id, tmdb_id, title, poster_url, status,
+               current_season, total_seasons_at_save, updated_at
+        FROM user_series_tracking
+        WHERE user_id = ? AND tmdb_id = ?
+        """,
+        (user_id, tmdb_id)
+    )
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+
+def list_series_tracking(user_id: int, status: str | None = None):
+    """Lista tutte le serie tracciate, opzionalmente filtrate per status.
+    Ordinate per updated_at desc (le più recenti prima).
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    if status:
+        cur.execute(
+            """
+            SELECT tmdb_id, title, poster_url, status,
+                   current_season, total_seasons_at_save, updated_at
+            FROM user_series_tracking
+            WHERE user_id = ? AND status = ?
+            ORDER BY updated_at DESC
+            """,
+            (user_id, status)
+        )
+    else:
+        cur.execute(
+            """
+            SELECT tmdb_id, title, poster_url, status,
+                   current_season, total_seasons_at_save, updated_at
+            FROM user_series_tracking
+            WHERE user_id = ?
+            ORDER BY updated_at DESC
+            """,
+            (user_id,)
+        )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
 
 
 
