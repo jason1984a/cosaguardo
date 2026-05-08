@@ -1527,7 +1527,9 @@ function cgTrackingSeasonChange(e) {
     var sel = e && e.target ? e.target : document.getElementById('tracking-season-select');
     if (!sel) return;
     var s = parseInt(sel.value, 10) || 1;
-    cgTrackingDoTrack('watching', s);
+    // Salva e chiudi: l'utente ha completato la scelta della stagione,
+    // tenere il popover aperto sembrerebbe che la selezione non sia partita.
+    cgTrackingDoTrack('watching', s, /* closeAfter */ true);
 }
 
 function cgTrackingMarkActive(status) {
@@ -1571,7 +1573,7 @@ function cgTrackingRefreshTrigger(status, season) {
     }
 }
 
-function cgTrackingDoTrack(status, season) {
+function cgTrackingDoTrack(status, season, closeAfter) {
     var w = document.getElementById('tracking-wrap');
     if (!w) return;
     var tmdbId = parseInt(w.getAttribute('data-tmdb-id'), 10);
@@ -1595,7 +1597,6 @@ function cgTrackingDoTrack(status, season) {
     })
     .then(function(r) {
         if (r.status === 401) {
-            // Sessione scaduta in mezzo: degrade graceful → prompt login
             cgShowLoginToast('La sessione è scaduta. Accedi di nuovo per continuare.');
             cgTrackingClose();
             throw new Error('not-authenticated');
@@ -1605,7 +1606,10 @@ function cgTrackingDoTrack(status, season) {
     })
     .then(function() {
         cgTrackingRefreshTrigger(status, season);
-        if (status !== 'watching') {
+        // Per 'watching': teniamo aperto solo al PRIMO click (per mostrare
+        // il selettore di stagione). Quando l'utente cambia stagione → chiudi.
+        // Per gli altri status: sempre chiudi.
+        if (status !== 'watching' || closeAfter) {
             setTimeout(cgTrackingClose, 350);
         }
     })

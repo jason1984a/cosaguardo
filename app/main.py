@@ -818,9 +818,23 @@ def api_series_untrack(request: Request, tmdb_id: int):
 @app.get("/le-mie-serie", response_class=HTMLResponse)
 def le_mie_serie(request: Request):
     user_id = request.session.get("user_id")
+
+    # Guest: render una pagina di "registrazione invitante" invece di
+    # redirectare a /login. Il template gestisce sia logged-in che guest:
+    # passiamo is_logged_in al context e il template biforca.
     if not user_id:
-        # Non loggato → login con next per tornare qui post-login
-        return RedirectResponse(url="/login?next=/le-mie-serie", status_code=302)
+        return templates.TemplateResponse(
+            request=request,
+            name="le_mie_serie.html",
+            context={
+                "request":   request,
+                "is_logged_in": False,
+                "watchlist": [],
+                "watching":  [],
+                "completed": [],
+                "total":     0,
+            },
+        )
 
     watchlist = list_series_tracking(user_id, "watchlist")
     watching  = list_series_tracking(user_id, "watching")
@@ -833,6 +847,7 @@ def le_mie_serie(request: Request):
         name="le_mie_serie.html",
         context={
             "request":   request,
+            "is_logged_in": True,
             "watchlist": watchlist,
             "watching":  watching,
             "completed": completed,
