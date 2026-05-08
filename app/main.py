@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi import Body
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.taste_profile import build_taste_profile
 from app.dashboard_recommendations import build_dashboard_recommendations
 from app.db import (
@@ -290,6 +291,35 @@ def _patched_TemplateResponse(*args, **kwargs):
     return _original_TemplateResponse(*args, **kwargs)
 
 templates.TemplateResponse = _patched_TemplateResponse
+
+
+# ─── Custom 404 handler ──────────────────────────────────────────────────
+# FastAPI di default risponde con JSON {"detail": "Not Found"} per i 404.
+# Sostituisce la risposta JSON con la pagina 404 brandizzata, mantenendo
+# JSON solo per le route API (path che iniziano con /api/ o richieste con
+# Accept: application/json).
+@app.exception_handler(StarletteHTTPException)
+async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        # API e fetch JSON: mantieni risposta JSON
+        accept = request.headers.get("accept", "")
+        if request.url.path.startswith("/api/") or "application/json" in accept:
+            return JSONResponse(
+                status_code=404,
+                content={"detail": exc.detail or "Not Found"},
+            )
+        # Browser navigation: pagina HTML brandizzata
+        return templates.TemplateResponse(
+            request=request,
+            name="404.html",
+            context={"request": request},
+            status_code=404,
+        )
+    # Tutti gli altri status code (401, 403, 500, etc.) -> comportamento default
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 
 def prettify_title(title: str) -> str:

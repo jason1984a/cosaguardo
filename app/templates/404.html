@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Pagina non trovata | CosaGuardo{% endblock %}
+{% block meta_description %}La pagina che stai cercando non esiste. Torna alla home oppure scopri cosa guardare in streaming.{% endblock %}
+
+{% block content %}
+<style>
+    .nf-wrap {
+        max-width: 560px;
+        margin: 40px auto 80px;
+        padding: 0 16px;
+        text-align: center;
+    }
+    .nf-code {
+        font-size: clamp(96px, 22vw, 168px);
+        font-weight: 900;
+        line-height: 1;
+        letter-spacing: -0.04em;
+        background: linear-gradient(135deg, var(--primary), #9b7bff);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0 0 8px;
+    }
+    .nf-title {
+        font-size: clamp(20px, 5vw, 28px);
+        font-weight: 800;
+        margin: 0 0 14px;
+        color: var(--text);
+    }
+    .nf-text {
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.55;
+        max-width: 440px;
+        margin: 0 auto 28px;
+    }
+    .nf-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+    }
+    .nf-actions a {
+        text-decoration: none;
+        min-width: 140px;
+    }
+</style>
+
+<div class="nf-wrap">
+    <div class="nf-code" aria-hidden="true">404</div>
+    <h1 class="nf-title">Pagina non trovata</h1>
+    <p class="nf-text">
+        Il film o la pagina che cercavi non è qui. Magari il titolo è cambiato,
+        oppure stiamo rinfrescando il catalogo. Da qui in poi torna pure a casa.
+    </p>
+    <div class="nf-actions">
+        <a href="/" class="btn btn-primary">Torna alla home</a>
+        <a href="/scopri" class="btn btn-secondary">Esplora il catalogo</a>
+    </div>
+</div>
+{% endblock %}
