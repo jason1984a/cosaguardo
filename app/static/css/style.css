@@ -2845,7 +2845,13 @@ button:active {
         rgba(255,255,255,0.10) 50%,
         rgba(255,255,255,0.04) 100%);
     background-size: 200% 100%;
-    animation: platformSkeletonPulse 1.4s ease-in-out infinite;
+    /* Iterazioni limitate (era 'infinite'): l'animazione si ferma dopo 5.6s
+       anche se loadPlatformStrip() non sostituisce le skeleton.
+       Senza questo cap, sotto Lighthouse mobile (CPU 4x throttled +
+       requestIdleCallback che non firava) la GPU non andava mai a idle e
+       Lighthouse rinunciava all'LCP -> NO_LCP. Le skeleton normalmente
+       vengono comunque rimpiazzate entro ~1.5s da DOMContentLoaded. */
+    animation: platformSkeletonPulse 1.4s ease-in-out 4;
     border-color: transparent;
 }
 @keyframes platformSkeletonPulse {

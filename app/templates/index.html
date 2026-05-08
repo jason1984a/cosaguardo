@@ -434,12 +434,13 @@ document.addEventListener("DOMContentLoaded", function () {
     // Se fallisce, lascia gli skeleton in piedi per qualche secondo e poi
     // nasconde la sezione (no errori visibili).
     //
-    // IMPORTANTE: usiamo requestIdleCallback per spostare il fetch + la
-    // mutazione DOM (innerHTML replacement degli skeleton) FUORI dalla
-    // finestra di misurazione LCP. Quando Lighthouse vedeva la mutazione
-    // durante la sua finestra, marcava NO_LCP perche' un possibile
-    // candidate spariva dal DOM senza un sostituto stabile.
-    function loadPlatformStrip() {
+    // NOTA: avevo provato requestIdleCallback per spostare la mutazione DOM
+    // fuori dalla finestra LCP, ma sotto Lighthouse mobile (CPU 4x throttled)
+    // l'idle callback non fira mai -> le 8 skeleton continuano a pulsare
+    // all'infinito -> GPU sempre attiva -> Lighthouse non raggiunge mai idle
+    // e marca NO_LCP. Su DOMContentLoaded la fetch parte subito (50ms server-
+    // cached), le skeleton vengono rimpiazzate entro 1.5s e GPU va a idle.
+    (function loadPlatformStrip() {
         const stripRow = document.getElementById("platform-strip-row");
         if (!stripRow) return;
 
@@ -483,15 +484,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]
             );
         }
-    }
-    // Schedula loadPlatformStrip fuori dalla finestra LCP di Lighthouse.
-    // requestIdleCallback con timeout 2.5s garantisce esecuzione anche su
-    // browser saturi (timeout = max wait prima di forzare l'esecuzione).
-    if ('requestIdleCallback' in window) {
-        requestIdleCallback(loadPlatformStrip, { timeout: 2500 });
-    } else {
-        setTimeout(loadPlatformStrip, 1800);
-    }
+    })();
 
     // ── Nav fascia principale "I più apprezzati" ────────────────────────────
     const row      = document.getElementById("hero-trending-row");
