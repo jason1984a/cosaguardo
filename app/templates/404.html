@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Pagina non trovata | CosaGuardo{% endblock %}
-{% block meta_description %}La pagina che stai cercando non esiste. Torna alla home oppure scopri cosa guardare in streaming.{% endblock %}
+{% block meta_description %}La pagina che stai cercando non esiste. Verrai reindirizzato alla home.{% endblock %}
 
 {% block content %}
 <style>
@@ -33,7 +33,22 @@
         font-size: 15px;
         line-height: 1.55;
         max-width: 440px;
-        margin: 0 auto 28px;
+        margin: 0 auto 24px;
+    }
+    .nf-redirect-notice {
+        display: inline-block;
+        padding: 8px 14px;
+        margin: 0 0 22px;
+        border-radius: 999px;
+        background: rgba(110, 168, 254, 0.10);
+        border: 1px solid rgba(110, 168, 254, 0.22);
+        color: var(--primary);
+        font-size: 13px;
+        font-weight: 600;
+    }
+    #nf-countdown {
+        font-variant-numeric: tabular-nums;
+        font-weight: 800;
     }
     .nf-actions {
         display: flex;
@@ -52,11 +67,54 @@
     <h1 class="nf-title">Pagina non trovata</h1>
     <p class="nf-text">
         Il film o la pagina che cercavi non è qui. Magari il titolo è cambiato,
-        oppure stiamo rinfrescando il catalogo. Da qui in poi torna pure a casa.
+        oppure stiamo rinfrescando il catalogo.
     </p>
+
+    <div class="nf-redirect-notice" id="nf-redirect-notice" aria-live="polite">
+        Ti riporto alla home tra <span id="nf-countdown">5</span> secondi…
+    </div>
+
     <div class="nf-actions">
-        <a href="/" class="btn btn-primary">Torna alla home</a>
-        <a href="/scopri" class="btn btn-secondary">Esplora il catalogo</a>
+        <a href="/" class="btn btn-primary" id="nf-btn-home">Vai subito alla home</a>
+        <a href="/scopri" class="btn btn-secondary" id="nf-btn-scopri">Esplora il catalogo</a>
     </div>
 </div>
+
+<script>
+    (function() {
+        var seconds = 5;
+        var counter = document.getElementById('nf-countdown');
+        var notice  = document.getElementById('nf-redirect-notice');
+        var btnHome = document.getElementById('nf-btn-home');
+        var btnScopri = document.getElementById('nf-btn-scopri');
+
+        // Cancella il redirect se l'utente clicca un bottone (vuole gestirsi
+        // la nav da solo) o se la tab passa in background (potrebbe tornare
+        // dopo molto e non vogliamo redirectarlo all'improvviso).
+        var cancelled = false;
+        function cancelRedirect() {
+            cancelled = true;
+            if (timer) clearInterval(timer);
+            if (notice) notice.style.display = 'none';
+        }
+
+        if (btnHome)   btnHome.addEventListener('click', cancelRedirect);
+        if (btnScopri) btnScopri.addEventListener('click', cancelRedirect);
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'hidden') cancelRedirect();
+        });
+
+        var timer = setInterval(function() {
+            if (cancelled) return;
+            seconds -= 1;
+            if (counter) counter.textContent = seconds;
+            if (seconds <= 0) {
+                clearInterval(timer);
+                // location.replace -> nessuna entry nello history,
+                // back-button non riporta sul 404
+                window.location.replace('/');
+            }
+        }, 1000);
+    })();
+</script>
 {% endblock %}
