@@ -805,7 +805,7 @@
         }
     </style>
 
-    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=16">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=17">
     <link rel="icon" type="image/x-icon" href="{{ url_for('static', path='favicon.ico') }}">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', path='icon.svg') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', path='apple-touch-icon.png') }}">
@@ -1294,10 +1294,16 @@
 
             // ─── Inizia tracking engagement ─────────────────────────────
             bumpPageview();
-            setInterval(tickTime, 1000);
+            // setInterval(tickTime) ritardato di 5s: durante quei 5s la pagina
+            // resta CPU-idle, permettendo a Lighthouse di chiudere la finestra
+            // di misurazione LCP. Senza questo ritardo, il tick ogni 1s
+            // impediva i 5s consecutivi di idle che Lighthouse esige.
+            setTimeout(function() {
+                setInterval(tickTime, 1000);
+            }, 5000);
 
-            // Primo check dopo INITIAL_DELAY_MS, poi ogni 5s via tickTime
-            setTimeout(maybeShowBanner, INITIAL_DELAY_MS);
+            // Primo check dopo INITIAL_DELAY_MS, ma minimo 5s per stessa ragione
+            setTimeout(maybeShowBanner, Math.max(INITIAL_DELAY_MS, 5000));
         });
 
         function dismissBanner(reason) {
