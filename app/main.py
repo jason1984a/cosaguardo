@@ -1482,59 +1482,16 @@ def profilo(request: Request):
 
     stats      = get_user_stats(user_id)
     searches   = get_searches_by_user(user_id, limit=10)
+    # liked_titles serve a build_dashboard_recommendations qui sotto;
+    # non lo passiamo più al template (i preferiti sono in /la-mia-raccolta).
     liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
     taste_profile = build_taste_profile(searches)
 
-    # Poster e tmdb_id — prima dalla cache DB, poi TMDb solo se mancanti
-    seen_titles = stats.get("seen", [])
-    all_items   = liked_titles + seen_titles
-
-    # 1. Controlla cache DB
-    keys        = [(item["title"], item["content_type"]) for item in all_items]
-    cached_map  = get_poster_cache(keys)
-
-    needs_fetch = []
-    for item in all_items:
-        key = (item["title"], item["content_type"])
-        if key in cached_map:
-            item["poster_url"] = cached_map[key]["poster_url"]
-            item["tmdb_id"]    = cached_map[key]["tmdb_id"]
-        else:
-            item["poster_url"] = ""
-            item["tmdb_id"]    = None
-            needs_fetch.append(item)
-
-    # 2. TMDb solo per quelli non in cache
-    if needs_fetch:
-        def _enrich_item(item):
-            if item["content_type"] == "movie":
-                tmdb_info = get_movie_tmdb_info(item["title"])
-                if tmdb_info:
-                    item["poster_url"] = tmdb_info.get("poster_url", "")
-                    item["tmdb_id"]    = tmdb_info.get("tmdb_id")
-            else:
-                tv_info = find_tv_by_title(item["title"])
-                if tv_info and tv_info.get("poster_path"):
-                    item["poster_url"] = f"https://image.tmdb.org/t/p/w342{tv_info['poster_path']}"
-                    item["tmdb_id"]    = tv_info.get("id") or tv_info.get("tv_id")
-            return item
-
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        with ThreadPoolExecutor(max_workers=10) as ex:
-            futures = {ex.submit(_enrich_item, item): item for item in needs_fetch}
-            for fut in as_completed(futures):
-                try:
-                    fut.result()
-                except Exception as e:
-                    # Lookup TMDb opzionale per arricchire la cache.
-                    log.debug("dashboard: _enrich_item fallita: %s", e)
-
-        # 3. Salva nuovi risultati in cache
-        save_poster_cache([
-            {"title": i["title"], "content_type": i["content_type"],
-             "poster_url": i.get("poster_url",""), "tmdb_id": i.get("tmdb_id")}
-            for i in needs_fetch
-        ])
+    # NOTA: il vecchio enrichment di poster_url+tmdb_id su liked_titles e
+    # seen_titles è stato rimosso quando le sezioni "Preferiti" e "Già visti"
+    # sono state spostate in /la-mia-raccolta. Quel lavoro è ora svolto da
+    # _enrich_titles_with_posters() solo per la pagina raccolta. Il profilo
+    # carica più veloce di prima (niente N batch su poster_cache + TMDb fallback).
 
     # Consigli del giorno (stessa logica del vecchio dashboard)
     today_key  = datetime.now().strftime("%Y-%m-%d")
@@ -1561,8 +1518,6 @@ def profilo(request: Request):
             "user_name":       f"{user['first_name'] or ''} {user['last_name'] or ''}".strip() or user["email"],
             "stats":           stats,
             "taste_profile":   taste_profile,
-            "liked_titles":    liked_titles,
-            "seen_titles":     seen_titles,
             "recommendations": recommendations,
             "searches":        searches,
         },

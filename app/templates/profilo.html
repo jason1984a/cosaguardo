@@ -96,94 +96,20 @@
         {% endif %}
     </section>
 
-    <!-- ── PREFERITI ─────────────────────────────────────────────────── -->
-    <details class="profilo-accordion" {% if liked_titles %}open{% endif %}>
-        <summary class="profilo-accordion-header">
-            <span class="profilo-accordion-title">
-                <i data-lucide="heart" style="width:15px;height:15px;stroke:#f87171;stroke-width:2;"></i>
-                I tuoi preferiti
-            </span>
-            <span class="profilo-accordion-count">{{ stats.liked_count }}</span>
-            <i data-lucide="chevron-down" class="profilo-accordion-chevron" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;"></i>
-        </summary>
-        <div class="profilo-accordion-body">
-            {% if liked_titles %}
-            <div class="profilo-liked-grid">
-                {% for item in liked_titles %}
-                <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.get('tmdb_id', '') }}"
-                   class="profilo-liked-card"
-                   {% if not item.get('tmdb_id') %}style="pointer-events:none;"{% endif %}>
-                    {% if item.poster_url %}
-                    <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
-                    {% else %}
-                    <div class="profilo-liked-noposter">
-                        <i data-lucide="film" style="width:20px;height:20px;opacity:.3;"></i>
-                    </div>
-                    {% endif %}
-                    <div class="profilo-liked-overlay">
-                        <span class="profilo-liked-type {{ 'badge-tv' if item.content_type == 'tv' else 'badge-movie' }}">
-                            {{ "Serie" if item.content_type == "tv" else "Film" }}
-                        </span>
-                        <div class="profilo-liked-title">{{ item.title }}</div>
-                    </div>
-                </a>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="profilo-empty-hint">
-                <p>Aggiungi un ❤️ ai contenuti che ti piacciono per trovarli qui.</p>
-            </div>
-            {% endif %}
+    <!-- ── LINK ALLA RACCOLTA ───────────────────────────────────────
+         I preferiti e i visti vivono ora in /la-mia-raccolta insieme
+         a serie in corso e watchlist. Card-ponte per chi li cercava qui. -->
+    <a href="/la-mia-raccolta" class="profilo-raccolta-link">
+        <div class="profilo-raccolta-icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
         </div>
-    </details>
+        <div class="profilo-raccolta-text">
+            <strong>La mia raccolta</strong>
+            <span>{{ stats.liked_count }} preferiti · {{ stats.seen_count }} visti · serie in corso e watchlist</span>
+        </div>
+        <span class="profilo-raccolta-arrow" aria-hidden="true">→</span>
+    </a>
 
-    <!-- ── GIÀ VISTI ────────────────────────────────────────────── -->
-    <details class="profilo-accordion">
-        <summary class="profilo-accordion-header">
-            <span class="profilo-accordion-title">
-                <i data-lucide="check-circle" style="width:15px;height:15px;stroke:#4ade80;stroke-width:2;"></i>
-                Già visti
-            </span>
-            <span class="profilo-accordion-count">{{ stats.seen_count }}</span>
-            <i data-lucide="chevron-down" class="profilo-accordion-chevron" style="width:16px;height:16px;stroke:currentColor;stroke-width:2;"></i>
-        </summary>
-        <div class="profilo-accordion-body">
-            {% if seen_titles %}
-            <div class="profilo-liked-grid">
-                {% for item in seen_titles %}
-                <a href="/{{ 'serie' if item.content_type == 'tv' else 'film' }}/{{ item.get('tmdb_id', '') }}"
-                   class="profilo-liked-card"
-                   {% if not item.get('tmdb_id') %}style="pointer-events:none;"{% endif %}>
-                    {% if item.poster_url %}
-                    <img src="{{ item.poster_url }}" alt="{{ item.title }}" loading="lazy">
-                    {% else %}
-                    <div class="profilo-liked-noposter">
-                        <i data-lucide="{{ 'tv-2' if item.content_type == 'tv' else 'film' }}" style="width:20px;height:20px;opacity:.3;"></i>
-                    </div>
-                    {% endif %}
-                    <div class="profilo-liked-overlay">
-                        <span class="profilo-liked-type {{ 'badge-tv' if item.content_type == 'tv' else 'badge-movie' }}">
-                            {{ "Serie" if item.content_type == "tv" else "Film" }}
-                        </span>
-                        <div class="profilo-liked-title">{{ item.title }}</div>
-                    </div>
-                    <div style="position:absolute;top:6px;right:6px;background:rgba(34,197,94,0.85);border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;">
-                        <i data-lucide="check" style="width:11px;height:11px;stroke:#fff;stroke-width:3;"></i>
-                    </div>
-                </a>
-                {% endfor %}
-            </div>
-            <p style="color:var(--muted);font-size:0.75rem;margin-top:12px;line-height:1.5;">
-                Usati per non riproporre contenuti già visti nei consigli.
-            </p>
-            {% else %}
-            <div class="profilo-empty-hint">
-                <i data-lucide="check-circle" style="width:28px;height:28px;opacity:.25;"></i>
-                <p>Nessun titolo ancora. Dalla scheda di un film o serie clicca "Segna come visto".</p>
-            </div>
-            {% endif %}
-        </div>
-    </details>
 
     <!-- ── GUSTI ─────────────────────────────────────────────────────── -->
     {% if taste_profile.genres or taste_profile.vibes %}
@@ -381,6 +307,55 @@
     border: 1px solid rgba(255,255,255,0.08);
     border-radius: 18px; overflow: hidden;
     backdrop-filter: blur(10px);
+}
+
+/* ── Card-ponte verso /la-mia-raccolta (rimpiazza i vecchi accordion
+   "Preferiti" e "Già visti" che ora vivono nella raccolta) ─────────── */
+.profilo-raccolta-link {
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 18px;
+    background: linear-gradient(135deg, rgba(110,168,254,0.10), rgba(155,123,255,0.06));
+    border: 1px solid rgba(110,168,254,0.25);
+    border-radius: 18px;
+    text-decoration: none;
+    transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+    margin-bottom: 14px;
+}
+.profilo-raccolta-link:hover {
+    transform: translateY(-1px);
+    border-color: rgba(110,168,254,0.5);
+    background: linear-gradient(135deg, rgba(110,168,254,0.16), rgba(155,123,255,0.10));
+}
+.profilo-raccolta-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, var(--primary), #9b7bff);
+    color: #08101f;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+}
+.profilo-raccolta-text {
+    flex: 1; min-width: 0;
+}
+.profilo-raccolta-text strong {
+    display: block;
+    font-size: 0.95rem; font-weight: 800;
+    color: var(--text);
+    margin-bottom: 2px;
+}
+.profilo-raccolta-text span {
+    display: block;
+    font-size: 0.78rem; color: var(--muted);
+    line-height: 1.4;
+}
+.profilo-raccolta-arrow {
+    font-size: 22px; color: var(--primary);
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: transform 0.15s ease;
+}
+.profilo-raccolta-link:hover .profilo-raccolta-arrow {
+    transform: translateX(3px);
 }
 .profilo-accordion-header {
     display: flex; align-items: center; gap: 8px;
