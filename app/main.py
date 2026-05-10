@@ -689,6 +689,17 @@ def save_feedback(request: Request, data: dict = Body(...)):
             preference="liked"
         )
 
+    elif feedback_type == "unliked":
+        # Rimuove il like (preference → vuoto). Usato dal bottone × nella
+        # tab "Preferiti" di /la-mia-raccolta. NB: usiamo "" e non None
+        # perché upsert_title_state usa None come sentinel "non cambiare".
+        upsert_title_state(
+            user_id=user_id,
+            title=title,
+            content_type=content_type,
+            preference=""
+        )
+
     elif feedback_type == "disliked":
         upsert_title_state(
             user_id=user_id,
@@ -844,6 +855,31 @@ def _enrich_titles_with_posters(items):
     return out
 
 
+def _dedup_by_tmdb_id(items):
+    """Items GIÀ ordinati per recency desc. Tiene il PRIMO (più recente)
+    per ogni (content_type, tmdb_id); items senza tmdb_id passano comunque
+    (non possiamo dedupare senza id univoco — sono pochi e marginali).
+
+    Risolve il caso: due record in user_title_state con titoli leggermente
+    diversi (es. "Braveheart" e "Braveheart - Cuore impavido") che mappano
+    sulla stessa entità TMDb. La doppia card sparisce dall'UI; il secondo
+    record in DB resta zombie ma il bottone × sulla card lo elimina al
+    successivo click (re-dedup mostra il fratello rimasto).
+    """
+    seen_ids = set()
+    out = []
+    for d in items:
+        tid = d.get('tmdb_id')
+        ctype = d.get('content_type', '')
+        if tid:
+            key = (ctype, tid)
+            if key in seen_ids:
+                continue
+            seen_ids.add(key)
+        out.append(d)
+    return out
+
+
 @app.get("/le-mie-serie")
 def le_mie_serie_redirect():
     """Vecchio URL: 301 → nuovo /la-mia-raccolta. SEO-friendly + non rompe
@@ -876,24 +912,35 @@ def la_mia_raccolta(request: Request):
     watching  = [dict(r) for r in list_series_tracking(user_id, "watching")]
     watchlist = [dict(r) for r in list_series_tracking(user_id, "watchlist")]
     completed_series = [dict(r) for r in list_series_tracking(user_id, "completed")]
+    # Tag _kind per il bottone × del template (tutte e 3 le liste sono tracking)
+    for lst in (watching, watchlist, completed_series):
+        for s in lst:
+            s['_kind'] = 'series-tracked'
 
     # ── Film visti (binario, dal vecchio user_title_state)
     seen_films = []
     try:
         seen_raw = get_seen_titles_full(user_id, content_type="movie")
         seen_films = _enrich_titles_with_posters(seen_raw)
+        for f in seen_films:
+            f['_kind'] = 'film-seen'
     except Exception as e:
         log.warning("la-mia-raccolta: get_seen_titles_full fallita uid=%s: %s", user_id, e)
 
-    # ── Tab "Visti" = serie completate + film visti, ordinato per recency
+    # ── Tab "Visti" = serie completate + film visti, ordinato per recency, dedup
     visti = completed_series + seen_films
     visti.sort(key=lambda x: x.get('updated_at') or '', reverse=True)
+    visti = _dedup_by_tmdb_id(visti)
 
     # ── Preferiti (film + serie con preference='liked')
     preferiti = []
     try:
         liked_raw = get_liked_states_by_user(user_id)
         preferiti = _enrich_titles_with_posters(liked_raw)
+        for p in preferiti:
+            p['_kind'] = 'liked'
+        # Già ordinati per updated_at desc da get_liked_states_by_user
+        preferiti = _dedup_by_tmdb_id(preferiti)
     except Exception as e:
         log.warning("la-mia-raccolta: get_liked_states_by_user fallita uid=%s: %s", user_id, e)
 
@@ -1482,16 +1529,30 @@ def profilo(request: Request):
 
     stats      = get_user_stats(user_id)
     searches   = get_searches_by_user(user_id, limit=10)
-    # liked_titles serve a build_dashboard_recommendations qui sotto;
-    # non lo passiamo più al template (i preferiti sono in /la-mia-raccolta).
     liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
     taste_profile = build_taste_profile(searches)
 
-    # NOTA: il vecchio enrichment di poster_url+tmdb_id su liked_titles e
-    # seen_titles è stato rimosso quando le sezioni "Preferiti" e "Già visti"
-    # sono state spostate in /la-mia-raccolta. Quel lavoro è ora svolto da
-    # _enrich_titles_with_posters() solo per la pagina raccolta. Il profilo
-    # carica più veloce di prima (niente N batch su poster_cache + TMDb fallback).
+    # build_dashboard_recommendations potrebbe usare poster_url/tmdb_id su
+    # liked_titles, quindi facciamo un lookup BATCH dalla cache (veloce,
+    # SQL in-memory). MA niente più TMDb fallback: era il pezzo lento del
+    # vecchio profilo. Items senza poster in cache restano senza, costa zero.
+    seen_titles = stats.get("seen", [])
+    all_items   = liked_titles + seen_titles
+    if all_items:
+        try:
+            keys = [(item["title"], item["content_type"]) for item in all_items]
+            cached_map = get_poster_cache(keys)
+            for item in all_items:
+                key = (item["title"], item["content_type"])
+                cached = cached_map.get(key)
+                if cached:
+                    item["poster_url"] = cached.get("poster_url", "")
+                    item["tmdb_id"]    = cached.get("tmdb_id")
+                else:
+                    item.setdefault("poster_url", "")
+                    item.setdefault("tmdb_id", None)
+        except Exception as e:
+            log.warning("profilo: poster_cache lookup fallita uid=%s: %s", user_id, e)
 
     # Consigli del giorno (stessa logica del vecchio dashboard)
     today_key  = datetime.now().strftime("%Y-%m-%d")

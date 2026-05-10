@@ -364,14 +364,21 @@
     </div>
 
     {# Macro per renderizzare una card. content_type può essere "movie" o "tv".
-       has_remove=true → mostra il bottone × per rimozione (solo per series tracking) #}
-    {% macro card(item, has_remove=false, show_season=false, show_type=false) %}
+       has_remove=true → mostra il bottone × per rimozione.
+       remove_kind: 'series-tracked' (DELETE tracking) o 'film-seen' (toggle save-feedback)
+                    o 'liked' (toggle liked) — letto da JS sul click. #}
+    {% macro card(item, has_remove=false, show_season=false, show_type=false, remove_kind='') %}
     {% set ctype = item.content_type or 'tv' %}
     {% set href = ('/serie/' if ctype == 'tv' else '/film/') ~ (item.tmdb_id or '') %}
-    <div class="lmr-card {% if show_type %}has-type-badge{% endif %}" data-tmdb-id="{{ item.tmdb_id or '' }}">
+    {# Se has_remove non specificato esplicitamente, usa _kind dell'item #}
+    {% set _kind = remove_kind or item.get('_kind', '') %}
+    <div class="lmr-card {% if show_type %}has-type-badge{% endif %}"
+         data-tmdb-id="{{ item.tmdb_id or '' }}"
+         data-title="{{ item.title | e }}"
+         data-content-type="{{ ctype }}"
+         data-kind="{{ _kind }}">
         {% if has_remove %}
         <button class="lmr-card-remove" type="button"
-                data-tmdb-id="{{ item.tmdb_id }}"
                 title="Rimuovi dalla raccolta" aria-label="Rimuovi {{ item.title }}">×</button>
         {% endif %}
         {% if item.tmdb_id %}<a href="{{ href }}" class="lmr-card-link">{% else %}<div class="lmr-card-link">{% endif %}
@@ -436,11 +443,9 @@
         {% if visti %}
         <div class="lmr-grid">
             {% for v in visti %}
-                {# Le serie tracciate hanno status='completed' (dict da list_series_tracking),
-                   i film vengono da get_seen_titles_full. Mostro il chip "Film/Serie" per
-                   distinguerli visivamente. Niente bottone rimuovi qui per ora — l'utente
-                   gestisce dalla detail page. #}
-                {{ card(v, show_type=true) }}
+                {# I item hanno _kind='series-tracked' o 'film-seen' (settato in main.py).
+                   Il bottone × risolve l'edge-case dei duplicati nei dati legacy. #}
+                {{ card(v, has_remove=true, show_type=true) }}
             {% endfor %}
         </div>
         {% else %}
@@ -457,7 +462,7 @@
         {% if preferiti %}
         <div class="lmr-grid">
             {% for p in preferiti %}
-                {{ card(p, show_type=true) }}
+                {{ card(p, has_remove=true, show_type=true) }}
             {% endfor %}
         </div>
         {% else %}
@@ -499,38 +504,78 @@
         });
     });
 
-    // ─── Remove from list (DELETE /api/series/track/{id}) ──────────
-    // Solo per le card delle serie tracciate (Sto guardando / Voglio guardare).
+    // ─── Remove from list ──────────────────────────────────────────
+    // Tre kind possibili (data-kind sulla card):
+    //   'series-tracked' → DELETE /api/series/track/{tmdb_id}
+    //   'film-seen'      → POST /save-feedback {feedback_type:'seen'} (toggle)
+    //   'liked'          → POST /save-feedback {feedback_type:'unliked'}
     document.querySelectorAll('.lmr-card-remove').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            var tmdbId = btn.getAttribute('data-tmdb-id');
-            if (!tmdbId) return;
-            if (!confirm('Rimuovere questa serie dalla raccolta?')) return;
+            var card   = btn.closest('.lmr-card');
+            if (!card) return;
+            var kind   = card.getAttribute('data-kind') || '';
+            var tmdbId = card.getAttribute('data-tmdb-id') || '';
+            var title  = card.getAttribute('data-title') || '';
+            var ctype  = card.getAttribute('data-content-type') || '';
+
+            var msg = (kind === 'liked')
+                ? 'Rimuovere dai preferiti?'
+                : 'Rimuovere dalla raccolta?';
+            if (!confirm(msg)) return;
 
             btn.disabled = true;
-            fetch('/api/series/track/' + encodeURIComponent(tmdbId), {
-                method: 'DELETE',
-                credentials: 'same-origin',
-            })
+
+            var endpoint, init;
+            if (kind === 'series-tracked' && tmdbId) {
+                endpoint = '/api/series/track/' + encodeURIComponent(tmdbId);
+                init = { method: 'DELETE', credentials: 'same-origin' };
+            } else if (kind === 'film-seen') {
+                // Toggle: il record è seen=1, lo portiamo a 0
+                endpoint = '/save-feedback';
+                init = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        title: title,
+                        content_type: ctype,
+                        feedback_type: 'seen'
+                    }),
+                };
+            } else if (kind === 'liked') {
+                endpoint = '/save-feedback';
+                init = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        title: title,
+                        content_type: ctype,
+                        feedback_type: 'unliked'
+                    }),
+                };
+            } else {
+                btn.disabled = false;
+                return;
+            }
+
+            fetch(endpoint, init)
             .then(function(r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
             })
             .then(function() {
-                var card = btn.closest('.lmr-card');
-                if (card) {
-                    card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
-                    card.style.opacity = '0';
-                    card.style.transform = 'scale(0.96)';
-                    setTimeout(function() { card.remove(); }, 220);
-                }
+                card.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.96)';
+                setTimeout(function() { card.remove(); }, 220);
             })
             .catch(function(err) {
-                console.error('untrack failed:', err);
+                console.error('remove failed:', err);
                 btn.disabled = false;
-                alert('Non è stato possibile rimuovere la serie. Riprova.');
+                alert('Rimozione non riuscita. Riprova.');
             });
         });
     });
