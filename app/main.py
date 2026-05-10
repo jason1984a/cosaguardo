@@ -38,6 +38,9 @@ from app.db import (
     get_series_tracking,
     list_series_tracking,
     get_seen_titles_full,
+    get_series_seasons_cache,
+    get_series_seasons_cache_batch,
+    upsert_series_seasons_cache,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -435,6 +438,17 @@ def home(request: Request):
     user_id  = request.session.get("user_id")
     cinema   = get_cinema_cached()
 
+    # ─── Phase 2: serie tracciate dell'utente + detection nuove stagioni ──
+    # "Continua a guardare" = ultime serie watchlist + watching, max 12.
+    # "Novità" = serie watching dove total_seasons (cache TMDb) > total_seasons_at_save.
+    continua_a_guardare = []
+    new_seasons_alert = []
+    if user_id:
+        try:
+            continua_a_guardare, new_seasons_alert = _build_home_tracking_data(user_id)
+        except Exception as e:
+            log.warning("home: tracking enrichment fallita uid=%s: %s", user_id, e)
+
     return templates.TemplateResponse(
         request=request,
         name="index.html",
@@ -446,9 +460,166 @@ def home(request: Request):
             "upcoming": cinema.get("upcoming") or [],
             "top_rated": get_toprated_cached(limit=10),
             "news": get_news_cached(limit=8),
+            "continua_a_guardare": continua_a_guardare,
+            "new_seasons_alert":   new_seasons_alert,
         },
     )
 
+
+# ─── Phase 2: detection nuove stagioni ──────────────────────────────────
+# series_seasons_cache mantiene per ogni tmdb_id lo snapshot TMDb di
+# total_seasons + status + last_air_date. Refresh lazy 24h (cache stale →
+# refresh in background, ritorniamo subito i dati vecchi). Cache miss →
+# fetch sincrono (la prima volta che vediamo una serie tracciata).
+_SEASONS_CACHE_TTL_SECONDS = 86400  # 24h
+_seasons_refresh_lock = _perf_threading.Lock()
+_seasons_refresh_inflight = set()  # tmdb_id già in refresh, evita duplicati
+
+
+def _fetch_seasons_from_tmdb(tmdb_id: int) -> dict | None:
+    """Hit TMDb via get_detail_tv (estesa con status + last_air_date) e
+    salva in cache. Ritorna dict {total_seasons, status, last_air_date, title}
+    o None se il fetch fallisce."""
+    try:
+        d = get_detail_tv(tmdb_id)
+        if not d or not d.get("title"):
+            return None
+        info = {
+            "title":         d.get("title", ""),
+            "total_seasons": d.get("seasons", 0) or 0,
+            "status":        d.get("status", "") or "",
+            "last_air_date": d.get("last_air_date", "") or "",
+        }
+        upsert_series_seasons_cache(
+            tmdb_id=tmdb_id,
+            title=info["title"],
+            total_seasons=info["total_seasons"],
+            status=info["status"],
+            last_air_date=info["last_air_date"],
+        )
+        return info
+    except Exception as e:
+        log.warning("_fetch_seasons_from_tmdb: tmdb_id=%s: %s", tmdb_id, e)
+        return None
+
+
+def _refresh_seasons_in_background(tmdb_id: int):
+    """Avvia un thread daemon che fa il refresh. De-dup: se per quel tmdb_id
+    c'è già un refresh in corso, no-op."""
+    with _seasons_refresh_lock:
+        if tmdb_id in _seasons_refresh_inflight:
+            return
+        _seasons_refresh_inflight.add(tmdb_id)
+
+    def _worker():
+        try:
+            _fetch_seasons_from_tmdb(tmdb_id)
+        finally:
+            with _seasons_refresh_lock:
+                _seasons_refresh_inflight.discard(tmdb_id)
+
+    t = _perf_threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+
+def _is_seasons_cache_stale(cached_at_str: str) -> bool:
+    """cached_at è 'YYYY-MM-DD HH:MM:SS' (sqlite). True se > 24h fa."""
+    if not cached_at_str:
+        return True
+    try:
+        cached_dt = datetime.strptime(cached_at_str, "%Y-%m-%d %H:%M:%S")
+        return (datetime.utcnow() - cached_dt).total_seconds() > _SEASONS_CACHE_TTL_SECONDS
+    except (ValueError, TypeError):
+        return True
+
+
+def _build_home_tracking_data(user_id: int):
+    """Ritorna (continua_a_guardare, new_seasons_alert).
+    - continua_a_guardare: list serie watching+watchlist (max 12), arricchita
+      con flag has_new_season per le card.
+    - new_seasons_alert: subset delle serie watching con nuove stagioni
+      disponibili (max 5, per il banner home).
+    """
+    # 1. Fetch tracking dell'utente (watching + watchlist, ordinato per recency)
+    watching  = [dict(r) for r in list_series_tracking(user_id, "watching")]
+    watchlist = [dict(r) for r in list_series_tracking(user_id, "watchlist")]
+    # Continua a guardare = watching prima (in corso), poi watchlist (da iniziare)
+    continua = (watching + watchlist)[:12]
+    if not continua:
+        return [], []
+
+    # 2. Batch lookup cache per i tmdb_id presenti
+    tmdb_ids = [s["tmdb_id"] for s in continua]
+    cache_map = get_series_seasons_cache_batch(tmdb_ids)
+
+    # 3. Per ognuna: determina freschezza, eventuale fetch sincrono o bg refresh
+    needs_sync_fetch = []
+    for s in continua:
+        tid = s["tmdb_id"]
+        cached = cache_map.get(tid)
+        if cached is None:
+            # Cache miss → fetch sincrono (mai vista prima, raro)
+            needs_sync_fetch.append(tid)
+        elif _is_seasons_cache_stale(cached["cached_at"]):
+            # Stale → ritorniamo cached, refresh in background (zero blocco home)
+            _refresh_seasons_in_background(tid)
+            # `cached` resta valido per questo render
+
+    # Cache miss sincrono in parallelo (max 4 alla volta per non bloccare troppo)
+    if needs_sync_fetch:
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futures = {ex.submit(_fetch_seasons_from_tmdb, tid): tid for tid in needs_sync_fetch}
+            for fut in as_completed(futures):
+                tid = futures[fut]
+                try:
+                    info = fut.result()
+                    if info:
+                        # aggiorna cache_map con il dato appena fetchato
+                        cache_map[tid] = {
+                            "tmdb_id": tid,
+                            "title": info["title"],
+                            "total_seasons": info["total_seasons"],
+                            "status": info["status"],
+                            "last_air_date": info["last_air_date"],
+                            "cached_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
+                        }
+                except Exception as e:
+                    log.debug("home: fetch seasons miss tmdb_id=%s: %s", tid, e)
+
+    # 4. Arricchisci ogni serie con has_new_season e calcola alert banner
+    alerts = []
+    for s in continua:
+        tid = s["tmdb_id"]
+        cached = cache_map.get(tid)
+        if not cached:
+            s["has_new_season"] = False
+            s["latest_total_seasons"] = s.get("total_seasons_at_save") or 0
+            continue
+        # Accesso sicuro che funziona sia con sqlite3.Row sia con dict
+        try:
+            latest = cached["total_seasons"] if hasattr(cached, "keys") else cached.get("total_seasons", 0)
+        except (KeyError, TypeError):
+            latest = 0
+        latest = int(latest or 0)
+        snapshot = int(s.get("total_seasons_at_save") or 0)
+        has_new = (s.get("status") == "watching") and (latest > snapshot > 0)
+        s["has_new_season"]      = has_new
+        s["latest_total_seasons"] = latest
+
+        # Alert solo per le serie watching: queste interessano l'utente "in corso"
+        if has_new:
+            alerts.append({
+                "tmdb_id":   tid,
+                "title":     s["title"],
+                "poster_url": s.get("poster_url", ""),
+                "current_season":      s.get("current_season"),
+                "latest_total_seasons": latest,
+                "snapshot_seasons":    snapshot,
+            })
+
+    # Limita banner a 5 (UI compatta)
+    return continua, alerts[:5]
 
 
 @app.get("/cinema-news", response_class=JSONResponse)
@@ -804,6 +975,14 @@ def api_series_track(request: Request, data: dict = Body(...)):
         log.exception("api_series_track: set fallita uid=%s tmdb_id=%s: %s",
                       user_id, tmdb_id, e)
         raise HTTPException(status_code=500, detail="errore salvataggio")
+
+    # Pre-popola la cache season in background: la prima visita successiva
+    # alla home non avrà cache miss su questa serie. _refresh_in_background
+    # è de-dup, quindi è safe chiamarlo anche su serie già in cache.
+    try:
+        _refresh_seasons_in_background(tmdb_id)
+    except Exception as e:
+        log.debug("api_series_track: bg refresh prefetch fallita: %s", e)
 
     return {"status": "ok", "tracking": {
         "tmdb_id": tmdb_id, "status": status,

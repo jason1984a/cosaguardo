@@ -1646,6 +1646,12 @@ def _build_tv_detail(tmdb_id: int, d: dict) -> dict:
             "release_date":   d.get("first_air_date", ""),
             "seasons":        seasons,
             "episodes":       episodes,
+            # Status TMDb: "Returning Series" (in corso, possibili nuove stagioni),
+            # "Ended" (chiusa), "Canceled" (cancellata), "In Production", ecc.
+            # last_air_date = data ultimo episodio andato in onda. Usati da
+            # series_seasons_cache per detection nuove stagioni nelle serie tracciate.
+            "status":         d.get("status", ""),
+            "last_air_date":  d.get("last_air_date", ""),
             "vote_average":   round(d.get("vote_average", 0), 1),
             "vote_count":     d.get("vote_count", 0),
             "poster_url":     f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else "",

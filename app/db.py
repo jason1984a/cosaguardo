@@ -306,6 +306,21 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_user_series_tracking_status
         ON user_series_tracking (user_id, status, updated_at DESC)
     """)
+
+    # ─── Cache info stagioni TMDb per detection nuove stagioni ──────────
+    # Refresh lazy ogni 24h (vedi get_series_seasons_info / refresh_*).
+    # status TMDb: "Returning Series" | "Ended" | "Canceled" | "In Production".
+    # Detection: JOIN user_series_tracking ⋈ qui WHERE total_seasons > total_seasons_at_save.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS series_seasons_cache (
+            tmdb_id        INTEGER PRIMARY KEY,
+            title          TEXT,
+            total_seasons  INTEGER NOT NULL DEFAULT 0,
+            status         TEXT,
+            last_air_date  TEXT,
+            cached_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     # ───────────────────────────────────────────────────────────────────────
 
     conn.commit()
@@ -732,6 +747,72 @@ def list_series_tracking(user_id: int, status: str | None = None):
     rows = cur.fetchall()
     conn.close()
     return rows
+
+
+# ─── series_seasons_cache helpers ───────────────────────────────────────
+# Detection nuove stagioni: cache TMDb info di seasons/status/last_air_date.
+# Refresh logic vive in main.py (dipende da TMDb fetch). Qui solo R/W.
+
+def get_series_seasons_cache(tmdb_id: int):
+    """Riga sqlite3.Row o None se cache miss."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT tmdb_id, title, total_seasons, status, last_air_date, cached_at
+        FROM series_seasons_cache
+        WHERE tmdb_id = ?
+        """,
+        (tmdb_id,)
+    )
+    row = cur.fetchone()
+    conn.close()
+    return row
+
+
+def get_series_seasons_cache_batch(tmdb_ids: list):
+    """Lookup batch. Ritorna dict {tmdb_id: row}."""
+    if not tmdb_ids:
+        return {}
+    conn = get_connection()
+    cur = conn.cursor()
+    placeholders = ",".join("?" for _ in tmdb_ids)
+    cur.execute(
+        f"""
+        SELECT tmdb_id, title, total_seasons, status, last_air_date, cached_at
+        FROM series_seasons_cache
+        WHERE tmdb_id IN ({placeholders})
+        """,
+        tmdb_ids
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return {r["tmdb_id"]: r for r in rows}
+
+
+def upsert_series_seasons_cache(tmdb_id: int, title: str = "",
+                                 total_seasons: int = 0, status: str = "",
+                                 last_air_date: str = ""):
+    """Salva o aggiorna la cache season per una serie. cached_at = NOW.
+    Idempotente. Chiamato dal refresher (sincrono o background)."""
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO series_seasons_cache
+            (tmdb_id, title, total_seasons, status, last_air_date, cached_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(tmdb_id) DO UPDATE SET
+            title         = excluded.title,
+            total_seasons = excluded.total_seasons,
+            status        = excluded.status,
+            last_air_date = excluded.last_air_date,
+            cached_at     = CURRENT_TIMESTAMP
+        """,
+        (tmdb_id, title, total_seasons, status, last_air_date)
+    )
+    conn.commit()
+    conn.close()
 
 
 
