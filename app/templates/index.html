@@ -89,8 +89,11 @@
     {% if is_logged_in %}
     {# ─── Phase 2: Banner "novità nuove stagioni" ───────────────────────
        Mostrato solo se ci sono serie watching dell'utente con total_seasons
-       in cache > total_seasons_at_save. Un solo banner orizzontale, click
-       porta a /la-mia-raccolta filtrato sulle watching (in arrivo). #}
+       in cache > total_seasons_at_save. La strip "Continua a guardare" è
+       stata rimossa dalla home: ridondante per chi torna spesso, le serie
+       tracciate vivono nella loro pagina dedicata /la-mia-raccolta.
+       Il banner invece appare SOLO quando c'è davvero qualcosa di nuovo
+       (= valore tangibile). #}
     {% if new_seasons_alert %}
     <section class="home-new-season-banner" id="home-new-season-banner">
         <div class="hns-icon" aria-hidden="true">✨</div>
@@ -107,42 +110,6 @@
         <a href="/la-mia-raccolta" class="hns-cta">Vai →</a>
         <button type="button" class="hns-close" aria-label="Nascondi"
                 onclick="this.closest('.home-new-season-banner').remove();">×</button>
-    </section>
-    {% endif %}
-
-    {# ─── Phase 2: "Continua a guardare" ────────────────────────────────
-       Rimpiazza il vecchio home-personal-strip (era solo skeleton).
-       Mostra le serie watching+watchlist dell'utente con badge stagione +
-       chip NEW se è uscita una nuova stagione (has_new_season). #}
-    {% if continua_a_guardare %}
-    <section class="home-continua-strip" id="home-continua-strip">
-        <div class="continua-strip-header">
-            <span class="continua-strip-label">▶︎ Continua a guardare</span>
-            <a href="/la-mia-raccolta" class="continua-strip-all">Vedi tutto →</a>
-        </div>
-        <div class="continua-strip-row">
-            {% for s in continua_a_guardare %}
-            <a href="/serie/{{ s.tmdb_id }}" class="continua-card {% if s.has_new_season %}continua-card--new{% endif %}">
-                <div class="continua-card-poster">
-                    {% if s.poster_url %}
-                    <img src="{{ s.poster_url | replace('/w342/', '/w185/') | replace('/w500/', '/w185/') }}"
-                         alt="{{ s.title }}" loading="lazy" decoding="async" width="120" height="180">
-                    {% else %}
-                    <div class="continua-card-placeholder">{{ s.title }}</div>
-                    {% endif %}
-                    {% if s.has_new_season %}
-                    <span class="continua-card-newbadge">NEW</span>
-                    {% endif %}
-                    {% if s.status == "watching" and s.current_season %}
-                    <span class="continua-card-season">S{{ s.current_season }}{% if s.total_seasons_at_save %}/{{ s.total_seasons_at_save }}{% endif %}</span>
-                    {% elif s.status == "watchlist" %}
-                    <span class="continua-card-season continua-card-season--saved">Da iniziare</span>
-                    {% endif %}
-                </div>
-                <div class="continua-card-title">{{ s.title }}</div>
-            </a>
-            {% endfor %}
-        </div>
     </section>
     {% endif %}
     {% endif %}

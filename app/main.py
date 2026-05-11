@@ -438,14 +438,15 @@ def home(request: Request):
     user_id  = request.session.get("user_id")
     cinema   = get_cinema_cached()
 
-    # ─── Phase 2: serie tracciate dell'utente + detection nuove stagioni ──
-    # "Continua a guardare" = ultime serie watchlist + watching, max 12.
-    # "Novità" = serie watching dove total_seasons (cache TMDb) > total_seasons_at_save.
-    continua_a_guardare = []
+    # ─── Phase 2: detection nuove stagioni → banner novità ───────────────
+    # La strip "Continua a guardare" è stata RIMOSSA dalla home (era ridondante
+    # per chi torna spesso). Restano: il banner novità (alto-valore: appare
+    # solo quando c'è qualcosa di nuovo da segnalare) e la pagina dedicata
+    # /la-mia-raccolta che è il vero hub del tracking.
     new_seasons_alert = []
     if user_id:
         try:
-            continua_a_guardare, new_seasons_alert = _build_home_tracking_data(user_id)
+            _, new_seasons_alert = _build_home_tracking_data(user_id)
         except Exception as e:
             log.warning("home: tracking enrichment fallita uid=%s: %s", user_id, e)
 
@@ -460,7 +461,6 @@ def home(request: Request):
             "upcoming": cinema.get("upcoming") or [],
             "top_rated": get_toprated_cached(limit=10),
             "news": get_news_cached(limit=8),
-            "continua_a_guardare": continua_a_guardare,
             "new_seasons_alert":   new_seasons_alert,
         },
     )
