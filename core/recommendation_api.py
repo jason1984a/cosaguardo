@@ -1102,7 +1102,7 @@ def get_movie_poster(title: str):
             "query": title
         }
 
-        response = requests.get(url, params=params)
+        response = requests.get(url, params=params, timeout=15)
         data = response.json()
 
         if data.get("results"):

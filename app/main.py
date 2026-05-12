@@ -182,6 +182,41 @@ async def anti_scanner(request: Request, call_next):
     return await call_next(request)
 
 
+# ─── Anti-bot UA blocker ────────────────────────────────────────────────
+# robots.txt è solo "advisory" — i bot maleducati lo ignorano. Questo middleware
+# risponde 403 PRIMA di processare la richiesta, senza nemmeno toccare il DB.
+# Riduce drasticamente il carico generato da AI scraper e SEO crawler abusivi.
+#
+# IMPORTANTE: tieniamo permessi Googlebot, Bingbot, DuckDuckBot, Yandex (utili
+# per SEO). Blocchiamo solo bot che non portano traffico utente reale.
+#
+# Update list: tieni in sync con /robots.txt — gli UA bloccati qui sono quelli
+# elencati con "Disallow: /" lì.
+_BLOCKED_BOT_UAS = (
+    # AI training/inference crawlers
+    "gptbot", "chatgpt-user", "oai-searchbot", "anthropic-ai", "claudebot",
+    "claude-web", "ccbot", "cohere-ai", "perplexitybot", "perplexity-user",
+    "meta-externalagent", "bytespider", "imagesiftbot", "diffbot",
+    "omgilibot", "facebookbot", "applebot-extended", "amazonbot",
+    # SEO/marketing crawler aggressivi
+    "semrushbot", "ahrefsbot", "mj12bot", "dotbot", "blexbot", "petalbot",
+    "seznambot", "dataforseobot", "serpstatbot", "megaindex",
+)
+
+
+@app.middleware("http")
+async def block_bad_bots(request: Request, call_next):
+    ua = (request.headers.get("user-agent") or "").lower()
+    if ua:
+        for bot_id in _BLOCKED_BOT_UAS:
+            if bot_id in ua:
+                return _PlainTextResponse(
+                    "Forbidden — bot non autorizzato. Vedi robots.txt.",
+                    status_code=403
+                )
+    return await call_next(request)
+
+
 # ─── Cache-Control middleware per asset statici ─────────────────────────
 # Browser cacha 1 anno gli asset sotto /static (CSS, JS, immagini, icone).
 # I template usano cache-busting via querystring (?v=6) per forzare reload
@@ -930,7 +965,17 @@ def register_submit(
             platforms if isinstance(platforms, list) else [platforms]
         )
 
-    return RedirectResponse(url="/profilo", status_code=303)
+    # Prefetch daily_recommendations in BG: come per /login, evita che il
+    # primo click su /profilo aspetti la generazione consigli.
+    try:
+        _prefetch_daily_recs_async(user_id)
+    except Exception as e:
+        log.debug("register: prefetch daily_recs fallita uid=%s: %s", user_id, e)
+
+    # Flag ?registered=1 → letto da base.html per triggerare gli eventi di
+    # conversione su GA4 + Meta Pixel. Il JS rimuove il flag dalla URL dopo
+    # il trigger così non spara di nuovo se l'utente ricarica.
+    return RedirectResponse(url="/profilo?registered=1", status_code=303)
 
 @app.post("/feedback")
 def save_feedback(request: Request, data: dict = Body(...)):
@@ -2427,27 +2472,124 @@ _SITEMAP_TTL = 3600  # 1 ora
 @app.get("/robots.txt")
 def robots_txt():
     """
-    robots.txt — dice ai crawler dove trovare la sitemap e cosa NON crawlare.
-    Fondamentale per Google: prima cerca questo file, POI la sitemap.
-    """
-    content = """User-agent: *
-Allow: /
+    robots.txt — istruzioni per i crawler. Strategia:
+    - BLOCCA AI scraper (GPTBot, ClaudeBot, ecc.) che pesano gratis senza
+      portare visite utente. Per loro Disallow: /.
+    - BLOCCA SEO crawler aggressivi (Semrush, Ahrefs, MJ12, DotBot) che
+      analizzano backlink senza aggiungere valore.
+    - PERMETTI Googlebot, Bingbot e altri search engine utili (necessari per
+      indicizzazione = traffico organico).
+    - Per il resto del mondo: Allow / con Crawl-delay 5s per evitare bot
+      educati che abusano della frequenza.
 
-# Non indicizzare aree admin/tecniche
+    Nota: robots.txt è "raccomandato", non vincolante. I bot maleducati lo
+    ignorano. Per quelli c'è il middleware UA-blocker in main.py.
+    """
+    content = """# ─── AI training crawlers (no SEO value, just take) ─────────────────────
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: Perplexity-User
+Disallow: /
+
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+# ─── SEO/marketing crawler aggressivi ───────────────────────────────────
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: SeznamBot
+Disallow: /
+
+User-agent: DataForSeoBot
+Disallow: /
+
+User-agent: SerpstatBot
+Disallow: /
+
+User-agent: MegaIndex
+Disallow: /
+
+# ─── Default: Allow tutti gli altri (Googlebot, Bingbot, ecc.) ──────────
+User-agent: *
+Allow: /
+Crawl-delay: 5
+
+# Aree private/tecniche da non indicizzare anche per i bot leciti
 Disallow: /admin/
 Disallow: /api/
 Disallow: /static/sw.js
 Disallow: /tmdb-id
 Disallow: /watch-providers
 Disallow: /feedback
-
-# Non indicizzare pagine utente (private)
 Disallow: /profilo
 Disallow: /login
 Disallow: /register
 Disallow: /logout
+Disallow: /save-feedback
+Disallow: /home-picks
 
-# Sitemap
 Sitemap: https://cosaguardo.com/sitemap.xml
 """
     return Response(content=content, media_type="text/plain")
