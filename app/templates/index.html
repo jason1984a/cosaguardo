@@ -112,6 +112,34 @@
                 onclick="this.closest('.home-new-season-banner').remove();">×</button>
     </section>
     {% endif %}
+
+    {# ─── "Scelti per te" — carosello consigli personalizzati ───────────
+       Caricato lazy via fetch /home-picks (cache giornaliera in DB lato server).
+       Il JS in fondo al file gestisce show/hide automaticamente:
+       - 401 (raro qui, dato {% if is_logged_in %}) → nasconde
+       - picks vuote (utente con < 2 segnali) → nasconde
+       - picks ok → renderizza e mostra. #}
+    <section class="home-personal-strip" id="home-personal-strip" style="display:none;">
+        <div class="personal-strip-header">
+            <span class="personal-strip-label">✦ Scelti per te</span>
+        </div>
+        <div class="personal-strip-wrap personal-strip-wrap--nav">
+            <button class="trend-nav trend-nav-left personal-nav-left" type="button" aria-label="Scorri a sinistra">‹</button>
+            <div class="personal-strip-row" id="personal-strip-row">
+                {# Skeleton cards mentre carica (sostituiti dal JS quando arriva /home-picks) #}
+                {% for _ in range(6) %}
+                <div class="personal-card personal-card--skeleton">
+                    <div class="personal-card-poster skeleton-pulse"></div>
+                    <div class="personal-card-body">
+                        <div class="skeleton-line skeleton-pulse" style="width:70%;height:12px;border-radius:6px;"></div>
+                        <div class="skeleton-line skeleton-pulse" style="width:50%;height:10px;border-radius:6px;margin-top:6px;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <button class="trend-nav trend-nav-right personal-nav-right" type="button" aria-label="Scorri a destra">›</button>
+        </div>
+    </section>
     {% endif %}
 
     <section class="search-panel search-panel-v2" id="search-panel">

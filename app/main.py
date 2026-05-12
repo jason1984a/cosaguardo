@@ -650,6 +650,11 @@ def home_picks(request: Request):
     """
     Consigli personalizzati per la home — calcolati una volta al giorno e salvati in DB.
     Prima chiamata del giorno: ~2-3s. Tutte le successive: istantanee (lettura DB).
+
+    Gate "minimum signals": ritorna [] se l'utente ha meno di 2 segnali totali
+    (searches + liked). Sotto questa soglia i consigli sarebbero generici, e una
+    sezione "Scelti per te" generica è peggio di nessuna sezione (perde fiducia
+    nell'algoritmo). Il frontend nasconde automaticamente la sezione se vuota.
     """
     user_id = request.session.get("user_id")
     if not user_id:
@@ -663,11 +668,19 @@ def home_picks(request: Request):
     if cached:
         return cached
 
-    # 2. Prima chiamata del giorno — calcola
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
+    # 2. Prima chiamata del giorno — calcola, ma prima check signals
     searches     = get_searches_by_user(user_id, limit=10)
     liked_titles = [dict(row) for row in get_liked_states_by_user(user_id)]
+
+    # Gate: niente picks per utenti senza segnali. Almeno 2 ricerche o 2 liked
+    # totali. Soglia bassa di proposito (non vogliamo escludere chi è agli inizi,
+    # ma vogliamo evitare l'utente che si è appena registrato 30 secondi fa).
+    if (len(searches) + len(liked_titles)) < 2:
+        log.debug("home_picks: signal threshold non raggiunto uid=%s "
+                  "(searches=%d liked=%d)", user_id, len(searches), len(liked_titles))
+        return []
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     # Poster in parallelo
     def fetch_poster(item):
