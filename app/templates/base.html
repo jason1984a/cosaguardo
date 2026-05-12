@@ -25,9 +25,63 @@
             gtag('consent', 'update', {'analytics_storage': 'granted'});
         }
 
-        // Carica GA4 se consenso già dato
+        // ── Meta Pixel (Facebook/Instagram) — DISATTIVATO ────────────────
+        // Snippet pronto per attivazione futura. Per riattivarlo:
+        //   1. Crea il dataset/pixel in Events Manager (servirà un account FB
+        //      attivo, eventualmente di una persona di fiducia che possa
+        //      condividerlo)
+        //   2. Sostituisci META_PIXEL_ID con l'ID (15-16 cifre)
+        //   3. Scommenta la chiamata loadMetaPixel() nel blocco "Carica
+        //      analytics se consenso già dato" e nel handler acceptCookies
+        // Per ora la campagna ads parte solo con GA4 + UTM, ottimizzata per
+        // Traffico (non Conversioni). Lo snippet è no-op finché l'ID non è
+        // numerico valido — quindi safe anche se accidentalmente caricato.
+        var META_PIXEL_ID = 'META_PIXEL_ID';  // ← sostituisci con il tuo ID quando avrai accesso
+
+        function loadMetaPixel() {
+            if (!META_PIXEL_ID || !/^\d{10,20}$/.test(META_PIXEL_ID)) return;
+            if (window.fbq) return;
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', META_PIXEL_ID);
+            fbq('track', 'PageView');
+        }
+
+        // ── Helper unificato per tracking conversioni su entrambe le piattaforme ─
+        // Esposto a window per chiamate da altri script (es. trigger registrazione).
+        window.cgTrack = function(eventName, params) {
+            try {
+                // GA4: nome eventi snake_case
+                if (typeof gtag === 'function' &&
+                    localStorage.getItem('cg_cookie_consent') === 'accepted') {
+                    gtag('event', eventName, params || {});
+                }
+                // Meta Pixel: nome eventi PascalCase. Mapping snake_case → standard event.
+                if (typeof fbq === 'function' &&
+                    localStorage.getItem('cg_cookie_consent') === 'accepted') {
+                    var pixelEvent = ({
+                        'sign_up':       'CompleteRegistration',
+                        'login':         'Lead',
+                        'search':        'Search',
+                        'view_content':  'ViewContent',
+                    })[eventName];
+                    if (pixelEvent) {
+                        fbq('track', pixelEvent, params || {});
+                    }
+                }
+            } catch (_) {}
+        };
+
+        // Carica analytics se consenso già dato
         if (localStorage.getItem('cg_cookie_consent') === 'accepted') {
             loadGA4();
+            loadMetaPixel();
         }
     </script>
     <title>{% block title %}CosaGuardo{% endblock %}</title>
@@ -1045,6 +1099,7 @@
                 localStorage.setItem('cg_cookie_consent', 'accepted');
                 removeBanner();
                 if (typeof loadGA4 === 'function') loadGA4();
+                if (typeof loadMetaPixel === 'function') loadMetaPixel();
             };
 
             window.declineCookies = function() {
@@ -1265,6 +1320,26 @@
 
         // ─── Click handlers ─────────────────────────────────────────────
         document.addEventListener('DOMContentLoaded', function() {
+            // ── Trigger conversioni post-registrazione ─────────────────────
+            // Il server redirecta su /profilo?registered=1 dopo registrazione.
+            // Spariamo l'evento UNA SOLA VOLTA su GA4 + Meta Pixel, poi
+            // puliamo la URL così reload non ritrigghera.
+            try {
+                var urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('registered') === '1') {
+                    if (typeof window.cgTrack === 'function') {
+                        // cgTrack mappa sign_up → CompleteRegistration su Pixel
+                        window.cgTrack('sign_up', { method: 'email' });
+                    }
+                    // Rimuovi il flag dalla URL senza ricaricare
+                    urlParams.delete('registered');
+                    var newUrl = window.location.pathname +
+                        (urlParams.toString() ? '?' + urlParams.toString() : '') +
+                        window.location.hash;
+                    history.replaceState(null, '', newUrl);
+                }
+            } catch (_) {}
+
             var btnInstall = document.getElementById('install-btn-action');
             var btnClose   = document.getElementById('install-btn-close');
             var btnIosX    = document.getElementById('ios-guide-close');
