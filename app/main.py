@@ -450,6 +450,13 @@ def home(request: Request):
         except Exception as e:
             log.warning("home: tracking enrichment fallita uid=%s: %s", user_id, e)
 
+        # Prefetch daily_recommendations in background per il futuro click su /profilo.
+        # Se già in cache (o già inflight) il prefetch è no-op. Non blocca la home.
+        try:
+            _prefetch_daily_recs_async(user_id)
+        except Exception as e:
+            log.debug("home: prefetch daily_recs fallita uid=%s: %s", user_id, e)
+
     return templates.TemplateResponse(
         request=request,
         name="index.html",
@@ -620,6 +627,80 @@ def _build_home_tracking_data(user_id: int):
 
     # Limita banner a 5 (UI compatta)
     return continua, alerts[:5]
+
+
+# ─── Prefetch daily_recommendations in background ──────────────────────
+# build_dashboard_recommendations è la chiamata più lenta del route /profilo
+# (~30-60s alla prima visita del giorno per utente con history ricca, perché
+# fa TMDb fetch per arricchire poster + generazione consigli). Le visite
+# successive leggono dalla cache daily_recommendations in DB (~3s totali).
+#
+# Strategia:
+# 1. Trigger del prefetch dalla home e dal login (= prima del profilo)
+# 2. Dedup via dict user_id → threading.Event: se già in corso, non duplichiamo
+# 3. Il route /profilo, se trova prefetch in corso, ATTENDE sull'Event invece
+#    di lanciare un calcolo parallelo. Quando il prefetch finisce, set() sblocca.
+_dashboard_recs_lock = _perf_threading.Lock()
+_dashboard_recs_inflight = {}  # user_id -> Event (signaled quando calcolo finisce)
+
+
+def _prefetch_daily_recs_async(user_id: int):
+    """Avvia thread daemon che calcola e salva daily_recommendations per oggi.
+    Idempotente: se già in inflight o già in cache, no-op. Sicuro chiamarlo
+    da qualsiasi route. Non blocca mai."""
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    with _dashboard_recs_lock:
+        if user_id in _dashboard_recs_inflight:
+            return  # già in corso, lascia che finisca
+        try:
+            existing = get_daily_recommendations(user_id, today)
+            if existing and len(existing) > 0:
+                return  # già in cache, niente da fare
+        except Exception as e:
+            log.debug("_prefetch_daily_recs_async: lookup fallita uid=%s: %s", user_id, e)
+            return
+        # Crea event per far attendere chi vuole sapere quando finisce
+        ev = _perf_threading.Event()
+        _dashboard_recs_inflight[user_id] = ev
+
+    def _worker():
+        try:
+            t0 = datetime.now()
+            searches = get_searches_by_user(user_id, limit=10)
+            liked = [dict(r) for r in get_liked_states_by_user(user_id)]
+            taste = build_taste_profile(searches)
+            recs = build_dashboard_recommendations(
+                user_id=user_id,
+                searches=searches,
+                liked_titles=liked,
+                taste_profile=taste,
+            )
+            if recs:
+                save_daily_recommendations(user_id, today, recs)
+                elapsed = (datetime.now() - t0).total_seconds()
+                log.info("_prefetch_daily_recs_async: completed uid=%s in %.1fs (%d items)",
+                         user_id, elapsed, len(recs))
+        except Exception as e:
+            log.warning("_prefetch_daily_recs_async: build fallita uid=%s: %s", user_id, e)
+        finally:
+            with _dashboard_recs_lock:
+                _dashboard_recs_inflight.pop(user_id, None)
+            ev.set()  # sblocca eventuali waiters anche su fallimento
+
+    t = _perf_threading.Thread(target=_worker, daemon=True)
+    t.start()
+
+
+def _wait_for_daily_recs(user_id: int, timeout: float = 90.0) -> bool:
+    """Se un prefetch è in corso per user_id, blocca finché non finisce
+    (o timeout). Ritorna True se completato/non necessario, False su timeout.
+    Usato dal route /profilo per evitare di lanciare calcolo parallelo."""
+    with _dashboard_recs_lock:
+        ev = _dashboard_recs_inflight.get(user_id)
+    if ev is None:
+        return True  # non in corso, niente da aspettare
+    return ev.wait(timeout=timeout)
 
 
 @app.get("/cinema-news", response_class=JSONResponse)
@@ -1180,6 +1261,13 @@ def login_submit(
 
     request.session["user_id"] = user["id"]
     request.session["user_email"] = user["email"]
+
+    # Prefetch daily_recommendations in BG: il primo click su /profilo dopo
+    # il login non aspetterà più la generazione (~1 minuto altrimenti).
+    try:
+        _prefetch_daily_recs_async(user["id"])
+    except Exception as e:
+        log.debug("login: prefetch daily_recs fallita uid=%s: %s", user["id"], e)
 
     return RedirectResponse(url="/profilo", status_code=303)
 
@@ -1750,9 +1838,21 @@ def profilo(request: Request):
     today_key  = datetime.now().strftime("%Y-%m-%d")
     daily_recs = get_daily_recommendations(user_id, today_key)
 
+    if not daily_recs:
+        # Prima visita del giorno: c'è probabilmente già un prefetch in corso
+        # avviato da /home o /login. Aspettiamo che finisca invece di lanciare
+        # un calcolo parallelo (sarebbe spreco di TMDb + DB writes).
+        # Se non era in corso, avviamolo noi e poi aspettiamo.
+        _prefetch_daily_recs_async(user_id)
+        _wait_for_daily_recs(user_id, timeout=90)
+        daily_recs = get_daily_recommendations(user_id, today_key)
+
     if daily_recs and len(daily_recs) > 0:
         recommendations = [dict(rec) for rec in daily_recs]
     else:
+        # Caso degenere: prefetch fallito o timeout > 90s. Fallback sincrono
+        # come ultima risorsa — meglio una pagina con consigli che senza.
+        log.warning("profilo: daily_recs ancora vuoto dopo wait uid=%s, fallback sync", user_id)
         recommendations = build_dashboard_recommendations(
             user_id=user_id,
             searches=searches,
