@@ -460,6 +460,48 @@ document.getElementById("recommend-form")?.addEventListener("submit", function(e
 });
 
 document.addEventListener("DOMContentLoaded", function () {
+    // ── Prefill da "Trova simili" ─────────────────────────────────────
+    // Link `/?prefill=Titolo&type=tv` (generato da detail.html → "Trova
+    // simili") deve compilare il primo input, settare il radio button al
+    // type corretto e fare auto-submit, così l'utente atterra direttamente
+    // sui consigli simili senza ulteriore click.
+    (function handlePrefillParam() {
+        try {
+            var params = new URLSearchParams(window.location.search);
+            var prefill = params.get('prefill');
+            var type    = params.get('type');
+            if (!prefill) return;
+
+            // Set content_type radio (default 'movie', accetta 'tv')
+            if (type === 'tv' || type === 'movie') {
+                var radio = document.querySelector('input[name="content_type"][value="' + type + '"]');
+                if (radio) {
+                    radio.checked = true;
+                    if (typeof updatePlaceholders === 'function') {
+                        updatePlaceholders(type);
+                    }
+                }
+            }
+
+            // Pre-fill movie1
+            var firstInput = document.getElementById('movie1');
+            if (!firstInput) return;
+            firstInput.value = prefill;
+
+            // Scroll alla search panel così l'utente vede il pre-fill
+            // prima del submit (sensazione di "cosa sta succedendo")
+            var panel = document.getElementById('search-panel');
+            if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Auto-submit dopo breve delay (lascia tempo a smooth scroll
+            // di partire e all'utente di percepire la pre-compilazione)
+            var form = document.getElementById('recommend-form');
+            if (form) {
+                setTimeout(function () { form.submit(); }, 400);
+            }
+        } catch (_) { /* fail-safe: niente prefill */ }
+    })();
+
     // ── Striscia piattaforme streaming ────────────────────────────────
     // Carica loghi da TMDb via /home-platforms (server-cached 30gg).
     // Se fallisce, lascia gli skeleton in piedi per qualche secondo e poi
