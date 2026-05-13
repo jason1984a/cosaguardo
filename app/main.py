@@ -1,5 +1,6 @@
 import os
 import sys
+import signal
 from fastapi import FastAPI, Form, Request, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -154,6 +155,65 @@ log = _logging_main.getLogger("cosaguardo")
 
 app = FastAPI()
 app.add_middleware(SessionMiddleware, secret_key=os.environ.get("SECRET_KEY", "cosaguardo-secret-key"))
+
+
+# ─── Restart programmato per gestire memory drift ───────────────────────
+# Python tende a NON rilasciare memoria al kernel anche dopo GC (high water
+# mark del processo). Combinato con un piccolo leak residuo, la memoria
+# cresce di ~5% RAM all'ora. Senza intervento, Render OOM-killa l'istanza
+# ogni 8-10h in modo NON controllato (request in corso fail con 502).
+#
+# Soluzione: thread daemon che ogni N ore manda SIGTERM al processo.
+# Uvicorn intercetta, fa graceful shutdown (drena le request entro ~30s),
+# Render rileva il processo terminato e fa restart automatico. Memoria
+# resettata in modo controllato, downtime ~30-60s.
+#
+# Disabilitabile via env DISABLE_AUTO_RESTART=1 (es. per debug).
+# Configurabile via env AUTO_RESTART_HOURS (default 6).
+_AUTO_RESTART_HOURS = float(os.environ.get("AUTO_RESTART_HOURS", "6"))
+
+
+def _scheduled_restart_worker():
+    """Worker del thread daemon: dorme N ore, poi invia SIGTERM al processo."""
+    import time
+    seconds = _AUTO_RESTART_HOURS * 3600
+    time.sleep(seconds)
+    try:
+        # Logging visibile in Render → Logs per audit
+        import logging
+        logging.getLogger("cosaguardo").warning(
+            "_scheduled_restart: %.1fh trascorse, invio SIGTERM per restart pulito (memory cleanup)",
+            _AUTO_RESTART_HOURS
+        )
+    except Exception:
+        pass
+    # SIGTERM al processo: Uvicorn lo intercetta, finisce le request in corso
+    # (max 30s di default), poi termina. Render rileva exit code e fa restart.
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
+@app.on_event("startup")
+def _start_scheduled_restart_thread():
+    """Avvia il thread di restart programmato all'avvio dell'app.
+    Skippato in dev/test via env DISABLE_AUTO_RESTART=1."""
+    if os.environ.get("DISABLE_AUTO_RESTART"):
+        return
+    # Import qui per evitare ordering issues con threading globale
+    import threading
+    t = threading.Thread(
+        target=_scheduled_restart_worker,
+        daemon=True,
+        name="scheduled_restart"
+    )
+    t.start()
+    try:
+        import logging
+        logging.getLogger("cosaguardo").info(
+            "_scheduled_restart: thread avviato, restart programmato fra %.1fh",
+            _AUTO_RESTART_HOURS
+        )
+    except Exception:
+        pass
 
 
 # ─── Anti-scanner middleware ─────────────────────────────────────────────
