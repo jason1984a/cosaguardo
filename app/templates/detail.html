@@ -1423,9 +1423,15 @@ function cgTrackingToggle(e) {
         if (p.parentNode !== document.body) {
             document.body.appendChild(p);
         }
-        cgTrackingPosition();      // calcola top/left/etc su position:fixed
+        // Render off-screen prima del posizionamento per misurare altezza reale.
+        // Senza questo step, cgTrackingPosition userebbe la stima conservativa
+        // (340px) che è sufficiente nel 95% dei casi ma può sbagliare per
+        // popover insolitamente alti (es. molte stagioni nel selector).
+        p.style.visibility = 'hidden';
+        p.style.display    = 'flex';
+        cgTrackingPosition();      // ora offsetHeight è accurato
+        p.style.visibility = 'visible';
         cgTrackingShowBackdrop();  // overlay scuro cliccabile per chiudere
-        p.style.display = 'flex';
         var t = document.getElementById('tracking-trigger');
         if (t) t.setAttribute('aria-expanded', 'true');
         // Click fuori chiude (registrato dopo per evitare auto-close immediato)
@@ -1453,14 +1459,38 @@ function cgTrackingPosition() {
         p.style.minWidth = '0';
         p.style.maxWidth = 'calc(100vw - 16px)';
     } else {
-        // Desktop: float subito sotto il trigger
+        // Desktop: float subito sotto il trigger di default, ma se non c'è
+        // abbastanza spazio sotto, FLIPPA sopra. Senza questo controllo,
+        // quando l'utente apre il popover con il trigger in fondo allo schermo,
+        // il popover finisce parzialmente fuori viewport (= sezione "A che
+        // stagione sei?" tagliata e non scrollabile, perché position:fixed).
         var rect = t.getBoundingClientRect();
-        var popoverWidth = 260;
-        var top  = rect.bottom + 6;
+        var popoverWidth  = 260;
+        // Altezza reale se già misurabile (popover già reso visibile), altrimenti
+        // stima conservativa di 340px (header + 3 opzioni + season selector + padding).
+        var popoverHeight = p.offsetHeight || 340;
+        var viewportH = window.innerHeight;
+        var spaceBelow = viewportH - rect.bottom;
+        var spaceAbove = rect.top;
+        var margin = 16;
+
+        var top;
+        if (spaceBelow >= popoverHeight + margin) {
+            // Spazio sufficiente sotto: comportamento di default
+            top = rect.bottom + 6;
+        } else if (spaceAbove >= popoverHeight + margin) {
+            // Sotto non ci sta ma sopra sì → flip-up
+            top = rect.top - popoverHeight - 6;
+        } else {
+            // Caso degenere: né sotto né sopra ci sta (popover più alto del
+            // viewport ridotto). Aggancia al bordo inferiore con margine.
+            top = Math.max(margin, viewportH - popoverHeight - margin);
+        }
+
         var left = rect.left;
         // Se uscirebbe dal viewport a destra, allinea col bordo destro del trigger
-        if (left + popoverWidth > window.innerWidth - 16) {
-            left = Math.max(16, rect.right - popoverWidth);
+        if (left + popoverWidth > window.innerWidth - margin) {
+            left = Math.max(margin, rect.right - popoverWidth);
         }
         p.style.top      = top + 'px';
         p.style.left     = left + 'px';
