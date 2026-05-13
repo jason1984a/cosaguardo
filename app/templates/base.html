@@ -53,6 +53,25 @@
             fbq('track', 'PageView');
         }
 
+        // ── Microsoft Clarity (session recording, heatmap, scroll depth) ──
+        // Sostituisci CLARITY_PROJECT_ID con il tuo Project ID quando avrai
+        // creato il progetto su clarity.microsoft.com. È un codice alfanumerico
+        // breve (es. "abc1234567"). Finché è il placeholder, loadClarity è no-op.
+        // Costo: GRATIS, illimitato. Vedi: heatmap, registrazioni sessioni
+        // reali, rage click, dead click, scroll depth. Complementare a GA4
+        // (GA4 = "quanti e da dove", Clarity = "cosa fanno e dove si bloccano").
+        var CLARITY_PROJECT_ID = 'CLARITY_PROJECT_ID';  // ← sostituisci col tuo ID
+
+        function loadClarity() {
+            if (!CLARITY_PROJECT_ID || !/^[a-z0-9]{6,20}$/i.test(CLARITY_PROJECT_ID)) return;
+            if (window.clarity) return;
+            (function(c,l,a,r,i,t,y){
+                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+            })(window, document, "clarity", "script", CLARITY_PROJECT_ID);
+        }
+
         // ── Helper unificato per tracking conversioni su entrambe le piattaforme ─
         // Esposto a window per chiamate da altri script (es. trigger registrazione).
         window.cgTrack = function(eventName, params) {
@@ -82,6 +101,7 @@
         if (localStorage.getItem('cg_cookie_consent') === 'accepted') {
             loadGA4();
             loadMetaPixel();
+            loadClarity();
         }
     </script>
     <title>{% block title %}CosaGuardo{% endblock %}</title>
@@ -1100,6 +1120,7 @@
                 removeBanner();
                 if (typeof loadGA4 === 'function') loadGA4();
                 if (typeof loadMetaPixel === 'function') loadMetaPixel();
+                if (typeof loadClarity === 'function') loadClarity();
             };
 
             window.declineCookies = function() {
