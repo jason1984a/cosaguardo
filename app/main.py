@@ -233,6 +233,24 @@ _SCANNER_BLOCK_PREFIXES = (
 )
 
 
+# ─── Redirect 301 dal vecchio dominio onrender.com → cosaguardo.com ──────
+# Dopo il move al dominio custom restano backlink, condivisioni Whatsapp e
+# bookmark vecchi che puntano al *.onrender.com originale. Per UX e per
+# consolidare link equity SEO, 301 redirect verso il dominio brand.
+# 301 (permanent) segnala a Google "il sito è migrato definitivamente";
+# eventuale page rank sul vecchio dominio si trasferisce al nuovo.
+# Preserva path e query string così l'utente atterra ESATTAMENTE dove voleva.
+@app.middleware("http")
+async def redirect_legacy_domain(request: Request, call_next):
+    host = (request.headers.get("host") or "").lower()
+    if "onrender.com" in host:
+        target = f"https://cosaguardo.com{request.url.path}"
+        if request.url.query:
+            target += f"?{request.url.query}"
+        return RedirectResponse(url=target, status_code=301)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def anti_scanner(request: Request, call_next):
     path = request.url.path
