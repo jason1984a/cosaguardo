@@ -146,6 +146,24 @@ html, body {
     border-radius: 18px;
     box-shadow: 0 24px 56px rgba(0,0,0,0.65);
     display: block;
+    /* Poster cliccabile: feedback visivo che comunica interattività.
+       Hover (desktop): lieve scale up. Active (tap mobile/click): scale down
+       breve. transform-origin = center per non spostare il layout. */
+    cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.2, 0.8, 0.2, 1),
+                box-shadow 0.18s ease;
+}
+.detail-poster:hover {
+    transform: scale(1.025);
+    box-shadow: 0 30px 64px rgba(0,0,0,0.7);
+}
+.detail-poster:active {
+    transform: scale(0.97);
+    transition-duration: 0.08s;
+}
+.detail-poster:focus-visible {
+    outline: 3px solid var(--accent, #5e8eff);
+    outline-offset: 4px;
 }
 
 .detail-poster-placeholder {
@@ -913,10 +931,17 @@ html, body {
         </script>
     </div>
     <div class="container detail-hero-content">
-        {# POSTER #}
+        {# POSTER — click scrolla a "Dove vederlo in Italia" (la value prop
+           principale del sito). Sfrutta l'istinto Netflix/Prime: l'utente
+           clicca/tappa il poster aspettandosi un'azione. Invece di un dead
+           click, lo portiamo direttamente sull'info utile. #}
         <div class="detail-poster-wrap">
             {% if detail.poster_url %}
-            <img src="{{ detail.poster_url }}" alt="{{ detail.title }}" class="detail-poster">
+            <img src="{{ detail.poster_url }}" alt="{{ detail.title }}" class="detail-poster"
+                 role="button" tabindex="0"
+                 aria-label="Scorri a 'Dove vederlo in Italia'"
+                 onclick="document.getElementById('where-to-watch')?.scrollIntoView({behavior:'smooth',block:'start'})"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){document.getElementById('where-to-watch')?.scrollIntoView({behavior:'smooth',block:'start'});event.preventDefault();}">
             {% else %}
             <div class="detail-poster-placeholder">
                 <i data-lucide="film" style="width:40px;height:40px;opacity:.35;"></i>
@@ -1206,8 +1231,8 @@ html, body {
     {# SIDEBAR #}
     <div class="detail-sidebar">
 
-        {# PROVIDERS #}
-        <div class="detail-sidebar-card">
+        {# PROVIDERS — target dello scroll dal click sul poster #}
+        <div class="detail-sidebar-card" id="where-to-watch">
             <div class="detail-section-title" style="margin-bottom:16px;">Dove vederlo in Italia</div>
 
             {% set prov = detail.providers %}
