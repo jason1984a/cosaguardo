@@ -231,6 +231,46 @@
         </div>
     </section>
 
+    {# ── Card "perché registrarsi" — solo per ospiti non loggati ───────────
+       Posizionata dopo la search panel, prima dei caroselli editoriali:
+       chi arriva fa la sua ricerca; chi NON cerca scrolla la home, vede
+       questa card e capisce in 5 secondi cosa guadagna registrandosi.
+       Dismissibile (chiude col × → sessionStorage), non disturba di nuovo
+       nella stessa sessione. Mostrata SOLO se !is_logged_in. #}
+    {% if not is_logged_in %}
+    <section class="signup-card-section" id="signup-card-section">
+        <div class="signup-card">
+            <button type="button" class="signup-card-close"
+                    aria-label="Chiudi"
+                    onclick="document.getElementById('signup-card-section').style.display='none'; try{sessionStorage.setItem('cg_signup_card_dismissed','1');}catch(_){}">×</button>
+            <div class="signup-card-content">
+                <div class="signup-card-icon">🎯</div>
+                <div class="signup-card-text">
+                    <h3 class="signup-card-title">Crea il tuo profilo gratis</h3>
+                    <ul class="signup-card-benefits">
+                        <li>Salva film e serie nei preferiti</li>
+                        <li>Tieni traccia di cosa stai guardando</li>
+                        <li>Ricevi consigli su misura ogni giorno</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="signup-card-cta">
+                <a href="/register" class="signup-card-btn">Inizia gratis →</a>
+                <span class="signup-card-note">In 10 secondi. Nessuna carta richiesta.</span>
+            </div>
+        </div>
+    </section>
+    <script>
+        // Se la card era già stata chiusa in questa sessione, non mostrarla
+        try {
+            if (sessionStorage.getItem('cg_signup_card_dismissed') === '1') {
+                var s = document.getElementById('signup-card-section');
+                if (s) s.style.display = 'none';
+            }
+        } catch (_) { /* sessionStorage non disponibile, ignora */ }
+    </script>
+    {% endif %}
+
     {% if now_playing %}
     <section class="cinema-strip-section">
         <div class="personal-strip-header">
