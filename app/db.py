@@ -334,11 +334,77 @@ def init_db():
                 cached_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        # ─── Streaming alerts (lead generation per titoli non disponibili) ────
+        # Quando un titolo NON è ancora in streaming in Italia, l'utente lascia
+        # l'email per essere avvisato quando arriva. Tabella semplice: email +
+        # tmdb_id + content_type. user_id opzionale (utente loggato).
+        # Future: cron job che controlla TMDb providers per ogni alert attivo,
+        # quando il titolo arriva su una piattaforma manda email e marca notified.
+        # Per ora: solo raccolta lead. UNIQUE(email, tmdb_id, content_type) evita
+        # duplicati se lo stesso utente clicca più volte.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS streaming_alerts (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                email           TEXT NOT NULL,
+                tmdb_id         INTEGER NOT NULL,
+                content_type    TEXT NOT NULL,
+                title           TEXT,
+                user_id         INTEGER,
+                notified_at     TIMESTAMP,
+                created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(email, tmdb_id, content_type)
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_streaming_alerts_pending
+            ON streaming_alerts (tmdb_id, content_type)
+            WHERE notified_at IS NULL
+        """)
         # ───────────────────────────────────────────────────────────────────────
 
         conn.commit()
     finally:
         conn.close()
+
+
+def add_streaming_alert(email: str, tmdb_id: int, content_type: str,
+                        title: str | None = None, user_id: int | None = None) -> bool:
+    """
+    Registra un alert per il titolo. Restituisce True se inserito, False se
+    già esistente (idempotente). Usa INSERT OR IGNORE per gestire il vincolo
+    UNIQUE senza sollevare eccezione.
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT OR IGNORE INTO streaming_alerts
+                (email, tmdb_id, content_type, title, user_id)
+            VALUES (?, ?, ?, ?, ?)
+        """, (email.strip().lower(), int(tmdb_id), content_type, title, user_id))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def count_streaming_alerts_for_title(tmdb_id: int, content_type: str) -> int:
+    """Conta quante persone aspettano questo titolo (utile per social proof
+    futuro tipo 'X persone in attesa'). Per ora non usata nel template ma
+    pronta per quando vorrai aggiungere il counter."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT COUNT(*) FROM streaming_alerts
+            WHERE tmdb_id = ? AND content_type = ? AND notified_at IS NULL
+        """, (int(tmdb_id), content_type))
+        row = cur.fetchone()
+        return int(row[0]) if row else 0
+    finally:
+        conn.close()
+
 
 def create_search(user_id: int, seed_titles: str, content_type: str):
     conn = get_connection()

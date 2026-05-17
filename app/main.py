@@ -42,6 +42,7 @@ from app.db import (
     get_series_seasons_cache,
     get_series_seasons_cache_batch,
     upsert_series_seasons_cache,
+    add_streaming_alert,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -1205,6 +1206,55 @@ def api_series_track(request: Request, data: dict = Body(...)):
         "tmdb_id": tmdb_id, "status": status,
         "current_season": current_season,
     }}
+
+
+# ─── Streaming alerts (lead generation per titoli non disponibili) ──────────
+# Quando l'utente atterra su una scheda di un titolo NON in streaming,
+# vede il form "Avvisami quando arriva". Salviamo email + tmdb_id in
+# streaming_alerts. Nessuna registrazione obbligatoria: l'email basta.
+# Se l'utente è loggato, associamo anche user_id per cross-link futuro.
+_EMAIL_RE = _perf_re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@app.post("/api/streaming-alert")
+def api_streaming_alert(request: Request, data: dict = Body(...)):
+    # Validazione email — pattern basico, non perfetto ma blocca i mass spammer
+    email = (data.get("email") or "").strip().lower()
+    if not email or not _EMAIL_RE.match(email) or len(email) > 200:
+        raise HTTPException(status_code=400, detail="email non valida")
+
+    try:
+        tmdb_id = int(data.get("tmdb_id") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="tmdb_id non valido")
+    if tmdb_id <= 0:
+        raise HTTPException(status_code=400, detail="tmdb_id non valido")
+
+    content_type = (data.get("content_type") or "").strip()
+    if content_type not in ("movie", "tv"):
+        raise HTTPException(status_code=400, detail="content_type non valido")
+
+    title = (data.get("title") or "").strip()[:300] or None
+
+    # user_id opzionale: se loggato, associamo per cross-link futuro
+    user_id = request.session.get("user_id")
+
+    try:
+        inserted = add_streaming_alert(
+            email=email,
+            tmdb_id=tmdb_id,
+            content_type=content_type,
+            title=title,
+            user_id=user_id,
+        )
+    except Exception as e:
+        log.warning("streaming_alert: insert fallito (%s/%s/%s): %s",
+                    email, tmdb_id, content_type, e)
+        raise HTTPException(status_code=500, detail="errore salvataggio")
+
+    # inserted=True → primo signup; False → email già registrata per quel titolo.
+    # In entrambi i casi rispondiamo OK (UX: utente vede "✓ Ti avviseremo")
+    return {"status": "ok", "already_registered": not inserted}
 
 
 @app.delete("/api/series/track/{tmdb_id}")

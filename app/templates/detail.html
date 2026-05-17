@@ -995,6 +995,140 @@ html, body {
     from { opacity: 0; transform: translate(-50%, 12px); }
     to   { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* ── ALERT BLOCK (titolo non in streaming) ─────────────────────────────── */
+.cg-alert-block {
+    margin-top: 8px;
+    padding: 18px 18px 16px;
+    background: linear-gradient(135deg, rgba(110,168,254,0.16), rgba(155,123,255,0.10) 60%, rgba(110,168,254,0.06));
+    border: 1px solid rgba(110,168,254,0.32);
+    border-radius: 14px;
+}
+.cg-alert-icon {
+    font-size: 24px;
+    line-height: 1;
+    margin-bottom: 8px;
+}
+.cg-alert-title {
+    font-size: 15.5px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1.3;
+    margin-bottom: 4px;
+}
+.cg-alert-sub {
+    font-size: 13px;
+    color: rgba(255,255,255,0.72);
+    line-height: 1.45;
+    margin-bottom: 14px;
+}
+.cg-alert-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.cg-alert-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 11px 14px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.16);
+    border-radius: 10px;
+    color: #fff;
+    font-size: 14px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+.cg-alert-input::placeholder { color: rgba(255,255,255,0.4); }
+.cg-alert-input:focus {
+    outline: none;
+    border-color: rgba(110,168,254,0.6);
+    background: rgba(255,255,255,0.10);
+}
+.cg-alert-submit {
+    width: 100%;
+    padding: 11px 18px;
+    background: linear-gradient(135deg, #6ea8fe, #9b7bff);
+    color: #08101f;
+    border: 0;
+    border-radius: 10px;
+    font-weight: 800;
+    font-size: 14.5px;
+    cursor: pointer;
+    box-shadow: 0 6px 16px rgba(110,168,254,0.35);
+    transition: filter 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+}
+.cg-alert-submit:hover { filter: brightness(1.08); }
+.cg-alert-submit:active { transform: scale(0.97); }
+.cg-alert-submit:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+.cg-alert-status {
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 4px;
+    min-height: 18px;
+}
+.cg-alert-status.is-success { color: #54e0a6; }
+.cg-alert-status.is-error   { color: #ff8a8a; }
+.cg-alert-note {
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.45);
+    text-align: center;
+    margin-top: 6px;
+}
+
+/* ── SIMILAR DISPONIBILI (B) ───────────────────────────────────────────── */
+.cg-alert-similar-card {
+    margin-top: 14px;
+}
+.cg-alert-similar-header {
+    margin-bottom: 14px;
+}
+.cg-alert-similar-eyebrow {
+    display: inline-block;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--primary, #6ea8fe);
+    letter-spacing: 0.3px;
+    margin-bottom: 4px;
+}
+.cg-alert-similar-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+}
+.cg-alert-similar-card-link {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform 0.12s ease;
+}
+.cg-alert-similar-card-link:hover {
+    transform: translateY(-2px);
+}
+.cg-alert-similar-card-link img {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    display: block;
+}
+.cg-alert-similar-title {
+    font-size: 12.5px;
+    color: rgba(255,255,255,0.82);
+    line-height: 1.3;
+    text-align: center;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
 </style>
 {% endblock %}
 
@@ -1396,11 +1530,59 @@ html, body {
             {% endif %}
 
             {% if not prov.flatrate and not prov.rent %}
-            <p class="no-providers-msg">Non disponibile in streaming in Italia al momento.</p>
+            {# ── A: Avvisami quando arriva in streaming ─────────────────
+               Quando non ci sono provider attivi (né flat né rent), invece
+               della frase neutra mostriamo: form email per l'alert (lead
+               generation) + (sotto, fuori da questa card) lista simili
+               disponibili come fallback. #}
+            <div class="cg-alert-block" id="cg-alert-block">
+                <div class="cg-alert-icon">🔔</div>
+                <div class="cg-alert-title">Non è ancora in streaming in Italia</div>
+                <div class="cg-alert-sub">Lascia la tua email e ti avvisiamo appena arriva su Netflix, Prime, Disney+ o altri.</div>
+
+                <form class="cg-alert-form" id="cg-alert-form"
+                      onsubmit="return submitStreamingAlert(event);">
+                    <input type="email" name="email" id="cg-alert-email"
+                           placeholder="tu@email.it"
+                           required
+                           autocomplete="email"
+                           class="cg-alert-input"
+                           {% if is_logged_in and user_email %}value="{{ user_email }}"{% endif %}>
+                    <button type="submit" class="cg-alert-submit" id="cg-alert-submit">
+                        Avvisami
+                    </button>
+                </form>
+
+                <div class="cg-alert-status" id="cg-alert-status" aria-live="polite"></div>
+                <div class="cg-alert-note">Solo questo alert. Niente newsletter né spam.</div>
+            </div>
             {% endif %}
 
 
         </div>
+
+        {# ── B: Film simili disponibili (fuori dalla sidebar-card per dare
+           respiro). Mostrato solo se il titolo corrente non ha provider, e
+           se abbiamo almeno 1 simile. Riusa la lista 'similar' già passata
+           dal route /film/{id} e /serie/{id}. #}
+        {% if not prov.flatrate and not prov.rent and similar %}
+        <div class="detail-sidebar-card cg-alert-similar-card">
+            <div class="cg-alert-similar-header">
+                <span class="cg-alert-similar-eyebrow">🎬 Nel frattempo</span>
+                <div class="detail-section-title" style="margin-bottom:0;">Vedi titoli simili</div>
+            </div>
+            <div class="cg-alert-similar-grid">
+                {% for s in similar[:4] %}
+                <a href="{{ '/serie/' if s.content_type == 'tv' else '/film/' }}{{ s.tmdb_id }}"
+                   class="cg-alert-similar-card-link"
+                   title="{{ s.title }}">
+                    <img src="{{ s.poster_url }}" alt="{{ s.title }}" loading="lazy">
+                    <span class="cg-alert-similar-title">{{ s.title }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
 
         {# INFO EXTRA #}
         <div class="detail-sidebar-card">
@@ -1508,6 +1690,69 @@ document.addEventListener('keydown', function (e) {
         }
     }
 });
+
+// ── Streaming Alert (form "Avvisami quando arriva") ───────────────────
+// Submit asincrono del form: POST a /api/streaming-alert, mostra status
+// inline (✓ success / errore in rosso), niente reload pagina.
+// already_registered = true → email già registrata, comunque success UX.
+function submitStreamingAlert(event) {
+    event.preventDefault();
+    const form    = document.getElementById('cg-alert-form');
+    const input   = document.getElementById('cg-alert-email');
+    const btn     = document.getElementById('cg-alert-submit');
+    const status  = document.getElementById('cg-alert-status');
+    if (!form || !input || !btn || !status) return false;
+
+    const email = (input.value || '').trim();
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+        status.className = 'cg-alert-status is-error';
+        status.textContent = 'Inserisci un\'email valida.';
+        return false;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Invio…';
+    status.className = 'cg-alert-status';
+    status.textContent = '';
+
+    fetch('/api/streaming-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            email: email,
+            tmdb_id: {{ detail.tmdb_id }},
+            content_type: '{{ detail.content_type }}',
+            title: {{ detail.title | tojson }}
+        })
+    })
+    .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+    .then(({ ok, data }) => {
+        if (!ok) {
+            status.className = 'cg-alert-status is-error';
+            status.textContent = (data && data.detail) || 'Errore. Riprova.';
+            btn.disabled = false;
+            btn.textContent = 'Avvisami';
+            return;
+        }
+        // Successo: nascondo form, mostro conferma
+        form.style.display = 'none';
+        status.className = 'cg-alert-status is-success';
+        status.textContent = data.already_registered
+            ? '✓ Sei già nella lista. Ti scriviamo appena arriva.'
+            : '✓ Ti avviseremo appena arriva in streaming!';
+        // Anche la nota e l'icona possono restare visibili; la card resta lì
+        // per rinforzare il messaggio. Niente redirect.
+    })
+    .catch(err => {
+        console.warn('streaming-alert error', err);
+        status.className = 'cg-alert-status is-error';
+        status.textContent = 'Errore di rete. Riprova.';
+        btn.disabled = false;
+        btn.textContent = 'Avvisami';
+    });
+
+    return false;
+}
 
 function expandOverview() {
     const p   = document.getElementById("detail-overview-text");
