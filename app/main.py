@@ -43,6 +43,9 @@ from app.db import (
     get_series_seasons_cache_batch,
     upsert_series_seasons_cache,
     add_streaming_alert,
+    list_streaming_alerts,
+    streaming_alerts_stats,
+    top_requested_titles,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -3319,6 +3322,32 @@ def admin_utenti(request: Request):
     return templates.TemplateResponse(
         request=request, name="admin_utenti.html",
         context={"request": request, "stats": stats}
+    )
+
+
+@app.get("/admin/streaming-alerts", response_class=HTMLResponse)
+def admin_streaming_alerts(request: Request):
+    """
+    Pagina admin con la lista delle email raccolte tramite il form
+    "Avvisami quando arriva in streaming". Include stats aggregate e
+    top titoli più richiesti per capire dove c'è domanda.
+    Limite default 200 entry più recenti; per export massivo aggiungere
+    in futuro un /admin/streaming-alerts.csv.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    alerts = list_streaming_alerts(limit=200, offset=0)
+    stats  = streaming_alerts_stats()
+    top    = top_requested_titles(limit=10)
+    return templates.TemplateResponse(
+        request=request, name="admin_streaming_alerts.html",
+        context={
+            "request": request,
+            "alerts":  alerts,
+            "stats":   stats,
+            "top":     top,
+        }
     )
 
 

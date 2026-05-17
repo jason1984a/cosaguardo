@@ -1,0 +1,352 @@
+{% extends "base.html" %}
+{% block title %}Admin Streaming Alerts — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<div style="padding-bottom:48px;">
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#93c5fd;margin-bottom:4px;">
+                🔐 Area Admin
+            </div>
+            <h1 style="font-size:1.6rem;font-weight:900;margin:0;">Streaming alerts</h1>
+            <p style="font-size:0.85rem;color:var(--muted);margin:6px 0 0;">
+                Email raccolte tramite "Avvisami quando arriva in streaming"
+            </p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="/admin/utenti" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);">
+                ← Utenti
+            </a>
+            <form action="/admin/logout" method="post" style="display:inline;">
+                <button type="submit" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);font-family:inherit;">
+                    Esci dall'admin
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- STATISTICHE -->
+    <div class="admin-stats-grid">
+        <div class="admin-stat">
+            <div class="admin-stat-val">{{ stats.total_alerts }}</div>
+            <div class="admin-stat-label">Alert totali</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#a78bfa;">{{ stats.unique_emails }}</div>
+            <div class="admin-stat-label">Email uniche</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#fbbf24;">{{ stats.total_titles }}</div>
+            <div class="admin-stat-label">Titoli richiesti</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#4ade80;">+{{ stats.last_7d }}</div>
+            <div class="admin-stat-label">Ultimi 7 giorni</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#f87171;">{{ stats.pending }}</div>
+            <div class="admin-stat-label">Da notificare</div>
+        </div>
+    </div>
+
+    <!-- TOP TITOLI RICHIESTI -->
+    {% if top %}
+    <div class="admin-section-header">
+        <h2 style="font-size:1.05rem;font-weight:800;margin:0 0 12px;">🔥 Top titoli più richiesti</h2>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 14px;">
+            I titoli con più persone in attesa. Segnale di domanda reale.
+        </p>
+    </div>
+    <div class="admin-top-grid">
+        {% for t in top %}
+        <a href="{{ '/serie/' if t.content_type == 'tv' else '/film/' }}{{ t.tmdb_id }}"
+           target="_blank"
+           class="admin-top-item"
+           title="Apri la scheda">
+            <div class="admin-top-rank">{{ loop.index }}</div>
+            <div class="admin-top-info">
+                <div class="admin-top-title">{{ t.title }}</div>
+                <div class="admin-top-meta">
+                    {{ "📺 Serie" if t.content_type == "tv" else "🎬 Film" }}
+                    · TMDb #{{ t.tmdb_id }}
+                </div>
+            </div>
+            <div class="admin-top-count">
+                <span class="admin-top-count-num">{{ t.alert_count }}</span>
+                <span class="admin-top-count-label">{{ "alert" if t.alert_count == 1 else "alert" }}</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- TABELLA ALERT -->
+    <div class="admin-section-header" style="margin-top:32px;">
+        <h2 style="font-size:1.05rem;font-weight:800;margin:0 0 12px;">📧 Tutte le email raccolte</h2>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 14px;">
+            Ultime 200 entry, più recenti prima. Click sul titolo per aprire la scheda.
+        </p>
+    </div>
+
+    {% if alerts %}
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Email</th>
+                    <th>Titolo</th>
+                    <th>Tipo</th>
+                    <th>Utente</th>
+                    <th>Data</th>
+                    <th>Stato</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in alerts %}
+                <tr>
+                    <td style="color:var(--muted);font-size:0.75rem;">{{ a.id }}</td>
+                    <td>
+                        <div style="font-weight:600;font-size:0.82rem;word-break:break-all;">
+                            <a href="mailto:{{ a.email }}" style="color:#93c5fd;text-decoration:none;">
+                                {{ a.email }}
+                            </a>
+                        </div>
+                    </td>
+                    <td>
+                        {% if a.tmdb_id %}
+                        <a href="{{ '/serie/' if a.content_type == 'tv' else '/film/' }}{{ a.tmdb_id }}"
+                           target="_blank"
+                           style="color:inherit;text-decoration:none;font-weight:600;font-size:0.82rem;">
+                            {{ a.title or "(senza titolo)" }}
+                            <span style="color:var(--muted);font-size:0.7rem;font-weight:400;">↗</span>
+                        </a>
+                        {% else %}
+                        <span style="color:var(--muted);">—</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="admin-badge">
+                            {{ "📺 TV" if a.content_type == "tv" else "🎬 Film" }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if a.user_id %}
+                        <span style="font-size:0.75rem;color:#4ade80;">#{{ a.user_id }}</span>
+                        {% else %}
+                        <span style="color:var(--muted);font-size:0.72rem;">ospite</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:0.78rem;color:var(--muted);white-space:nowrap;">
+                        {{ a.created_at[:16] if a.created_at else '—' }}
+                    </td>
+                    <td>
+                        {% if a.notified_at %}
+                        <span class="admin-badge" style="background:rgba(74,222,128,0.15);color:#4ade80;">
+                            ✓ Notificato
+                        </span>
+                        {% else %}
+                        <span class="admin-badge" style="background:rgba(251,191,36,0.12);color:#fbbf24;">
+                            ⏳ In attesa
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="admin-empty">
+        <div style="font-size:2.5rem;margin-bottom:12px;">📭</div>
+        <p style="font-size:0.95rem;font-weight:600;margin:0 0 6px;">Nessun alert ancora raccolto</p>
+        <p style="font-size:0.8rem;color:var(--muted);margin:0;">
+            Le email iniziano ad arrivare quando un utente clicca "Avvisami" su un titolo non disponibile in streaming.
+        </p>
+    </div>
+    {% endif %}
+
+</div>
+
+<style>
+/* Stats */
+.admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 32px;
+}
+.admin-stat {
+    background: rgba(22,31,61,0.7);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+    backdrop-filter: blur(8px);
+}
+.admin-stat-val {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #93c5fd;
+    line-height: 1;
+    margin-bottom: 4px;
+    letter-spacing: -0.03em;
+}
+.admin-stat-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+}
+
+/* Section header */
+.admin-section-header {
+    margin: 24px 0 14px;
+}
+
+/* Top titoli richiesti */
+.admin-top-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 8px;
+}
+.admin-top-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: rgba(22,31,61,0.5);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.admin-top-item:hover {
+    background: rgba(22,31,61,0.85);
+    border-color: rgba(110,168,254,0.3);
+}
+.admin-top-rank {
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    background: rgba(110,168,254,0.18);
+    color: #93c5fd;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.78rem;
+}
+.admin-top-info {
+    flex: 1;
+    min-width: 0;
+}
+.admin-top-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.admin-top-meta {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 2px;
+}
+.admin-top-count {
+    flex-shrink: 0;
+    text-align: right;
+}
+.admin-top-count-num {
+    display: block;
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #fbbf24;
+    line-height: 1;
+}
+.admin-top-count-label {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* Tabella */
+.admin-table-wrap {
+    background: rgba(22,31,61,0.5);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    overflow-x: auto;
+}
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.admin-table thead th {
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    white-space: nowrap;
+}
+.admin-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+}
+.admin-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+.admin-table tbody tr:hover {
+    background: rgba(255,255,255,0.025);
+}
+.admin-num {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    color: #cbd5e1;
+}
+.admin-badge {
+    display: inline-block;
+    padding: 3px 9px;
+    background: rgba(110,168,254,0.12);
+    color: #93c5fd;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* Empty state */
+.admin-empty {
+    background: rgba(22,31,61,0.5);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    padding: 36px 24px;
+    text-align: center;
+}
+
+/* Mobile: tabella scroll orizzontale */
+@media (max-width: 720px) {
+    .admin-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .admin-stat-val { font-size: 1.5rem; }
+    .admin-table { font-size: 0.78rem; }
+    .admin-table thead th, .admin-table tbody td {
+        padding: 10px 12px;
+    }
+}
+</style>
+{% endblock %}

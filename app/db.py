@@ -406,6 +406,101 @@ def count_streaming_alerts_for_title(tmdb_id: int, content_type: str) -> int:
         conn.close()
 
 
+def list_streaming_alerts(limit: int = 200, offset: int = 0) -> list[dict]:
+    """
+    Lista degli alert raccolti, più recenti prima. Aggregati con il titolo
+    e tmdb_id così l'admin vede in un colpo d'occhio "chi ha chiesto cosa".
+    Restituisce dict per essere passato direttamente al template.
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, email, tmdb_id, content_type, title, user_id,
+                   notified_at, created_at
+            FROM streaming_alerts
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """, (int(limit), int(offset)))
+        rows = cur.fetchall()
+        return [{
+            "id":           r[0],
+            "email":        r[1],
+            "tmdb_id":      r[2],
+            "content_type": r[3],
+            "title":        r[4],
+            "user_id":      r[5],
+            "notified_at":  r[6],
+            "created_at":   r[7],
+        } for r in rows]
+    finally:
+        conn.close()
+
+
+def streaming_alerts_stats() -> dict:
+    """
+    Statistiche aggregate sugli alert raccolti. Usato in admin per overview.
+    - total_alerts: count totale di alert (incluse email duplicate cross-titoli)
+    - unique_emails: count di email distinte (lead unici raccolti)
+    - total_titles: count di titoli distinti per cui si aspetta uno streaming
+    - pending: alert ancora da notificare (notified_at IS NULL)
+    - last_7d: alert creati negli ultimi 7 giorni
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM streaming_alerts")
+        total = cur.fetchone()[0] or 0
+        cur.execute("SELECT COUNT(DISTINCT email) FROM streaming_alerts")
+        unique_emails = cur.fetchone()[0] or 0
+        cur.execute("SELECT COUNT(DISTINCT tmdb_id || '_' || content_type) FROM streaming_alerts")
+        total_titles = cur.fetchone()[0] or 0
+        cur.execute("SELECT COUNT(*) FROM streaming_alerts WHERE notified_at IS NULL")
+        pending = cur.fetchone()[0] or 0
+        cur.execute("""
+            SELECT COUNT(*) FROM streaming_alerts
+            WHERE created_at >= datetime('now', '-7 days')
+        """)
+        last_7d = cur.fetchone()[0] or 0
+        return {
+            "total_alerts":  int(total),
+            "unique_emails": int(unique_emails),
+            "total_titles":  int(total_titles),
+            "pending":       int(pending),
+            "last_7d":       int(last_7d),
+        }
+    finally:
+        conn.close()
+
+
+def top_requested_titles(limit: int = 10) -> list[dict]:
+    """
+    Top N titoli più richiesti (con più alert ancora pending). Utile per
+    capire dove c'è più domanda di prodotto. Restituisce title, tmdb_id,
+    content_type, alert_count ordinati per count desc.
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT title, tmdb_id, content_type, COUNT(*) as alert_count
+            FROM streaming_alerts
+            WHERE notified_at IS NULL
+            GROUP BY tmdb_id, content_type
+            ORDER BY alert_count DESC, MAX(created_at) DESC
+            LIMIT ?
+        """, (int(limit),))
+        rows = cur.fetchall()
+        return [{
+            "title":        r[0] or "(senza titolo)",
+            "tmdb_id":      r[1],
+            "content_type": r[2],
+            "alert_count":  int(r[3]),
+        } for r in rows]
+    finally:
+        conn.close()
+
+
 def create_search(user_id: int, seed_titles: str, content_type: str):
     conn = get_connection()
     try:
