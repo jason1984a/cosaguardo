@@ -90,6 +90,48 @@
             </div>
         </div>
 
+        {# ── Prompt registrazione post-risultati — solo per ospiti ──────
+           L'utente ha appena ricevuto i consigli (= percepito il valore).
+           È il momento più "caldo" per proporre la registrazione, perché
+           può essere ancorata a un beneficio concreto: salvare/ritrovare
+           QUESTI consigli. Posizionata DOPO la grid, non sopra: non
+           interferisce con il consumo del contenuto principale.
+           Dismissable per sessione via sessionStorage (chiave separata
+           dalla card home, così le due dismiss non si sovrappongono). #}
+        {% if not is_logged_in %}
+        <section class="signup-prompt-section" id="signup-prompt-section">
+            <div class="signup-prompt">
+                <button type="button" class="signup-prompt-close"
+                        aria-label="Chiudi"
+                        onclick="document.getElementById('signup-prompt-section').style.display='none'; try{sessionStorage.setItem('cg_signup_prompt_dismissed','1');}catch(_){}">×</button>
+                <div class="signup-prompt-icon">💾</div>
+                <div class="signup-prompt-body">
+                    <h3 class="signup-prompt-title">Ti sono piaciuti questi consigli?</h3>
+                    <p class="signup-prompt-text">
+                        Registrati gratis in 10 secondi per:
+                    </p>
+                    <ul class="signup-prompt-benefits">
+                        <li>Salvare i suggerimenti che ti interessano</li>
+                        <li>Tracciare cosa stai guardando</li>
+                        <li>Tornare a queste ricerche quando vuoi</li>
+                    </ul>
+                </div>
+                <div class="signup-prompt-cta">
+                    <a href="/register" class="signup-prompt-btn">Crea account →</a>
+                    <span class="signup-prompt-note">Niente carta. Niente spam.</span>
+                </div>
+            </div>
+        </section>
+        <script>
+            try {
+                if (sessionStorage.getItem('cg_signup_prompt_dismissed') === '1') {
+                    var p = document.getElementById('signup-prompt-section');
+                    if (p) p.style.display = 'none';
+                }
+            } catch (_) { /* ignora */ }
+        </script>
+        {% endif %}
+
     {% else %}
         <div class="empty-panel">
             <h2>Nessuna raccomandazione trovata</h2>
