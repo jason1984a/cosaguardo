@@ -232,39 +232,137 @@
     </section>
 
     {# ── Card "perché registrarsi" — solo per ospiti non loggati ───────────
-       Posizionata dopo la search panel, prima dei caroselli editoriali:
-       chi arriva fa la sua ricerca; chi NON cerca scrolla la home, vede
-       questa card e capisce in 5 secondi cosa guadagna registrandosi.
-       Dismissibile (chiude col × → sessionStorage), non disturba di nuovo
-       nella stessa sessione. Mostrata SOLO se !is_logged_in. #}
+       Stili INLINE (in <style> sotto) per evitare dipendenze da style.css
+       globale che potrebbe non essere deployato/cached.
+       Design v2: compatta, CTA come pulsante evidente in accento blu,
+       icona integrata col titolo, scritta "GRATIS" come pill in alto. #}
     {% if not is_logged_in %}
-    <section class="signup-card-section" id="signup-card-section">
-        <div class="signup-card">
-            <button type="button" class="signup-card-close"
+    <section class="cg-signup-card-wrap" id="cg-signup-card-wrap">
+        <div class="cg-signup-card">
+            <button type="button" class="cg-signup-card-x"
                     aria-label="Chiudi"
-                    onclick="document.getElementById('signup-card-section').style.display='none'; try{sessionStorage.setItem('cg_signup_card_dismissed','1');}catch(_){}">×</button>
-            <div class="signup-card-content">
-                <div class="signup-card-icon">🎯</div>
-                <div class="signup-card-text">
-                    <h3 class="signup-card-title">Crea il tuo profilo gratis</h3>
-                    <ul class="signup-card-benefits">
-                        <li>Salva film e serie nei preferiti</li>
-                        <li>Tieni traccia di cosa stai guardando</li>
-                        <li>Ricevi consigli su misura ogni giorno</li>
-                    </ul>
-                </div>
+                    onclick="document.getElementById('cg-signup-card-wrap').style.display='none'; try{sessionStorage.setItem('cg_signup_card_dismissed','1');}catch(_){}">×</button>
+            <div class="cg-signup-card-left">
+                <div class="cg-signup-card-pill">✨ Gratis</div>
+                <h3 class="cg-signup-card-title">Crea il tuo profilo</h3>
+                <p class="cg-signup-card-sub">Salva i film. Traccia le serie. Ricevi consigli su misura ogni giorno.</p>
             </div>
-            <div class="signup-card-cta">
-                <a href="/register" class="signup-card-btn">Inizia gratis →</a>
-                <span class="signup-card-note">In 10 secondi. Nessuna carta richiesta.</span>
+            <div class="cg-signup-card-right">
+                <a href="/register" class="cg-signup-card-btn">
+                    Registrati gratis
+                    <span class="cg-signup-card-btn-arrow">→</span>
+                </a>
+                <span class="cg-signup-card-foot">10 secondi · No carta · No spam</span>
             </div>
         </div>
     </section>
+    <style>
+        .cg-signup-card-wrap {
+            margin: 28px 0 32px;
+        }
+        .cg-signup-card {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            padding: 22px 28px;
+            background: linear-gradient(135deg, rgba(110,168,254,0.18), rgba(155,123,255,0.12) 60%, rgba(110,168,254,0.08));
+            border: 1px solid rgba(110,168,254,0.36);
+            border-radius: 20px;
+            box-shadow: 0 8px 28px rgba(110,168,254,0.10);
+        }
+        .cg-signup-card-x {
+            position: absolute; top: 10px; right: 12px;
+            background: transparent; border: 0;
+            color: rgba(255,255,255,0.5); font-size: 22px; line-height: 1;
+            cursor: pointer; padding: 4px 8px; border-radius: 6px;
+        }
+        .cg-signup-card-x:hover { color: rgba(255,255,255,0.95); background: rgba(255,255,255,0.08); }
+        .cg-signup-card-left { flex: 1; min-width: 0; }
+        .cg-signup-card-pill {
+            display: inline-block;
+            background: rgba(110,168,254,0.20);
+            color: #6ea8fe;
+            font-size: 11.5px;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 999px;
+            margin-bottom: 10px;
+            letter-spacing: 0.3px;
+        }
+        .cg-signup-card-title {
+            margin: 0 0 6px;
+            font-size: 22px;
+            font-weight: 800;
+            color: #fff;
+            line-height: 1.2;
+        }
+        .cg-signup-card-sub {
+            margin: 0;
+            font-size: 14px;
+            color: rgba(255,255,255,0.72);
+            line-height: 1.5;
+        }
+        .cg-signup-card-right {
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
+            min-width: 220px;
+        }
+        .cg-signup-card-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #6ea8fe, #9b7bff);
+            color: #08101f;
+            text-decoration: none;
+            font-weight: 800;
+            font-size: 15.5px;
+            padding: 14px 22px;
+            border-radius: 14px;
+            box-shadow: 0 8px 20px rgba(110,168,254,0.40);
+            transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+        }
+        .cg-signup-card-btn:hover {
+            filter: brightness(1.08);
+            box-shadow: 0 10px 24px rgba(110,168,254,0.50);
+        }
+        .cg-signup-card-btn:active { transform: scale(0.97); }
+        .cg-signup-card-btn-arrow {
+            font-weight: 900;
+            transition: transform 0.15s ease;
+        }
+        .cg-signup-card-btn:hover .cg-signup-card-btn-arrow { transform: translateX(3px); }
+        .cg-signup-card-foot {
+            text-align: center;
+            font-size: 11.5px;
+            color: rgba(255,255,255,0.5);
+        }
+        @media (max-width: 720px) {
+            .cg-signup-card {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 16px;
+                padding: 20px 18px;
+            }
+            .cg-signup-card-title { font-size: 19px; }
+            .cg-signup-card-sub { font-size: 13.5px; }
+            .cg-signup-card-right { min-width: 0; }
+            .cg-signup-card-btn { padding: 13px 20px; font-size: 15px; }
+        }
+        @media (max-width: 480px) {
+            .cg-signup-card-wrap { margin: 22px 0 24px; }
+            .cg-signup-card { padding: 18px 16px; }
+            .cg-signup-card-title { font-size: 18px; }
+        }
+    </style>
     <script>
-        // Se la card era già stata chiusa in questa sessione, non mostrarla
         try {
             if (sessionStorage.getItem('cg_signup_card_dismissed') === '1') {
-                var s = document.getElementById('signup-card-section');
+                var s = document.getElementById('cg-signup-card-wrap');
                 if (s) s.style.display = 'none';
             }
         } catch (_) { /* sessionStorage non disponibile, ignora */ }

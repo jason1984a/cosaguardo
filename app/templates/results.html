@@ -34,6 +34,141 @@
         <div class="results-count-row">
             <span class="results-count-label">{{ recommendations|length }} consigli</span>
         </div>
+
+        {# ── Prompt registrazione SOPRA i consigli — solo per ospiti ─────
+           L'utente ha appena ricevuto la lista di consigli. Posizionato
+           in alto (non in fondo) per essere VISTO senza scrollare 10 card.
+           Design v2: banner orizzontale slim, CTA destro evidente,
+           inline CSS per non dipendere da style.css globale. #}
+        {% if not is_logged_in %}
+        <div class="cg-signup-prompt-wrap" id="cg-signup-prompt-wrap">
+            <div class="cg-signup-prompt">
+                <button type="button" class="cg-signup-prompt-x"
+                        aria-label="Chiudi"
+                        onclick="document.getElementById('cg-signup-prompt-wrap').style.display='none'; try{sessionStorage.setItem('cg_signup_prompt_dismissed','1');}catch(_){}">×</button>
+                <div class="cg-signup-prompt-left">
+                    <div class="cg-signup-prompt-pill">💾 Salva i tuoi consigli</div>
+                    <h3 class="cg-signup-prompt-title">Registrati per non perderli</h3>
+                    <p class="cg-signup-prompt-sub">Salva queste raccomandazioni, traccia cosa guardi e ricevi nuovi suggerimenti ogni giorno.</p>
+                </div>
+                <div class="cg-signup-prompt-right">
+                    <a href="/register" class="cg-signup-prompt-btn">
+                        Crea account
+                        <span class="cg-signup-prompt-btn-arrow">→</span>
+                    </a>
+                    <span class="cg-signup-prompt-foot">Gratis · 10 secondi · No spam</span>
+                </div>
+            </div>
+        </div>
+        <style>
+            .cg-signup-prompt-wrap {
+                margin: 0 0 28px;
+            }
+            .cg-signup-prompt {
+                position: relative;
+                display: flex;
+                align-items: center;
+                gap: 24px;
+                padding: 20px 26px;
+                background: linear-gradient(135deg, rgba(110,168,254,0.18), rgba(155,123,255,0.12) 60%, rgba(110,168,254,0.08));
+                border: 1px solid rgba(110,168,254,0.36);
+                border-radius: 18px;
+                box-shadow: 0 8px 24px rgba(110,168,254,0.10);
+            }
+            .cg-signup-prompt-x {
+                position: absolute; top: 10px; right: 12px;
+                background: transparent; border: 0;
+                color: rgba(255,255,255,0.5); font-size: 22px; line-height: 1;
+                cursor: pointer; padding: 4px 8px; border-radius: 6px;
+            }
+            .cg-signup-prompt-x:hover { color: rgba(255,255,255,0.95); background: rgba(255,255,255,0.08); }
+            .cg-signup-prompt-left { flex: 1; min-width: 0; padding-right: 12px; }
+            .cg-signup-prompt-pill {
+                display: inline-block;
+                background: rgba(110,168,254,0.20);
+                color: #6ea8fe;
+                font-size: 11.5px;
+                font-weight: 800;
+                padding: 4px 10px;
+                border-radius: 999px;
+                margin-bottom: 8px;
+                letter-spacing: 0.3px;
+            }
+            .cg-signup-prompt-title {
+                margin: 0 0 4px;
+                font-size: 19px;
+                font-weight: 800;
+                color: #fff;
+                line-height: 1.25;
+            }
+            .cg-signup-prompt-sub {
+                margin: 0;
+                font-size: 13.5px;
+                color: rgba(255,255,255,0.72);
+                line-height: 1.45;
+            }
+            .cg-signup-prompt-right {
+                flex-shrink: 0;
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 6px;
+                min-width: 200px;
+            }
+            .cg-signup-prompt-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                background: linear-gradient(135deg, #6ea8fe, #9b7bff);
+                color: #08101f;
+                text-decoration: none;
+                font-weight: 800;
+                font-size: 15px;
+                padding: 13px 22px;
+                border-radius: 14px;
+                box-shadow: 0 8px 20px rgba(110,168,254,0.40);
+                transition: filter 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
+            }
+            .cg-signup-prompt-btn:hover {
+                filter: brightness(1.08);
+                box-shadow: 0 10px 24px rgba(110,168,254,0.50);
+            }
+            .cg-signup-prompt-btn:active { transform: scale(0.97); }
+            .cg-signup-prompt-btn-arrow {
+                font-weight: 900;
+                transition: transform 0.15s ease;
+            }
+            .cg-signup-prompt-btn:hover .cg-signup-prompt-btn-arrow { transform: translateX(3px); }
+            .cg-signup-prompt-foot {
+                text-align: center;
+                font-size: 11.5px;
+                color: rgba(255,255,255,0.5);
+            }
+            @media (max-width: 720px) {
+                .cg-signup-prompt {
+                    flex-direction: column;
+                    align-items: stretch;
+                    gap: 14px;
+                    padding: 18px 16px;
+                }
+                .cg-signup-prompt-left { padding-right: 28px; }
+                .cg-signup-prompt-title { font-size: 17px; }
+                .cg-signup-prompt-sub { font-size: 13px; }
+                .cg-signup-prompt-right { min-width: 0; }
+                .cg-signup-prompt-btn { padding: 13px 20px; }
+            }
+        </style>
+        <script>
+            try {
+                if (sessionStorage.getItem('cg_signup_prompt_dismissed') === '1') {
+                    var p = document.getElementById('cg-signup-prompt-wrap');
+                    if (p) p.style.display = 'none';
+                }
+            } catch (_) { /* ignora */ }
+        </script>
+        {% endif %}
+
             <div class="results-scroll-row" id="results-scroll-row">
                 {% for rec in recommendations %}
                 {% set base_path = "serie" if content_type == "tv" else "film" %}
@@ -89,48 +224,6 @@
                 {% endfor %}
             </div>
         </div>
-
-        {# ── Prompt registrazione post-risultati — solo per ospiti ──────
-           L'utente ha appena ricevuto i consigli (= percepito il valore).
-           È il momento più "caldo" per proporre la registrazione, perché
-           può essere ancorata a un beneficio concreto: salvare/ritrovare
-           QUESTI consigli. Posizionata DOPO la grid, non sopra: non
-           interferisce con il consumo del contenuto principale.
-           Dismissable per sessione via sessionStorage (chiave separata
-           dalla card home, così le due dismiss non si sovrappongono). #}
-        {% if not is_logged_in %}
-        <section class="signup-prompt-section" id="signup-prompt-section">
-            <div class="signup-prompt">
-                <button type="button" class="signup-prompt-close"
-                        aria-label="Chiudi"
-                        onclick="document.getElementById('signup-prompt-section').style.display='none'; try{sessionStorage.setItem('cg_signup_prompt_dismissed','1');}catch(_){}">×</button>
-                <div class="signup-prompt-icon">💾</div>
-                <div class="signup-prompt-body">
-                    <h3 class="signup-prompt-title">Ti sono piaciuti questi consigli?</h3>
-                    <p class="signup-prompt-text">
-                        Registrati gratis in 10 secondi per:
-                    </p>
-                    <ul class="signup-prompt-benefits">
-                        <li>Salvare i suggerimenti che ti interessano</li>
-                        <li>Tracciare cosa stai guardando</li>
-                        <li>Tornare a queste ricerche quando vuoi</li>
-                    </ul>
-                </div>
-                <div class="signup-prompt-cta">
-                    <a href="/register" class="signup-prompt-btn">Crea account →</a>
-                    <span class="signup-prompt-note">Niente carta. Niente spam.</span>
-                </div>
-            </div>
-        </section>
-        <script>
-            try {
-                if (sessionStorage.getItem('cg_signup_prompt_dismissed') === '1') {
-                    var p = document.getElementById('signup-prompt-section');
-                    if (p) p.style.display = 'none';
-                }
-            } catch (_) { /* ignora */ }
-        </script>
-        {% endif %}
 
     {% else %}
         <div class="empty-panel">
