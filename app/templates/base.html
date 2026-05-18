@@ -1183,12 +1183,30 @@
         'use strict';
 
         // ─── Configurazione ─────────────────────────────────────────────
+        // Sistema "user-earned": il banner appare SOLO se l'utente ha
+        // mostrato segnali di interesse. Tre trigger indipendenti, basta
+        // che UNO sia attivo per mostrare il banner (più 30s sulla pagina).
+        //
+        //   T1 — Visite multiple in giorni diversi (≥2 giorni distinti)
+        //   T2 — Sessione lunga (≥3 pageview + ≥2min sul sito)
+        //   T3 — Utente loggato (ha già investito = già engaged)
+        //
+        // Pagine escluse (mai banner): /register, /login, /admin/*, /recommend
+        // Desktop: mai mostrato (raramente installato da banner web).
+        // Dismiss: permanente (localStorage), una volta chiuso non torna.
+
         var STORAGE_KEY      = 'cg_install_state_v1';
         var ENGAGEMENT_KEY   = 'cg_engagement';
-        var DISMISS_DAYS     = 7;       // ricomparsa dopo X giorni se chiuso
-        var MIN_TIME_SEC     = 25;      // tempo minimo sul sito prima di mostrare
-        var MIN_PAGEVIEWS    = 2;       // pageview minime prima di mostrare
-        var INITIAL_DELAY_MS = 1500;    // ritardo dopo evento trigger
+        var VISIT_DAYS_KEY   = 'cg_visit_days_v1';   // lista giorni distinti
+        var MIN_DELAY_SEC    = 30;     // 30s minimi sulla pagina prima del banner
+        var MIN_TIME_SEC     = 120;    // T2: 2 min totali su sito (sessione)
+        var MIN_PAGEVIEWS    = 3;      // T2: 3 pageview minime (sessione)
+        var MIN_VISIT_DAYS   = 2;      // T1: 2+ giorni distinti di visita
+        var INITIAL_DELAY_MS = 5000;   // primo check ritardato di 5s (LCP safe)
+        var EXCLUDED_PATHS   = ['/register', '/login', '/recommend'];
+
+        // Flag utente loggato (da Jinja, valutato server-side a render time)
+        var IS_LOGGED_IN = {% if is_logged_in %}true{% else %}false{% endif %};
 
         // ─── Detection device/browser ───────────────────────────────────
         function isStandalone() {
@@ -1210,6 +1228,25 @@
         function isAndroid() {
             return /Android/.test(navigator.userAgent);
         }
+        function isMobile() {
+            // Pointer coarse = touch device. Width sotto 1024 = mobile/tablet.
+            // Più affidabile dell'UA sniffing (futureproof + iPad iOS13+).
+            try {
+                return window.matchMedia('(pointer: coarse)').matches
+                    && window.matchMedia('(max-width: 1024px)').matches;
+            } catch (e) {
+                // Fallback su UA se matchMedia non disponibile
+                return isIOS() || isAndroid();
+            }
+        }
+        function isExcludedPath() {
+            var p = window.location.pathname || '/';
+            // Match esatto su /register, /login, /recommend
+            if (EXCLUDED_PATHS.indexOf(p) !== -1) return true;
+            // Match prefisso /admin/*
+            if (p.indexOf('/admin') === 0) return true;
+            return false;
+        }
 
         // ─── State management ───────────────────────────────────────────
         function getState() {
@@ -1221,29 +1258,40 @@
             try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
             catch (e) {}
         }
-        function shouldShow() {
-            // Già installata? Non mostrare
-            if (isStandalone()) return false;
 
-            var s = getState();
-            // Già installata in passato → non riproporre
-            if (s.installed) return false;
-
-            // Dismiss recente → aspetta DISMISS_DAYS
-            if (s.dismissedAt) {
-                var diffDays = (Date.now() - s.dismissedAt) / (1000 * 60 * 60 * 24);
-                if (diffDays < DISMISS_DAYS) return false;
-            }
-
-            // Engagement minimo non raggiunto?
-            var eng = getEngagement();
-            if (eng.timeSec < MIN_TIME_SEC) return false;
-            if (eng.pageviews < MIN_PAGEVIEWS) return false;
-
-            return true;
+        // ─── T1: tracking giorni distinti di visita ─────────────────────
+        // Salva il giorno corrente (YYYY-MM-DD) in localStorage come array.
+        // Trigger attivo se ≥MIN_VISIT_DAYS giorni distinti.
+        function todayKey() {
+            var d = new Date();
+            var y = d.getFullYear();
+            var m = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+        function recordVisitDay() {
+            try {
+                var raw = localStorage.getItem(VISIT_DAYS_KEY) || '[]';
+                var days = JSON.parse(raw);
+                if (!Array.isArray(days)) days = [];
+                var t = todayKey();
+                if (days.indexOf(t) === -1) {
+                    days.push(t);
+                    // Mantiene solo gli ultimi 60 giorni per non gonfiare localStorage
+                    if (days.length > 60) days = days.slice(-60);
+                    localStorage.setItem(VISIT_DAYS_KEY, JSON.stringify(days));
+                }
+            } catch (_) {}
+        }
+        function getDistinctVisitDays() {
+            try {
+                var raw = localStorage.getItem(VISIT_DAYS_KEY) || '[]';
+                var days = JSON.parse(raw);
+                return Array.isArray(days) ? days.length : 0;
+            } catch (_) { return 0; }
         }
 
-        // ─── Engagement tracking ────────────────────────────────────────
+        // ─── T2: engagement (sessione lunga) ────────────────────────────
         function getEngagement() {
             try {
                 var raw = sessionStorage.getItem(ENGAGEMENT_KEY) || '{}';
@@ -1263,8 +1311,37 @@
             e.timeSec = (e.timeSec || 0) + 1;
             try { sessionStorage.setItem(ENGAGEMENT_KEY, JSON.stringify(e)); } catch (_) {}
 
-            // Trigger check ogni 5 secondi (non spam)
-            if (e.timeSec % 5 === 0) maybeShowBanner();
+            // Trigger check ogni 10 secondi (non spam)
+            if (e.timeSec % 10 === 0) maybeShowBanner();
+        }
+
+        // ─── Valutazione: deve mostrare il banner? ──────────────────────
+        function shouldShow() {
+            // Esclusioni "hard" (mai mostrare in nessun caso)
+            if (isStandalone()) return false;
+            if (!isMobile()) return false;           // solo mobile
+            if (isExcludedPath()) return false;      // pagine escluse
+            if (isIOS() && isChromeIOS()) return false; // Chrome iOS non può installare
+
+            var s = getState();
+            if (s.installed) return false;
+            if (s.dismissed) return false;           // dismiss permanente
+
+            // Tempo minimo SU QUESTA pagina (30s) — sempre richiesto
+            var eng = getEngagement();
+            if (eng.timeSec < MIN_DELAY_SEC) return false;
+
+            // ── Trigger: basta UNO dei 3 ─────────────────────────────────
+            // T3: loggato
+            if (IS_LOGGED_IN) return true;
+
+            // T1: ≥2 giorni distinti
+            if (getDistinctVisitDays() >= MIN_VISIT_DAYS) return true;
+
+            // T2: sessione lunga (≥3 pageview + ≥2 min)
+            if (eng.pageviews >= MIN_PAGEVIEWS && eng.timeSec >= MIN_TIME_SEC) return true;
+
+            return false;
         }
 
         // ─── GA4 tracking (solo se consenso accettato) ──────────────────
@@ -1298,6 +1375,18 @@
             deferredPrompt = null;
         });
 
+        // ─── Dismiss permanente ─────────────────────────────────────────
+        function dismissBanner(reason) {
+            var s = getState();
+            s.dismissed = true;
+            s.dismissedAt = Date.now();
+            s.dismissReason = reason || 'manual';
+            setState(s);
+            hideBanner();
+            hideIosGuide();
+            track('install_banner_dismissed', { reason: reason });
+        }
+
         // ─── UI: show/hide ──────────────────────────────────────────────
         var bannerShown = false;
         function showBanner() {
@@ -1311,8 +1400,20 @@
             if (!b) return;
             b.classList.add('show');
             bannerShown = true;
+
+            // Quale trigger ha attivato la mostra?
+            var trigger = 'unknown';
+            var eng = getEngagement();
+            if (IS_LOGGED_IN) trigger = 'logged_in';
+            else if (getDistinctVisitDays() >= MIN_VISIT_DAYS) trigger = 'multi_day_visit';
+            else if (eng.pageviews >= MIN_PAGEVIEWS && eng.timeSec >= MIN_TIME_SEC) trigger = 'long_session';
+
             track('install_banner_shown', {
-                platform: isIOS() ? 'ios' : (isAndroid() ? 'android' : 'desktop')
+                platform: isIOS() ? 'ios' : (isAndroid() ? 'android' : 'desktop'),
+                trigger: trigger,
+                visit_days: getDistinctVisitDays(),
+                pageviews: eng.pageviews,
+                time_sec: eng.timeSec
             });
         }
         function hideBanner() {
@@ -1333,11 +1434,6 @@
         function maybeShowBanner() {
             if (bannerShown) return;
             if (!shouldShow()) return;
-
-            // Su Chrome iOS la PWA è impossibile installarla → non mostrare nulla
-            // (avrebbe banner che non porta a nulla. L'utente deve aprire Safari.)
-            if (isIOS() && isChromeIOS()) return;
-
             showBanner();
         }
 
@@ -1423,6 +1519,7 @@
 
             // ─── Inizia tracking engagement ─────────────────────────────
             bumpPageview();
+            recordVisitDay();    // T1: registra il giorno corrente per multi-day visit trigger
             // setInterval(tickTime) ritardato di 5s: durante quei 5s la pagina
             // resta CPU-idle, permettendo a Lighthouse di chiudere la finestra
             // di misurazione LCP. Senza questo ritardo, il tick ogni 1s
@@ -1434,14 +1531,6 @@
             // Primo check dopo INITIAL_DELAY_MS, ma minimo 5s per stessa ragione
             setTimeout(maybeShowBanner, Math.max(INITIAL_DELAY_MS, 5000));
         });
-
-        function dismissBanner(reason) {
-            var s = getState();
-            s.dismissedAt = Date.now();
-            setState(s);
-            hideBanner();
-            track('install_banner_dismissed', { reason: reason });
-        }
 
         // ─── Hint quando manca deferredPrompt (es. incognito) ───────────
         function showFallbackHint(platform) {
