@@ -1672,6 +1672,62 @@ def _build_tv_detail(tmdb_id: int, d: dict) -> dict:
         return {}
 
 
+def get_tv_season_episodes(tmdb_id: int, season_number: int) -> list:
+    """
+    Fetcha la lista episodi di una stagione di una serie da TMDb.
+    Endpoint: /tv/{tmdb_id}/season/{season_number}?language=it-IT
+    Restituisce lista di dict, ognuno con i campi necessari per renderizzare
+    la sezione "Episodi" del detail page. Niente cache (la cache è gestita da
+    db.get_series_episodes_cache / db.upsert_series_episodes_cache nel chiamante).
+
+    Campi per episodio:
+      - ep:        numero episodio (intero)
+      - title:     titolo italiano TMDb (o originale come fallback)
+      - overview:  trama breve (può essere stringa vuota se non disponibile)
+      - air_date:  data uscita 'YYYY-MM-DD' (può essere stringa vuota)
+      - runtime:   durata minuti (int, 0 se ignota)
+      - still_url: URL still TMDb (poster episodio) o stringa vuota
+      - is_future: True se air_date > oggi (per badge "in uscita")
+      - vote_avg:  rating TMDb (0-10), 0 se nessun voto
+    """
+    if not TMDB_API_KEY:
+        return []
+
+    try:
+        import datetime
+        today_iso = datetime.date.today().isoformat()
+        url = f"https://api.themoviedb.org/3/tv/{int(tmdb_id)}/season/{int(season_number)}"
+        r = requests.get(url, params={
+            "api_key":  TMDB_API_KEY,
+            "language": "it-IT",
+        }, timeout=6)
+        if r.status_code != 200:
+            return []
+        d = r.json() or {}
+        eps_raw = d.get("episodes") or []
+
+        out = []
+        for ep in eps_raw:
+            air = (ep.get("air_date") or "").strip()
+            is_future = bool(air and air > today_iso)
+            still = ep.get("still_path") or ""
+            out.append({
+                "ep":        ep.get("episode_number") or 0,
+                "title":     (ep.get("name") or "").strip(),
+                "overview":  (ep.get("overview") or "").strip(),
+                "air_date":  air,
+                "runtime":   ep.get("runtime") or 0,
+                "still_url": f"https://image.tmdb.org/t/p/w300{still}" if still else "",
+                "is_future": is_future,
+                "vote_avg":  round(ep.get("vote_average") or 0, 1),
+            })
+        # Ordina per numero episodio (di solito già ordinato ma per sicurezza)
+        out.sort(key=lambda e: e["ep"])
+        return out
+    except Exception:
+        return []
+
+
 def get_cinema_news(limit: int = 8) -> list:
     """
     Contenuti editoriali dalla sezione 'Dal mondo del cinema':

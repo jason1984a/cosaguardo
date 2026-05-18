@@ -335,8 +335,23 @@ def init_db():
             )
         """)
 
+        # ─── Cache episodi per stagione (per sezione "Episodi" detail page) ───
+        # Lista episodi per ogni stagione di una serie. Refresh lazy ogni 7 gg
+        # (gli episodi futuri possono essere annunciati, i titoli cambiare).
+        # episodes_json = JSON serializzato di lista di dict episodio con
+        # campi: ep, title, overview, air_date, runtime, still_url.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS series_episodes_cache (
+                tmdb_id        INTEGER NOT NULL,
+                season_number  INTEGER NOT NULL,
+                episodes_json  TEXT,
+                cached_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (tmdb_id, season_number)
+            )
+        """)
+
         # ─── Streaming alerts (lead generation per titoli non disponibili) ────
-        # Quando un titolo NON è ancora in streaming in Italia, l'utente lascia
+        # Quando un titolo NON è ancora in streaming, l'utente lascia
         # l'email per essere avvisato quando arriva. Tabella semplice: email +
         # tmdb_id + content_type. user_id opzionale (utente loggato).
         # Future: cron job che controlla TMDb providers per ogni alert attivo,
@@ -1024,6 +1039,63 @@ def upsert_series_seasons_cache(tmdb_id: int, title: str = "",
                 cached_at     = CURRENT_TIMESTAMP
             """,
             (tmdb_id, title, total_seasons, status, last_air_date)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ─── series_episodes_cache helpers ──────────────────────────────────────
+# Cache lista episodi per (tmdb_id, season_number). TTL 7 giorni.
+# Restituisce dict {episodes: [...], cached_at: timestamp} se in cache valida,
+# None se assente o scaduta. Il caller deve gestire il fetch + save.
+
+def get_series_episodes_cache(tmdb_id: int, season_number: int,
+                              max_age_days: int = 7) -> dict | None:
+    """Restituisce dict {'episodes': list, 'cached_at': str} se in cache e
+    non scaduta, None altrimenti. episodes è già deserializzato JSON→list."""
+    import json
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT episodes_json, cached_at FROM series_episodes_cache
+            WHERE tmdb_id = ? AND season_number = ?
+              AND cached_at >= datetime('now', ?)
+            """,
+            (int(tmdb_id), int(season_number), f"-{int(max_age_days)} days")
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        try:
+            episodes = json.loads(row[0]) if row[0] else []
+        except (TypeError, ValueError):
+            return None
+        return {"episodes": episodes, "cached_at": row[1]}
+    finally:
+        conn.close()
+
+
+def upsert_series_episodes_cache(tmdb_id: int, season_number: int,
+                                  episodes: list):
+    """Salva o aggiorna la cache episodi per (tmdb_id, season_number).
+    episodes = lista di dict episodio (verrà serializzata in JSON)."""
+    import json
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO series_episodes_cache
+                (tmdb_id, season_number, episodes_json, cached_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(tmdb_id, season_number) DO UPDATE SET
+                episodes_json = excluded.episodes_json,
+                cached_at     = CURRENT_TIMESTAMP
+            """,
+            (int(tmdb_id), int(season_number), json.dumps(episodes, ensure_ascii=False))
         )
         conn.commit()
     finally:

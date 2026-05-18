@@ -46,6 +46,8 @@ from app.db import (
     list_streaming_alerts,
     streaming_alerts_stats,
     top_requested_titles,
+    get_series_episodes_cache,
+    upsert_series_episodes_cache,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -59,6 +61,7 @@ from core.recommendation_api import (
     get_top_rated_recent,
     get_detail_movie,
     get_detail_tv,
+    get_tv_season_episodes,
     get_cinema_news,
     search_movies_fast,
     get_person_detail,
@@ -1258,6 +1261,51 @@ def api_streaming_alert(request: Request, data: dict = Body(...)):
     # inserted=True → primo signup; False → email già registrata per quel titolo.
     # In entrambi i casi rispondiamo OK (UX: utente vede "✓ Ti avviseremo")
     return {"status": "ok", "already_registered": not inserted}
+
+
+# ─── Episodi di una stagione (per sezione "Episodi" del detail page) ────────
+# Restituisce la lista episodi di (tmdb_id, season_number) in JSON.
+# Cache lato server 7gg (series_episodes_cache). Cache HTTP 1h.
+# Usato dal JS in detail.html che fa fetch async al tap della tab stagione.
+@app.get("/api/series/{tmdb_id}/season/{season_number}/episodes")
+def api_series_season_episodes(tmdb_id: int, season_number: int):
+    if tmdb_id <= 0 or season_number < 0 or season_number > 50:
+        raise HTTPException(status_code=400, detail="parametri non validi")
+
+    # 1. Cache hit?
+    cached = get_series_episodes_cache(tmdb_id, season_number, max_age_days=7)
+    if cached is not None:
+        return JSONResponse(
+            content={
+                "season":   season_number,
+                "episodes": cached["episodes"],
+                "cached":   True,
+            },
+            headers={"Cache-Control": "public, max-age=3600"}
+        )
+
+    # 2. Cache miss → fetch TMDb
+    try:
+        episodes = get_tv_season_episodes(tmdb_id, season_number)
+    except Exception as e:
+        log.warning("get_tv_season_episodes fallita per %s/%s: %s",
+                    tmdb_id, season_number, e)
+        episodes = []
+
+    # 3. Salva in cache anche se vuota (evita retry continui su serie senza dati)
+    try:
+        upsert_series_episodes_cache(tmdb_id, season_number, episodes)
+    except Exception as e:
+        log.warning("upsert_series_episodes_cache fallita: %s", e)
+
+    return JSONResponse(
+        content={
+            "season":   season_number,
+            "episodes": episodes,
+            "cached":   False,
+        },
+        headers={"Cache-Control": "public, max-age=3600"}
+    )
 
 
 @app.delete("/api/series/track/{tmdb_id}")
