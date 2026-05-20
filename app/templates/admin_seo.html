@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+{% block title %}Admin SEO Refresh — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<div style="padding-bottom:48px;">
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#93c5fd;margin-bottom:4px;">
+                🔐 Area Admin
+            </div>
+            <h1 style="font-size:1.6rem;font-weight:900;margin:0;">SEO Refresh</h1>
+            <p style="font-size:0.85rem;color:var(--muted);margin:6px 0 0;">
+                Pagine SEO indicizzabili: evergreen + new releases + detection nuove stagioni
+            </p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="/admin/utenti" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);">
+                ← Utenti
+            </a>
+            <form action="/admin/logout" method="post" style="display:inline;">
+                <button type="submit" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);font-family:inherit;">
+                    Esci dall'admin
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {# Conferma post-trigger (?triggered=1) #}
+    {% if request.query_params.get('triggered') %}
+    <div style="margin-bottom:20px;padding:12px 16px;background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.3);border-radius:10px;color:#86efac;font-size:0.88rem;">
+        ✓ Refresh avviato in background. Aggiorna la pagina tra qualche minuto per vedere il risultato.
+    </div>
+    {% endif %}
+
+    <!-- ALERT freschezza ultimo run -->
+    {% if last_age_days is not none %}
+        {% if last_age_days > 7 %}
+        <div style="margin-bottom:20px;padding:14px 16px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);border-radius:10px;">
+            <strong style="color:#fca5a5;">⚠️ Ultimo refresh {{ "%.0f"|format(last_age_days) }} giorni fa</strong>
+            <div style="font-size:0.82rem;color:var(--muted);margin-top:4px;">
+                Il job settimanale dovrebbe girare ogni lunedì 03:00. Qualcosa non torna: esegui un refresh manuale.
+            </div>
+        </div>
+        {% elif last_age_days > 3 %}
+        <div style="margin-bottom:20px;padding:12px 16px;background:rgba(251,191,36,0.10);border:1px solid rgba(251,191,36,0.30);border-radius:10px;">
+            <span style="color:#fbbf24;">Ultimo refresh {{ "%.1f"|format(last_age_days) }}gg fa — tutto regolare.</span>
+        </div>
+        {% endif %}
+    {% else %}
+    <div style="margin-bottom:20px;padding:14px 16px;background:rgba(110,168,254,0.10);border:1px solid rgba(110,168,254,0.30);border-radius:10px;">
+        <strong style="color:#93c5fd;">ℹ️ Nessun refresh ancora eseguito</strong>
+        <div style="font-size:0.82rem;color:var(--muted);margin-top:4px;">
+            Il primo refresh partirà in automatico (catchup all'avvio app, o lunedì 03:00). Puoi anche forzarlo qui sotto.
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Scheduler status -->
+    {% if scheduler_disabled %}
+    <div style="margin-bottom:20px;padding:12px 16px;background:rgba(248,113,113,0.10);border:1px solid rgba(248,113,113,0.30);border-radius:10px;color:#fca5a5;font-size:0.85rem;">
+        🛑 <strong>Scheduler disabilitato</strong> (env <code>DISABLE_SEO_REFRESH</code> attiva). Solo trigger manuale.
+    </div>
+    {% endif %}
+
+    <!-- STATS -->
+    <div class="admin-stats-grid">
+        <div class="admin-stat">
+            <div class="admin-stat-val">{{ stats.total }}</div>
+            <div class="admin-stat-label">Pagine SEO totali</div>
+            <div style="font-size:0.65rem;color:var(--muted);margin-top:3px;">cap {{ stats.cap_total }}</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#a78bfa;">{{ stats.by_type.movie or 0 }}</div>
+            <div class="admin-stat-label">🎬 Film</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#a78bfa;">{{ stats.by_type.tv or 0 }}</div>
+            <div class="admin-stat-label">📺 Serie TV</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#fbbf24;">{{ stats.by_source.evergreen or 0 }}</div>
+            <div class="admin-stat-label">Evergreen</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#4ade80;">{{ stats.by_source.new_release or 0 }}</div>
+            <div class="admin-stat-label">New release</div>
+            <div style="font-size:0.65rem;color:var(--muted);margin-top:3px;">cap {{ stats.cap_new_releases }}</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#f87171;">{{ stats.recent_season_bumps or 0 }}</div>
+            <div class="admin-stat-label">Bump stagioni (30gg)</div>
+        </div>
+    </div>
+
+    <!-- Bottone manuale -->
+    <div class="admin-section-header" style="margin-top:32px;">
+        <h2 style="font-size:1.05rem;font-weight:800;margin:0 0 12px;">⚡ Esegui refresh ora</h2>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 14px;">
+            Esegue: refresh evergreen (diff-only) → new releases IT → detection nuove stagioni. Durata stimata ~2-5 minuti.
+            Gira in background, puoi continuare a usare il sito.
+        </p>
+    </div>
+    <form action="/admin/seo-refresh-now" method="post" style="display:inline;">
+        <button type="submit" style="padding:12px 24px;border-radius:10px;font-size:0.9rem;font-weight:700;cursor:pointer;border:none;background:linear-gradient(135deg,#6ea8fe,#a78bfa);color:#08101f;font-family:inherit;box-shadow:0 4px 14px rgba(110,168,254,0.35);">
+            🔄 Esegui refresh adesso
+        </button>
+    </form>
+
+    <!-- ULTIMO RUN dettaglio -->
+    {% if last %}
+    <div class="admin-section-header" style="margin-top:32px;">
+        <h2 style="font-size:1.05rem;font-weight:800;margin:0 0 12px;">📊 Ultimo refresh</h2>
+    </div>
+    <div style="background:rgba(22,31,61,0.5);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:18px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;">
+            <div>
+                <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin-bottom:4px;">Trigger</div>
+                <div style="font-weight:600;">{{ last.trigger or '—' }}</div>
+            </div>
+            <div>
+                <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin-bottom:4px;">Durata</div>
+                <div style="font-weight:600;">{{ "%.1f"|format(last.duration_seconds or 0) }}s</div>
+            </div>
+            <div>
+                <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin-bottom:4px;">Evergreen diff</div>
+                <div style="font-weight:600;color:#fbbf24;">{{ last.evergreen_diff or 0 }}</div>
+            </div>
+            <div>
+                <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin-bottom:4px;">New aggiunti</div>
+                <div style="font-weight:600;color:#4ade80;">+{{ last.new_added or 0 }}</div>
+            </div>
+            <div>
+                <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin-bottom:4px;">Stagioni rilevate</div>
+                <div style="font-weight:600;color:#a78bfa;">{{ last.seasons_detected or 0 }}</div>
+            </div>
+            <div>
+                <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin-bottom:4px;">Stale rimossi</div>
+                <div style="font-weight:600;color:#f87171;">−{{ (last.evergreen_removed or 0) + (last.new_removed or 0) }}</div>
+            </div>
+        </div>
+        {% if last.error %}
+        <div style="margin-top:14px;padding:10px 12px;background:rgba(248,113,113,0.10);border:1px solid rgba(248,113,113,0.30);border-radius:8px;color:#fca5a5;font-size:0.82rem;font-family:monospace;word-break:break-all;">
+            ⚠️ {{ last.error }}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- LOG ULTIMI 10 RUN -->
+    {% if recent %}
+    <div class="admin-section-header" style="margin-top:32px;">
+        <h2 style="font-size:1.05rem;font-weight:800;margin:0 0 12px;">📅 Storico ultime esecuzioni</h2>
+    </div>
+    <div class="admin-table-wrap">
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Trigger</th>
+                    <th>Durata</th>
+                    <th>Evergreen diff</th>
+                    <th>New +</th>
+                    <th>Stagioni</th>
+                    <th>Esito</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in recent %}
+                <tr>
+                    <td style="font-size:0.78rem;white-space:nowrap;">
+                        {% if r.started_at %}
+                            {{ r.started_at | int }} <!-- raw ts; rendering lato JS sotto -->
+                        {% else %}—{% endif %}
+                    </td>
+                    <td><span class="admin-badge">{{ r.trigger or '—' }}</span></td>
+                    <td style="font-size:0.82rem;">{{ "%.1f"|format(r.duration_seconds or 0) }}s</td>
+                    <td style="font-size:0.82rem;color:#fbbf24;">{{ r.evergreen_diff or 0 }}</td>
+                    <td style="font-size:0.82rem;color:#4ade80;">+{{ r.new_added or 0 }}</td>
+                    <td style="font-size:0.82rem;color:#a78bfa;">{{ r.seasons_detected or 0 }}</td>
+                    <td>
+                        {% if r.error %}
+                        <span class="admin-badge" style="background:rgba(248,113,113,0.15);color:#fca5a5;">⚠️ errore</span>
+                        {% elif r.finished_at %}
+                        <span class="admin-badge" style="background:rgba(74,222,128,0.15);color:#4ade80;">✓ OK</span>
+                        {% else %}
+                        <span class="admin-badge" style="background:rgba(251,191,36,0.15);color:#fbbf24;">⏳ in corso</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <script>
+    // Render dei timestamp lato client (locale Europe/Rome del browser)
+    document.querySelectorAll('.admin-table tbody tr td:first-child').forEach(function(td) {
+        var ts = parseInt(td.textContent.trim(), 10);
+        if (!isNaN(ts) && ts > 0) {
+            var d = new Date(ts * 1000);
+            td.textContent = d.toLocaleString('it-IT', {
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+    });
+    </script>
+    {% endif %}
+
+    <!-- INFO ENDPOINT HTTP TOKEN -->
+    <div class="admin-section-header" style="margin-top:32px;">
+        <h2 style="font-size:1.05rem;font-weight:800;margin:0 0 12px;">🔐 Trigger via HTTP esterno</h2>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 14px;">
+            Endpoint protetto da token in env <code>SEO_REFRESH_TOKEN</code>. Da chiamare da cron-job.org / UptimeRobot / GitHub Actions se mai vuoi sostituire lo scheduler interno.
+        </p>
+    </div>
+    <div style="background:rgba(22,31,61,0.5);border:1px solid rgba(255,255,255,0.06);border-radius:14px;padding:16px;">
+        {% if http_token_set %}
+            <div style="color:#4ade80;font-size:0.85rem;margin-bottom:8px;">✓ Token configurato</div>
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:8px;">Endpoint:</div>
+            <code style="display:block;padding:10px;background:#0b1024;border-radius:6px;font-size:0.78rem;color:#cbd5e1;word-break:break-all;">
+                POST https://cosaguardo.com/admin/seo-refresh-trigger?token=&lt;SEO_REFRESH_TOKEN&gt;
+            </code>
+        {% else %}
+            <div style="color:#fbbf24;font-size:0.85rem;margin-bottom:8px;">⚠️ Token NON configurato</div>
+            <div style="font-size:0.82rem;color:var(--muted);">
+                Setta env var <code style="color:#93c5fd;">SEO_REFRESH_TOKEN</code> su Render con una stringa segreta lunga (es. <code>openssl rand -hex 32</code>) per abilitare l'endpoint HTTP esterno.
+                Fino a quel momento, l'endpoint restituisce 403.
+            </div>
+        {% endif %}
+    </div>
+
+</div>
+
+<style>
+/* Riuso CSS stile admin_streaming_alerts per coerenza visuale */
+.admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.admin-stat {
+    background: rgba(22,31,61,0.7);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+    backdrop-filter: blur(8px);
+}
+.admin-stat-val {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: #93c5fd;
+    line-height: 1;
+    margin-bottom: 4px;
+    letter-spacing: -0.03em;
+}
+.admin-stat-label {
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+}
+.admin-section-header { margin: 24px 0 14px; }
+.admin-table-wrap {
+    background: rgba(22,31,61,0.5);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    overflow-x: auto;
+}
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.admin-table thead th {
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    white-space: nowrap;
+}
+.admin-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+}
+.admin-table tbody tr:last-child td { border-bottom: 0; }
+.admin-table tbody tr:hover { background: rgba(255,255,255,0.025); }
+.admin-badge {
+    display: inline-block;
+    padding: 3px 9px;
+    background: rgba(110,168,254,0.12);
+    color: #93c5fd;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+@media (max-width: 720px) {
+    .admin-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .admin-stat-val { font-size: 1.5rem; }
+    .admin-table { font-size: 0.78rem; }
+    .admin-table thead th, .admin-table tbody td { padding: 10px 12px; }
+}
+</style>
+{% endblock %}

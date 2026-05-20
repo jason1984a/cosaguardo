@@ -310,6 +310,22 @@
     <section class="dv-section">
         <h2 class="dv-section-title">📺 Su quali piattaforme streaming è disponibile in Italia?</h2>
 
+        {% if season_bump and season_bump.seasons_count %}
+        {# Banner "🆕 Nuova stagione disponibile" — popolato solo se la serie ha avuto
+           un bump di seasons_count negli ultimi 60gg (rilevato dal job settimanale). #}
+        <div style="margin:0 0 18px;padding:14px 18px;background:linear-gradient(135deg,rgba(168,85,247,0.16),rgba(110,168,254,0.12));border:1px solid rgba(168,85,247,0.4);border-radius:14px;display:flex;align-items:center;gap:12px;">
+            <div style="font-size:24px;flex-shrink:0;">🆕</div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:800;font-size:15px;margin-bottom:2px;color:#fff;">
+                    Stagione {{ season_bump.seasons_count }} disponibile
+                </div>
+                <div style="font-size:13px;color:#cbd5e1;">
+                    Una nuova stagione di {{ item.title }} è da poco disponibile. Controlla qui sotto su quali piattaforme.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         {% if detail.providers and (detail.providers.flatrate or detail.providers.rent) %}
 
             {% if detail.providers.flatrate %}

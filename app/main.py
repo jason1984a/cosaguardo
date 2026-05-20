@@ -78,6 +78,9 @@ from core.seo_pages import (
     get_title_by_slug, list_seo_titles, list_all_slugs_for_sitemap,
     populate_seo_titles_db, seo_titles_count, slugify, get_similar_for_seo,
     get_slug_by_tmdb_id,
+    # Refresh settimanale + admin dashboard
+    weekly_seo_refresh, get_last_refresh_info, list_recent_refresh_log,
+    get_seo_stats, get_seasons_bump_info,
 )
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -221,6 +224,124 @@ def _start_scheduled_restart_thread():
         )
     except Exception:
         pass
+
+
+# ─── SEO REFRESH SCHEDULER ───────────────────────────────────────────────
+# Job settimanale che aggiorna le pagine SEO: refresh evergreen, aggiunge new releases,
+# detect nuove stagioni. Vedi core/seo_pages.py::weekly_seo_refresh.
+#
+# Strategia:
+# - Allo startup controlla `last_run` in DB (seo_refresh_log)
+# - Se ultimo run >7gg fa (o assente) → CATCHUP: esegue subito in background
+# - In ogni caso schedula il prossimo lunedì 03:00 Europe/Rome via threading.Timer
+# - Al completamento del job, rischedula per il lunedì successivo
+#
+# Resistenza al restart 6h: ad ogni startup ricalcola "tempo al prossimo lunedì 03:00"
+# e si re-arma. Se il restart cade durante il job, perdiamo solo l'esecuzione corrente
+# ma il prossimo run sarà schedulato correttamente al successivo startup.
+#
+# Disabilitabile via env DISABLE_SEO_REFRESH=1 (per debug locale).
+
+def _seconds_until_next_monday_3am_rome() -> float:
+    """
+    Calcola i secondi mancanti al prossimo lunedì 03:00 Europe/Rome (gestisce DST).
+
+    Implementazione: usa zoneinfo (stdlib Python 3.9+) per timezone Rome.
+    Se oggi è lunedì e sono prima delle 03:00 → restituisce i secondi fino alle 03:00 di oggi.
+    Altrimenti → secondi fino al prossimo lunedì 03:00.
+    """
+    from datetime import datetime, timedelta
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("Europe/Rome")
+    except Exception:
+        # Fallback se zoneinfo non disponibile: usa UTC+1 fisso (no DST handling).
+        # Su Render con Python 3.11+ zoneinfo è sempre disponibile.
+        from datetime import timezone
+        tz = timezone(timedelta(hours=1))
+
+    now = datetime.now(tz)
+    # weekday(): lunedì=0, ... domenica=6
+    days_to_monday = (0 - now.weekday()) % 7  # 0 se oggi è lunedì
+    target = (now + timedelta(days=days_to_monday)).replace(hour=3, minute=0, second=0, microsecond=0)
+    if target <= now:
+        # Già passate le 03:00 di lunedì → vai al prossimo lunedì
+        target += timedelta(days=7)
+    return (target - now).total_seconds()
+
+
+def _seo_refresh_worker():
+    """Worker del thread daemon: dorme fino al prossimo lunedì 03:00, esegue, ri-arma."""
+    import time as _time
+    while True:
+        sleep_s = _seconds_until_next_monday_3am_rome()
+        log.info(
+            "_seo_refresh: prossima esecuzione fra %.1fh (%.0fs)",
+            sleep_s / 3600, sleep_s
+        )
+        _time.sleep(sleep_s)
+        try:
+            log.info("_seo_refresh: avvio weekly_seo_refresh (trigger=scheduler)")
+            result = weekly_seo_refresh(trigger="scheduler")
+            log.info("_seo_refresh: completato — %s", result)
+        except Exception as e:
+            # Catturato già internamente da weekly_seo_refresh (errors nel log DB),
+            # ma logghiamo qui per visibilità su Render Logs.
+            log.exception("_seo_refresh: errore non gestito: %s", e)
+        # Loop continua → ricalcola prossimo lunedì
+
+
+def _seo_catchup_if_overdue():
+    """Allo startup: se l'ultimo refresh è >7gg fa, esegue subito in background.
+    Skippato in dev via DISABLE_SEO_REFRESH=1."""
+    try:
+        last = get_last_refresh_info()
+        if last and last.get("started_at"):
+            age_days = (_time.time() - last["started_at"]) / 86400
+            if age_days < 7:
+                log.info(
+                    "_seo_refresh: ultimo run %.1fgg fa, niente catchup",
+                    age_days
+                )
+                return
+            log.info(
+                "_seo_refresh: ultimo run %.1fgg fa (>7gg) → catchup in background",
+                age_days
+            )
+        else:
+            log.info("_seo_refresh: nessun run precedente → catchup in background")
+
+        # Esegui in thread separato per non bloccare lo startup
+        import threading
+        threading.Thread(
+            target=lambda: weekly_seo_refresh(trigger="startup_catchup"),
+            daemon=True,
+            name="seo_catchup"
+        ).start()
+    except Exception as e:
+        log.exception("_seo_refresh: errore in _seo_catchup_if_overdue: %s", e)
+
+
+@app.on_event("startup")
+def _start_seo_refresh_scheduler():
+    """Avvia scheduler SEO + esegue catchup se in ritardo.
+    Disabilitabile via env DISABLE_SEO_REFRESH=1 (per dev/test)."""
+    if os.environ.get("DISABLE_SEO_REFRESH"):
+        log.info("_seo_refresh: SKIP (DISABLE_SEO_REFRESH set)")
+        return
+
+    # 1. Catchup se ultimo run >7gg
+    _seo_catchup_if_overdue()
+
+    # 2. Avvia thread per prossimo lunedì 03:00
+    import threading
+    t = threading.Thread(
+        target=_seo_refresh_worker,
+        daemon=True,
+        name="seo_refresh_scheduler"
+    )
+    t.start()
+    log.info("_seo_refresh: scheduler avviato (prossimo lunedì 03:00 Europe/Rome)")
 
 
 # ─── Anti-scanner middleware ─────────────────────────────────────────────
@@ -2349,6 +2470,11 @@ def dove_vedere_detail(request: Request, slug: str):
         # Sezione "altri titoli simili" è opzionale per la pagina dove-vedere.
         log.warning("dove_vedere: similar_titles fallback per slug=%s: %s", item.get("slug"), e)
 
+    # Detection nuova stagione (solo TV, attiva se bump negli ultimi 60gg)
+    season_bump = None
+    if item["content_type"] == "tv":
+        season_bump = get_seasons_bump_info(item["slug"])
+
     return templates.TemplateResponse(
         request=request,
         name="dove_vedere.html",
@@ -2357,6 +2483,7 @@ def dove_vedere_detail(request: Request, slug: str):
             "item": item,
             "detail": detail,
             "similar_titles": similar_titles,
+            "season_bump": season_bump,
         },
     )
 
@@ -2422,13 +2549,15 @@ def come_simili(request: Request, slug: str):
 
 @app.get("/admin/refresh-seo")
 def admin_refresh_seo(request: Request):
-    """Rigenera le 800 pagine SEO da TMDb. Solo admin loggato.
-    Da chiamare manualmente o via cron settimanale."""
+    """Esegue il refresh SEO completo (evergreen + new_releases + nuove stagioni).
+
+    JSON endpoint legacy mantenuto per backward-compat. Dashboard HTML in /admin/seo.
+    """
     if not _check_admin(request):
         return RedirectResponse(url="/admin", status_code=302)
 
     try:
-        result = populate_seo_titles_db()
+        result = weekly_seo_refresh(trigger="admin_manual")
         return {"status": "ok", **result}
     except Exception as e:
         log.exception("admin_refresh_seo: %s", e)
@@ -2437,7 +2566,7 @@ def admin_refresh_seo(request: Request):
 
 @app.get("/admin/seo-stats")
 def admin_seo_stats(request: Request):
-    """Quante pagine SEO sono attualmente in DB."""
+    """Quante pagine SEO sono attualmente in DB (JSON, backward-compat)."""
     if not _check_admin(request):
         return RedirectResponse(url="/admin", status_code=302)
 
@@ -2445,7 +2574,91 @@ def admin_seo_stats(request: Request):
         "total": seo_titles_count(),
         "movies": list_seo_titles(content_type="movie", page=1, per_page=1)[1],
         "tv": list_seo_titles(content_type="tv", page=1, per_page=1)[1],
+        **get_seo_stats(),
     }
+
+
+@app.get("/admin/seo", response_class=HTMLResponse)
+def admin_seo_dashboard(request: Request):
+    """Dashboard SEO admin: stats aggregati + ultimo refresh + log esecuzioni + bottone manuale."""
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    stats = get_seo_stats()
+    last = get_last_refresh_info()
+    recent = list_recent_refresh_log(limit=10)
+
+    # Calcola "age" del last_run per display (giorni)
+    last_age_days = None
+    if last and last.get("started_at"):
+        last_age_days = (_time.time() - last["started_at"]) / 86400
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_seo.html",
+        context={
+            "request": request,
+            "stats": stats,
+            "last": last,
+            "last_age_days": last_age_days,
+            "recent": recent,
+            "scheduler_disabled": bool(os.environ.get("DISABLE_SEO_REFRESH")),
+            "http_token_set": bool(os.environ.get("SEO_REFRESH_TOKEN")),
+        },
+    )
+
+
+@app.post("/admin/seo-refresh-now")
+def admin_seo_refresh_now(request: Request):
+    """Trigger manuale refresh dalla dashboard /admin/seo.
+    Esegue in BACKGROUND (non blocca la response) per evitare timeout su pagina admin.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    # Esegui in background per non bloccare
+    import threading
+    threading.Thread(
+        target=lambda: weekly_seo_refresh(trigger="admin_manual"),
+        daemon=True,
+        name="seo_manual_refresh"
+    ).start()
+
+    return RedirectResponse(url="/admin/seo?triggered=1", status_code=303)
+
+
+@app.post("/admin/seo-refresh-trigger")
+def admin_seo_refresh_http_trigger(request: Request, token: str = ""):
+    """Endpoint HTTP per trigger esterno (cron-job.org, UptimeRobot, GitHub Actions, ecc.).
+
+    Protetto da token segreto in env var SEO_REFRESH_TOKEN. Se la env var non è settata,
+    l'endpoint è DISABILITATO (ritorna 403). Questo evita di esporre un trigger
+    pubblico per errore.
+
+    Esempio uso esterno:
+      curl -X POST 'https://cosaguardo.com/admin/seo-refresh-trigger?token=XXX'
+
+    Esegue in BACKGROUND e ritorna subito (200 + JSON) per evitare timeout del caller.
+    """
+    expected_token = os.environ.get("SEO_REFRESH_TOKEN", "")
+    if not expected_token:
+        return JSONResponse(
+            status_code=403,
+            content={"error": "endpoint disabled (SEO_REFRESH_TOKEN env not set)"}
+        )
+    # Confronto sicuro (constant-time)
+    import hmac
+    if not hmac.compare_digest(token, expected_token):
+        return JSONResponse(status_code=403, content={"error": "invalid token"})
+
+    import threading
+    threading.Thread(
+        target=lambda: weekly_seo_refresh(trigger="http_token"),
+        daemon=True,
+        name="seo_http_refresh"
+    ).start()
+
+    return JSONResponse(content={"status": "ok", "message": "refresh started in background"})
 
 
 @app.get("/admin/debug-come/{slug}")
