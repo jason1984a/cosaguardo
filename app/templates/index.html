@@ -126,6 +126,28 @@
         @media (max-width: 380px) {
             .cg-howit-arrow { display: none; }
         }
+
+        /* Mobile reorder: il search panel è il CORE del prodotto e deve stare
+           nel first viewport. Su desktop la strip "Come funziona" sta sotto l'hero
+           perché didascalica/onboarding. Su mobile spostiamo visivamente i blocchi
+           con CSS order (DOM invariato) per dare priorità al search.
+           Ordine visivo mobile: hero → search → strip → platform → trending → resto. */
+        @media (max-width: 600px) {
+            .page-home {
+                display: flex;
+                flex-direction: column;
+            }
+            .page-home > .home-hero          { order: 1; }
+            .page-home > .search-panel       { order: 2; }
+            .page-home > .cg-howit-strip     { order: 3; }
+            .page-home > .platform-strip     { order: 4; }
+            .page-home > .hero-trending-strip{ order: 5; }
+            /* Tutti gli altri sibling restano nel loro ordine DOM naturale dopo (order:0 default
+               sarebbe PRIMA dei nostri 1-5 → diamo order alto per tenerli dopo). */
+            .page-home > *:not(.home-hero):not(.search-panel):not(.cg-howit-strip):not(.platform-strip):not(.hero-trending-strip) {
+                order: 6;
+            }
+        }
     </style>
 
     {# Striscia piattaforme streaming: loghi TMDb caricati via fetch async.
