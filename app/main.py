@@ -2882,6 +2882,19 @@ def termini(request: Request):
     return templates.TemplateResponse(request=request, name="termini.html", context={"request": request})
 
 
+@app.get("/come-funziona", response_class=HTMLResponse)
+def come_funziona(request: Request):
+    """
+    Pagina "Come funziona CosaGuardo": valore proposition + 3 step + diff vs
+    competitor + FAQ con schema.org/FAQPage per rich snippet Google.
+    SEO target: "come funziona cosaguardo", "consigli film personalizzati",
+    "cosa guardare stasera algoritmo".
+    """
+    return templates.TemplateResponse(
+        request=request, name="come_funziona.html", context={"request": request}
+    )
+
+
 @app.get("/admin/db-cache-stats")
 def admin_db_cache_stats(request: Request):
     """Statistiche tabella tmdb_cache (count, size, expired, pct cap)."""

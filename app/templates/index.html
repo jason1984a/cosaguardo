@@ -24,6 +24,110 @@
         </div>
     </section>
 
+    {# Mini-strip "Come funziona in 3 step" — didascalica per nuovi visitatori,
+       compatta su desktop (riga unica), stacked verticale su mobile.
+       Link "Come funziona →" porta alla pagina full /come-funziona.
+       CSS inline (convenzione CosaGuardo per componenti critici). #}
+    <section class="cg-howit-strip" aria-label="Come funziona in 3 passi">
+        <div class="cg-howit-steps">
+            <div class="cg-howit-step">
+                <span class="cg-howit-icon" aria-hidden="true">✏️</span>
+                <span class="cg-howit-text">Inserisci 2-3 titoli che ami</span>
+            </div>
+            <span class="cg-howit-arrow" aria-hidden="true">→</span>
+            <div class="cg-howit-step">
+                <span class="cg-howit-icon" aria-hidden="true">🧠</span>
+                <span class="cg-howit-text">L'algoritmo trova i simili</span>
+            </div>
+            <span class="cg-howit-arrow" aria-hidden="true">→</span>
+            <div class="cg-howit-step">
+                <span class="cg-howit-icon" aria-hidden="true">📺</span>
+                <span class="cg-howit-text">Scopri dove vederli in Italia</span>
+            </div>
+        </div>
+        <a href="/come-funziona" class="cg-howit-link">Come funziona <span aria-hidden="true">›</span></a>
+    </section>
+    <style>
+        /* Mini-strip "Come funziona in 3 step".
+           Desktop: riga unica orizzontale, sobria, no ombre pesanti.
+           Mobile: stacked compatto, niente frecce orizzontali (sostituite),
+           altezza contenuta per non spingere giù il fold. */
+        .cg-howit-strip {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin: 8px 0 18px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.025);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 12px;
+        }
+        .cg-howit-steps {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .cg-howit-step {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13.5px;
+            color: var(--text);
+            white-space: nowrap;
+        }
+        .cg-howit-icon {
+            font-size: 16px;
+            line-height: 1;
+        }
+        .cg-howit-arrow {
+            color: var(--muted);
+            font-size: 14px;
+            opacity: 0.55;
+            flex-shrink: 0;
+        }
+        .cg-howit-link {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            white-space: nowrap;
+            transition: color .15s;
+            flex-shrink: 0;
+        }
+        .cg-howit-link:hover { color: var(--text); }
+        .cg-howit-link span { margin-left: 2px; }
+
+        /* Tablet medio: nascondi il testo, mostra solo icone */
+        @media (max-width: 880px) {
+            .cg-howit-text { display: none; }
+            .cg-howit-step { gap: 0; }
+        }
+
+        /* Mobile: riduci ulteriormente, mantieni compatta su una riga.
+           Niente padding/altezza extra: la home ha tante sezioni e questa
+           deve restare leggera. */
+        @media (max-width: 600px) {
+            .cg-howit-strip {
+                padding: 10px 12px;
+                margin: 6px 0 14px;
+                gap: 8px;
+            }
+            .cg-howit-steps { gap: 8px; }
+            .cg-howit-icon { font-size: 15px; }
+            .cg-howit-arrow { font-size: 12px; }
+            .cg-howit-link { font-size: 12px; }
+        }
+
+        /* Mobile molto piccolo: nascondi le frecce, lascia solo icone + link */
+        @media (max-width: 380px) {
+            .cg-howit-arrow { display: none; }
+        }
+    </style>
+
     {# Striscia piattaforme streaming: loghi TMDb caricati via fetch async.
        Decorativa per ora (no click); diventerà cliccabile quando aggiungeremo
        la pagina filtro per piattaforma. #}
