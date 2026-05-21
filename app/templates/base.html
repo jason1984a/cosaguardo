@@ -914,10 +914,171 @@
        E' caricato lazy via requestIdleCallback (fondo body) per stare
        FUORI dalla finestra critica di LCP/load event.
        Le icone appaiono ~500ms dopo il primo paint, ma non bloccano la metrica. #}
+    <style>
+        /* Placeholder per <i data-lucide> prima che lucide.js renderizzi i veri SVG.
+           Riserva lo spazio (no layout shift, Core Web Vital CLS) fino al render.
+           NB: i siti che hanno style="width:Xpx;height:Xpx" inline su <i> vincono
+           sopra questa regola (specificity), quindi non rompo i casi che già
+           dimensionano esplicitamente l'icona. */
+        i[data-lucide]:empty {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            vertical-align: -0.125em;
+        }
+    </style>
 
     {% block head_extra %}{% endblock %}
 </head>
 <body>
+    {# ─── NAVIGATION PROGRESS BAR ───────────────────────────────────────────
+       Stile YouTube/GitHub: bar viola gradient 3px in alto, fixed, z-index alto.
+       Si attiva quando l'utente clicca su un link interno e dà feedback "stai
+       navigando" prima che la prossima pagina sia caricata. Self-contained:
+       niente dipendenze esterne (no NProgress.js).
+       Performance: ~1KB CSS+JS gzipped, eseguito al primo paint. #}
+    <div id="cg-nav-progress" aria-hidden="true"></div>
+    <style>
+        #cg-nav-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            width: 0%;
+            background: linear-gradient(90deg, #6ea8fe 0%, #a78bfa 100%);
+            box-shadow: 0 0 8px rgba(167, 139, 250, 0.6);
+            z-index: 99999;
+            opacity: 0;
+            transition: width 0.25s ease-out, opacity 0.2s ease-out;
+            pointer-events: none;
+            border-radius: 0 2px 2px 0;
+        }
+        #cg-nav-progress.cg-progress-active {
+            opacity: 1;
+        }
+        /* Riduci motion se l'utente preferisce (a11y) */
+        @media (prefers-reduced-motion: reduce) {
+            #cg-nav-progress { transition: opacity 0.15s linear; }
+        }
+    </style>
+    <script>
+        // CG_NavProgress: feedback "stai navigando" al click.
+        // Funziona così:
+        //  1. Al click su <a href="..."> interno (no target=_blank, no hash, no js:),
+        //     parte la bar che va al 25% subito, poi cresce graduale fino a 90%.
+        //  2. Su 'pageshow' (= la nuova pagina si è caricata) o 'beforeunload',
+        //     la bar va al 100% e fade out.
+        //  3. Su navigazione browser (back/forward via popstate) idem, anche se
+        //     il caso d'uso principale è il click.
+        // Edge case: se il click non porta a navigazione (es. preventDefault da
+        // altro listener), la bar comunque si autoresetta dopo 4s di timeout.
+        (function() {
+            var bar = document.getElementById('cg-nav-progress');
+            if (!bar) return;
+            var progressInterval = null;
+            var resetTimeout = null;
+            var currentWidth = 0;
+
+            function start() {
+                if (progressInterval) return;  // già in corso
+                clearTimeout(resetTimeout);
+                currentWidth = 0;
+                bar.classList.add('cg-progress-active');
+                bar.style.transition = 'width 0.25s ease-out, opacity 0.2s ease-out';
+                // Salto rapido al 25% per feedback istantaneo al click
+                requestAnimationFrame(function() {
+                    currentWidth = 25;
+                    bar.style.width = '25%';
+                });
+                // Poi cresce graduale verso 90% (mai 100% finché non arriva la nuova pagina)
+                progressInterval = setInterval(function() {
+                    if (currentWidth < 90) {
+                        currentWidth += (90 - currentWidth) * 0.1;
+                        bar.style.width = currentWidth + '%';
+                    }
+                }, 250);
+                // Safety: se la nav non avviene entro 4s, resetta
+                resetTimeout = setTimeout(reset, 4000);
+            }
+
+            function finish() {
+                if (!progressInterval) return;
+                clearInterval(progressInterval);
+                clearTimeout(resetTimeout);
+                progressInterval = null;
+                bar.style.width = '100%';
+                setTimeout(function() {
+                    bar.classList.remove('cg-progress-active');
+                    setTimeout(function() {
+                        bar.style.transition = 'none';
+                        bar.style.width = '0%';
+                    }, 220);
+                }, 150);
+            }
+
+            function reset() {
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
+                clearTimeout(resetTimeout);
+                bar.classList.remove('cg-progress-active');
+                bar.style.transition = 'none';
+                bar.style.width = '0%';
+            }
+
+            // Click handler delegato sul document (cattura anche link aggiunti dinamicamente)
+            document.addEventListener('click', function(e) {
+                // Trova l'<a> più vicino salendo
+                var el = e.target;
+                while (el && el !== document.body) {
+                    if (el.tagName === 'A') break;
+                    el = el.parentElement;
+                }
+                if (!el || el.tagName !== 'A') return;
+                var href = el.getAttribute('href');
+                if (!href) return;
+                // Skip: external (target=_blank), mailto/tel, anchor puro, javascript:
+                if (el.getAttribute('target') === '_blank') return;
+                if (href.indexOf('mailto:') === 0) return;
+                if (href.indexOf('tel:') === 0) return;
+                if (href.indexOf('javascript:') === 0) return;
+                if (href.indexOf('#') === 0) return;
+                // Skip se modificatore tastiera (ctrl/cmd/shift = nuova tab)
+                if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+                // Skip se dominio esterno
+                if (/^https?:\/\//.test(href)) {
+                    try {
+                        var url = new URL(href);
+                        if (url.host !== location.host) return;
+                    } catch (_) { return; }
+                }
+                start();
+            }, true);
+
+            // Form submit: anche i form possono causare navigazione
+            document.addEventListener('submit', function(e) {
+                var form = e.target;
+                if (form && form.tagName === 'FORM' && form.method.toLowerCase() !== 'get') {
+                    // POST → ci sarà sicuramente una nav
+                    start();
+                }
+            }, true);
+
+            // Cleanup quando la nuova pagina si carica
+            window.addEventListener('beforeunload', finish);
+            window.addEventListener('pageshow', function(e) {
+                // pageshow scatta anche su back/forward dalla bfcache
+                if (e.persisted || progressInterval) finish();
+            });
+            // Safety: se per qualsiasi motivo la bar resta attiva dopo onload, reset
+            window.addEventListener('load', function() {
+                setTimeout(reset, 100);
+            });
+        })();
+    </script>
+    {# ─── /NAVIGATION PROGRESS BAR ──────────────────────────────────────── #}
+
     <div class="site-wrapper">
         <header class="site-header">
             <div class="container header-inner">

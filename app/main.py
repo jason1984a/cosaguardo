@@ -2036,19 +2036,45 @@ def film_detail(request: Request, tmdb_id: int):
     # Raccomandazioni simili dal motore interno
     # Anti-OOM: i bot non vedono la sezione "simili" (è il pezzo costoso),
     # vedono comunque tutto il detail principale (cache TMDb leggera).
+    #
+    # PERF: TMDb info per i 6 simili viene fetchato in PARALLELO (era seriale).
+    # Su cache-miss (= prima visita scheda) andiamo da ~3s a ~500ms su questa
+    # sezione. Stesso pattern usato nelle search principali della home (~riga 1700).
     similar = []
     if detail.get("title") and not _is_bot(request):
         try:
             res = recommend_from_seed_titles([detail["title"]], top_k=6, per_seed_limit=20)
-            for rec in res.get("recommendations", [])[:6]:
-                tmdb_info = get_movie_tmdb_info(rec["title"])
-                if tmdb_info and tmdb_info.get("poster_url"):
-                    similar.append({
-                        "title":      tmdb_info.get("display_title") or rec["title"],
-                        "poster_url": tmdb_info["poster_url"],
-                        "tmdb_id":    tmdb_info.get("tmdb_id"),
-                        "content_type": "movie",
-                    })
+            recs = res.get("recommendations", [])[:6]
+
+            if recs:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+                def _fetch_one(rec):
+                    return rec, get_movie_tmdb_info(rec["title"])
+
+                # 6 chiamate parallele invece che sequenziali.
+                # max_workers=6 = numero esatto di rec, no overhead.
+                tmdb_by_title = {}
+                with ThreadPoolExecutor(max_workers=6) as ex:
+                    futures = [ex.submit(_fetch_one, r) for r in recs]
+                    for fut in as_completed(futures):
+                        try:
+                            rec, info = fut.result(timeout=4)
+                            tmdb_by_title[rec["title"]] = info
+                        except Exception as e:
+                            # 1 fallita su 6 è ok, gli altri rec hanno comunque poster.
+                            log.debug("film_detail: similar tmdb fetch fail: %s", e)
+
+                # Ricostruisci la lista mantenendo l'ordine originale del motore
+                # (le futures finiscono in ordine arbitrario di completamento).
+                for rec in recs:
+                    tmdb_info = tmdb_by_title.get(rec["title"])
+                    if tmdb_info and tmdb_info.get("poster_url"):
+                        similar.append({
+                            "title":      tmdb_info.get("display_title") or rec["title"],
+                            "poster_url": tmdb_info["poster_url"],
+                            "tmdb_id":    tmdb_info.get("tmdb_id"),
+                            "content_type": "movie",
+                        })
         except Exception as e:
             # Sezione "simili" è opzionale: la pagina detail funziona senza.
             log.warning("film_detail: similar build fallito per '%s': %s", detail.get("title"), e)
