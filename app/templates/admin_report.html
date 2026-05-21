@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+{% block title %}Admin Report — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{# ─── MACRO STAT CARD — definite prima del block content per Jinja scoping ─── #}
+{% macro stat_card(label, current, previous, delta_pct, accent_color, sublabel=None) %}
+<div class="report-stat">
+    <div class="report-stat-val" style="color:{{ accent_color }};">{{ current }}</div>
+    <div class="report-stat-label">{{ label }}</div>
+    {% if sublabel %}<div class="report-stat-sublabel">{{ sublabel }}</div>{% endif %}
+    <div class="report-stat-delta">
+        {% if delta_pct is none %}
+            <span style="color:var(--muted);">— vs {{ previous }}</span>
+        {% elif delta_pct > 0 %}
+            <span style="color:#4ade80;">▲ {{ delta_pct }}%</span>
+            <span style="color:var(--muted);">vs {{ previous }}</span>
+        {% elif delta_pct < 0 %}
+            <span style="color:#f87171;">▼ {{ delta_pct|abs }}%</span>
+            <span style="color:var(--muted);">vs {{ previous }}</span>
+        {% else %}
+            <span style="color:var(--muted);">= vs {{ previous }}</span>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro stat_card_simple(label, value, accent_color, sublabel=None) %}
+<div class="report-stat">
+    <div class="report-stat-val" style="color:{{ accent_color }};">{{ value }}</div>
+    <div class="report-stat-label">{{ label }}</div>
+    {% if sublabel %}<div class="report-stat-sublabel">{{ sublabel }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% block content %}
+<div style="padding-bottom:48px;">
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#93c5fd;margin-bottom:4px;">
+                🔐 Area Admin
+            </div>
+            <h1 style="font-size:1.6rem;font-weight:900;margin:0;">Report</h1>
+            <p style="font-size:0.85rem;color:var(--muted);margin:6px 0 0;">
+                Metriche prodotto dal DB — per traffico aggregato e sorgenti vedi i link GA4 a destra
+            </p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="/admin/utenti" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);">
+                ← Utenti
+            </a>
+            <form action="/admin/logout" method="post" style="display:inline;">
+                <button type="submit" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);font-family:inherit;">
+                    Esci dall'admin
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- BARRA SELECTOR PERIODO + LINK GA4 -->
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;margin-bottom:24px;padding:14px 16px;background:rgba(22,31,61,0.5);border:1px solid rgba(255,255,255,0.06);border-radius:14px;">
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+            <span style="font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">Periodo</span>
+            <div style="display:flex;gap:4px;background:rgba(0,0,0,0.25);padding:3px;border-radius:10px;">
+                {% for key, label in [('today', 'Oggi'), ('7d', '7 giorni'), ('30d', '30 giorni')] %}
+                <a href="/admin/report?period={{ key }}"
+                   style="padding:7px 14px;border-radius:8px;font-size:0.82rem;font-weight:700;text-decoration:none;
+                          {% if report.period == key %}background:linear-gradient(135deg,#6ea8fe,#a78bfa);color:#08101f;{% else %}color:var(--muted);{% endif %}">
+                    {{ label }}
+                </a>
+                {% endfor %}
+            </div>
+            <span style="font-size:0.78rem;color:var(--muted);">
+                <span style="color:#cbd5e1;">{{ report.period_label }}</span> · confronto vs periodo precedente
+            </span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <a href="{{ ga4_links.home }}" target="_blank" rel="noopener"
+               style="padding:7px 13px;border-radius:8px;font-size:0.78rem;font-weight:700;text-decoration:none;border:1px solid rgba(168,139,250,0.35);color:#c4b5fd;background:rgba(168,139,250,0.08);">
+                📊 Apri GA4 ↗
+            </a>
+            <a href="{{ ga4_links.acquisition }}" target="_blank" rel="noopener"
+               style="padding:7px 13px;border-radius:8px;font-size:0.78rem;font-weight:700;text-decoration:none;border:1px solid rgba(110,168,254,0.30);color:#93c5fd;background:rgba(110,168,254,0.06);">
+                Acquisizione ↗
+            </a>
+            <a href="{{ ga4_links.pages }}" target="_blank" rel="noopener"
+               style="padding:7px 13px;border-radius:8px;font-size:0.78rem;font-weight:700;text-decoration:none;border:1px solid rgba(110,168,254,0.30);color:#93c5fd;background:rgba(110,168,254,0.06);">
+                Pagine ↗
+            </a>
+        </div>
+    </div>
+
+    {% if report.error %}
+    <div style="padding:14px 16px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);border-radius:10px;color:#fca5a5;">
+        ⚠️ Errore caricamento metriche: <code>{{ report.error }}</code>
+    </div>
+    {% else %}
+
+    <!-- SEZIONE 1: UTENTI -->
+    <div class="report-section-header">👥 Utenti</div>
+    <div class="report-stats-grid">
+        {{ stat_card("Nuove registrazioni", report.new_users.current, report.new_users.previous, report.new_users.delta_pct, "#4ade80") }}
+        {{ stat_card("Utenti attivi", report.active_users.current, report.active_users.previous, report.active_users.delta_pct, "#93c5fd", "almeno 1 ricerca") }}
+        {{ stat_card_simple("Utenti totali", report.total_users, "#a78bfa", "cumulativo") }}
+    </div>
+
+    <!-- SEZIONE 2: ATTIVITÀ CORE -->
+    <div class="report-section-header">🔍 Ricerche</div>
+    <div class="report-stats-grid">
+        {{ stat_card("Ricerche eseguite", report.searches.current, report.searches.previous, report.searches.delta_pct, "#fbbf24") }}
+        {{ stat_card("Daily recs generate", report.daily_recs.current, report.daily_recs.previous, report.daily_recs.delta_pct, "#fbbf24") }}
+        {{ stat_card("Utenti con daily rec", report.users_with_recs.current, report.users_with_recs.previous, report.users_with_recs.delta_pct, "#93c5fd") }}
+    </div>
+
+    {% if report.top_searches %}
+    <div class="report-top-grid-wrap">
+        <div class="report-top-label">🔥 Top titoli usati come seed di ricerca</div>
+        <div class="report-top-grid">
+            {% for t in report.top_searches %}
+            <div class="report-top-item">
+                <div class="report-top-rank">{{ loop.index }}</div>
+                <div class="report-top-info">
+                    <div class="report-top-title">{{ t.title }}</div>
+                </div>
+                <div class="report-top-count">
+                    <span class="report-top-count-num">{{ t.count }}</span>
+                    <span class="report-top-count-label">volte</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- SEZIONE 3: CONVERSIONI (ALERT) -->
+    <div class="report-section-header" style="margin-top:32px;">📧 Streaming Alert (conversion signal)</div>
+    <div class="report-stats-grid">
+        {{ stat_card("Email raccolte", report.alerts.current, report.alerts.previous, report.alerts.delta_pct, "#f87171") }}
+    </div>
+
+    {% if report.top_alerts %}
+    <div class="report-top-grid-wrap">
+        <div class="report-top-label">⭐ Top titoli richiesti come alert (= domanda non soddisfatta)</div>
+        <div class="report-top-grid">
+            {% for t in report.top_alerts %}
+            <a href="{{ '/serie/' if t.content_type == 'tv' else '/film/' }}{{ t.tmdb_id }}"
+               target="_blank" rel="noopener"
+               class="report-top-item"
+               style="text-decoration:none;color:inherit;">
+                <div class="report-top-rank">{{ loop.index }}</div>
+                <div class="report-top-info">
+                    <div class="report-top-title">{{ t.title }}</div>
+                    <div class="report-top-meta">
+                        {{ "📺 Serie" if t.content_type == "tv" else "🎬 Film" }} · TMDb #{{ t.tmdb_id }}
+                    </div>
+                </div>
+                <div class="report-top-count">
+                    <span class="report-top-count-num" style="color:#f87171;">{{ t.count }}</span>
+                    <span class="report-top-count-label">alert</span>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- SEZIONE 4: ENGAGEMENT (TRACKING + FEEDBACK) -->
+    <div class="report-section-header" style="margin-top:32px;">💫 Engagement</div>
+    <div class="report-stats-grid">
+        {{ stat_card("Serie aggiunte al tracking", report.series_tracked.current, report.series_tracked.previous, report.series_tracked.delta_pct, "#a78bfa") }}
+        {{ stat_card("Feedback raccolti", report.feedback.current, report.feedback.previous, report.feedback.delta_pct, "#fbbf24") }}
+    </div>
+    {% if report.feedback.by_type %}
+    <div style="margin-top:14px;padding:12px 16px;background:rgba(22,31,61,0.5);border:1px solid rgba(255,255,255,0.06);border-radius:10px;display:flex;gap:18px;flex-wrap:wrap;">
+        <span style="font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Breakdown feedback:</span>
+        {% for ftype, count in report.feedback.by_type.items() %}
+        <span style="font-size:0.85rem;color:#cbd5e1;">
+            <strong>{{ count }}</strong>
+            {% if ftype == 'like' %}👍{% elif ftype == 'dislike' %}👎{% else %}{{ ftype }}{% endif %}
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% endif %}{# /report.error #}
+
+</div>
+
+<style>
+.report-section-header {
+    font-size: 0.95rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #cbd5e1;
+    margin: 20px 0 12px;
+    padding-left: 2px;
+}
+
+.report-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+}
+.report-stat {
+    background: rgba(22,31,61,0.7);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+    backdrop-filter: blur(8px);
+}
+.report-stat-val {
+    font-size: 1.9rem;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 6px;
+    letter-spacing: -0.03em;
+}
+.report-stat-label {
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+}
+.report-stat-sublabel {
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 3px;
+    opacity: 0.7;
+}
+.report-stat-delta {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.78rem;
+    font-weight: 700;
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+.report-stat-delta > span:last-child { font-weight: 500; font-size: 0.72rem; }
+
+.report-top-grid-wrap {
+    margin-top: 16px;
+}
+.report-top-label {
+    font-size: 0.82rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+.report-top-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 8px;
+}
+.report-top-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 14px;
+    background: rgba(22,31,61,0.5);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.report-top-item:hover {
+    background: rgba(22,31,61,0.85);
+    border-color: rgba(110,168,254,0.3);
+}
+.report-top-rank {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    background: rgba(110,168,254,0.18);
+    color: #93c5fd;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 0.76rem;
+}
+.report-top-info { flex: 1; min-width: 0; }
+.report-top-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.report-top-meta {
+    font-size: 0.68rem;
+    color: var(--muted);
+    margin-top: 2px;
+}
+.report-top-count { flex-shrink: 0; text-align: right; }
+.report-top-count-num {
+    display: block;
+    font-size: 1.05rem;
+    font-weight: 900;
+    color: #fbbf24;
+    line-height: 1;
+}
+.report-top-count-label {
+    font-size: 0.62rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+@media (max-width: 720px) {
+    .report-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .report-stat-val { font-size: 1.55rem; }
+    .report-top-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+    .report-stats-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+}
+</style>
+{% endblock %}

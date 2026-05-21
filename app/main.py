@@ -2661,6 +2661,69 @@ def admin_seo_refresh_http_trigger(request: Request, token: str = ""):
     return JSONResponse(content={"status": "ok", "message": "refresh started in background"})
 
 
+# ─── ADMIN REPORT (analytics dashboard, dati DB only) ────────────────────
+@app.get("/admin/report", response_class=HTMLResponse)
+def admin_report(request: Request, period: str = "7d"):
+    """
+    Dashboard analytics admin con metriche DB-only.
+
+    GA4 NON è qui per scelta: setup richiede service account GCP e l'utente ha
+    organization policy che blocca la chiave JSON. Dati GA4 (sessioni, sorgenti,
+    pagine top) restano accessibili via 3 link diretti alla console GA4 nativa
+    nel template.
+
+    period: 'today' | '7d' | '30d' (default 7d). Validato dentro get_full_report.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    # Import locale: il modulo è light e si carica solo quando admin visita questa pagina
+    from core.admin_metrics import get_full_report
+
+    try:
+        report = get_full_report(period)
+    except Exception as e:
+        log.exception("admin_report: get_full_report failed: %s", e)
+        report = {"period": period, "period_label": "Errore", "error": str(e)}
+
+    # GA4 deep-links verificati (formato documentato da google/site-kit-wp #6639):
+    # - home: dashboard "Intelligent home" della property
+    # - acquisition: Reports > Life cycle > Acquisition > Traffic Acquisition
+    # - pages: Reports > Life cycle > Engagement > Pages and Screens
+    GA4_PROPERTY_ID = "535320105"
+    ga4_links = {
+        "home": (
+            f"https://analytics.google.com/analytics/web/#/p{GA4_PROPERTY_ID}/"
+            "reports/intelligenthome"
+        ),
+        "acquisition": (
+            f"https://analytics.google.com/analytics/web/#/p{GA4_PROPERTY_ID}/"
+            "reports/explorer?params=_u..nav=maui&"
+            "r=lifecycle-traffic-acquisition-v2&"
+            "ruid=lifecycle-traffic-acquisition-v2,life-cycle,acquisition&"
+            "collectionId=life-cycle"
+        ),
+        "pages": (
+            f"https://analytics.google.com/analytics/web/#/p{GA4_PROPERTY_ID}/"
+            "reports/explorer?params=_u..nav=maui&"
+            "r=all-pages-and-screens&"
+            "ruid=all-pages-and-screens,life-cycle,engagement&"
+            "collectionId=life-cycle"
+        ),
+    }
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_report.html",
+        context={
+            "request": request,
+            "report": report,
+            "ga4_links": ga4_links,
+            "ga4_property_id": GA4_PROPERTY_ID,
+        },
+    )
+
+
 @app.get("/admin/debug-come/{slug}")
 def admin_debug_come(request: Request, slug: str):
     """
