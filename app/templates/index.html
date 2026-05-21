@@ -31,18 +31,24 @@
     <section class="cg-howit-strip" aria-label="Come funziona in 3 passi">
         <div class="cg-howit-steps">
             <div class="cg-howit-step">
-                <span class="cg-howit-icon" aria-hidden="true">✏️</span>
-                <span class="cg-howit-text">Inserisci 2-3 titoli che ami</span>
+                <span class="cg-howit-icon" aria-hidden="true">
+                    <i data-lucide="pencil-line"></i>
+                </span>
+                <span class="cg-howit-text">Dicci 2-3 titoli che ami</span>
             </div>
             <span class="cg-howit-arrow" aria-hidden="true">→</span>
             <div class="cg-howit-step">
-                <span class="cg-howit-icon" aria-hidden="true">🧠</span>
+                <span class="cg-howit-icon" aria-hidden="true">
+                    <i data-lucide="sparkles"></i>
+                </span>
                 <span class="cg-howit-text">L'algoritmo trova i simili</span>
             </div>
             <span class="cg-howit-arrow" aria-hidden="true">→</span>
             <div class="cg-howit-step">
-                <span class="cg-howit-icon" aria-hidden="true">📺</span>
-                <span class="cg-howit-text">Scopri dove vederli in Italia</span>
+                <span class="cg-howit-icon" aria-hidden="true">
+                    <i data-lucide="tv"></i>
+                </span>
+                <span class="cg-howit-text">Scopri dove vederli</span>
             </div>
         </div>
         <a href="/come-funziona" class="cg-howit-link">Come funziona <span aria-hidden="true">›</span></a>
@@ -80,8 +86,18 @@
             white-space: nowrap;
         }
         .cg-howit-icon {
-            font-size: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             line-height: 1;
+            color: #a78bfa;  /* viola accent per le icone Lucide */
+            flex-shrink: 0;
+        }
+        /* Lucide renderizza un <svg> dentro <i data-lucide>: gli diamo dimensione esplicita */
+        .cg-howit-icon svg {
+            width: 16px;
+            height: 16px;
+            stroke-width: 2;
         }
         .cg-howit-arrow {
             color: var(--muted);
@@ -101,30 +117,58 @@
         .cg-howit-link:hover { color: var(--text); }
         .cg-howit-link span { margin-left: 2px; }
 
-        /* Tablet medio: nascondi il testo, mostra solo icone */
-        @media (max-width: 880px) {
+        /* Tablet medio (601-880px): orizzontale, solo icone, no testo */
+        @media (max-width: 880px) and (min-width: 601px) {
             .cg-howit-text { display: none; }
             .cg-howit-step { gap: 0; }
         }
 
-        /* Mobile: riduci ulteriormente, mantieni compatta su una riga.
-           Niente padding/altezza extra: la home ha tante sezioni e questa
-           deve restare leggera. */
+        /* Mobile (≤600px): layout VERTICALE — 3 righe "icona + frase" stacked.
+           Più verboso ma comunicativo: l'utente capisce il prodotto al volo.
+           Icone Lucide ingrandite (20px) + cerchio accent viola per leggibilità.
+           Link "Come funziona ›" a fondo box, allineato a destra. */
         @media (max-width: 600px) {
             .cg-howit-strip {
-                padding: 10px 12px;
-                margin: 6px 0 14px;
-                gap: 8px;
+                flex-direction: column;
+                align-items: stretch;
+                padding: 14px 16px;
+                margin: 8px 0 16px;
+                gap: 0;
             }
-            .cg-howit-steps { gap: 8px; }
-            .cg-howit-icon { font-size: 15px; }
-            .cg-howit-arrow { font-size: 12px; }
-            .cg-howit-link { font-size: 12px; }
-        }
-
-        /* Mobile molto piccolo: nascondi le frecce, lascia solo icone + link */
-        @media (max-width: 380px) {
+            .cg-howit-steps {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+                overflow: visible;
+            }
+            .cg-howit-step {
+                gap: 12px;
+                font-size: 14px;
+                white-space: normal;  /* permetti wrap se serve */
+                line-height: 1.35;
+            }
+            .cg-howit-icon {
+                width: 32px;
+                height: 32px;
+                background: rgba(167,139,250,0.12);
+                border-radius: 8px;
+            }
+            .cg-howit-icon svg {
+                width: 18px;
+                height: 18px;
+                stroke-width: 2;
+            }
+            /* Frecce orizzontali non hanno senso in layout verticale */
             .cg-howit-arrow { display: none; }
+            /* Link a destra in fondo, con divider sottile sopra */
+            .cg-howit-link {
+                font-size: 12.5px;
+                margin-top: 12px;
+                padding-top: 10px;
+                border-top: 1px solid rgba(255,255,255,0.06);
+                text-align: right;
+                align-self: stretch;
+            }
         }
 
         /* Mobile reorder: ricreiamo l'ordine "originale" della home pre-strip,
