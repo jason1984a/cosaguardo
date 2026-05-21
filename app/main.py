@@ -524,6 +524,47 @@ async def perf_logger(request: Request, call_next):
         print(f"[perf] {request.method} {path} status={status} dur={dur_ms}ms ua={ua_kind}{slow_marker}")
 
 
+# ─── HEAD → GET fallback middleware ──────────────────────────────────────
+# UptimeRobot (free tier) e molti uptime checker mandano richieste HEAD per
+# risparmiare banda. FastAPI di default non risponde alle HEAD su route @app.get
+# e ritorna 405 Method Not Allowed → false positive "sito down".
+#
+# Questo middleware intercetta HEAD, lo trasforma temporaneamente in GET, esegue
+# la route normalmente, poi rimuove il body dalla response (come da spec HTTP RFC
+# 7231 §4.3.2: HEAD identical to GET except server MUST NOT return body).
+#
+# Vantaggi vs alternative:
+#  - app.api_route(methods=["GET","HEAD"]): andrebbe applicato a ogni @app.get,
+#    questo invece copre TUTTE le route in un colpo solo e quelle future.
+#  - Endpoint /healthz dedicato: monitora "server vivo" ma non i tempi reali
+#    delle pagine, che è quello che ci interessa.
+#
+# Aggiunto in ULTIMO (= eseguito PER PRIMO, ordine LIFO dei middleware FastAPI)
+# così la trasformazione avviene prima del routing e prima del perf_logger →
+# il perf log mostra correttamente "HEAD /" senza confusione di metodo.
+@app.middleware("http")
+async def head_to_get_fallback(request: Request, call_next):
+    if request.method != "HEAD":
+        return await call_next(request)
+
+    # Trasforma HEAD → GET clonando lo scope ASGI con method patchato.
+    # Non muto request.scope direttamente: alcune downstream library lo
+    # leggono e cacheano, meglio dare un nuovo dict.
+    request.scope["method"] = "GET"
+    response = await call_next(request)
+    # Per HEAD la spec richiede header completi ma body vuoto.
+    # FastAPI Response sottoscrive lo standard: se il content-length era N,
+    # restituiamo lo stesso header ma stream vuoto.
+    # Implementazione: creiamo una Response identica con body=b"".
+    from starlette.responses import Response as _StarletteResponse
+    return _StarletteResponse(
+        content=b"",
+        status_code=response.status_code,
+        headers=dict(response.headers),
+        media_type=response.media_type,
+    )
+
+
 init_db()
 
 app.mount(
