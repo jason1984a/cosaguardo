@@ -3700,7 +3700,7 @@ def _check_admin(request: Request) -> bool:
 @app.get("/admin", response_class=HTMLResponse)
 def admin_login_page(request: Request):
     if _check_admin(request):
-        return RedirectResponse(url="/admin/utenti", status_code=302)
+        return RedirectResponse(url="/admin/home", status_code=302)
     return templates.TemplateResponse(
         request=request, name="admin_login.html",
         context={"request": request, "error": ""}
@@ -3711,10 +3711,43 @@ def admin_login_page(request: Request):
 def admin_login_submit(request: Request, password: str = Form(...)):
     if ADMIN_PASSWORD and password == ADMIN_PASSWORD:
         request.session["is_admin"] = True
-        return RedirectResponse(url="/admin/utenti", status_code=303)
+        return RedirectResponse(url="/admin/home", status_code=303)
     return templates.TemplateResponse(
         request=request, name="admin_login.html",
         context={"request": request, "error": "Password errata."}
+    )
+
+
+@app.get("/admin/home", response_class=HTMLResponse)
+def admin_home(request: Request):
+    """
+    Landing admin con menu navigazione, widget status sistema (link a
+    UptimeRobot status page) e mini-stats colpo d'occhio.
+
+    Vivere QUI invece che /admin/utenti come prima: separation of concerns.
+    /admin/utenti resta dedicata alla lista utenti (più pesante, carica
+    tutta la tabella). /admin/home è leggera e funge da hub di navigazione.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    stats = get_admin_stats()
+
+    # Alert pending: solo il numero, niente lista (la lista sta in /admin/streaming-alerts)
+    try:
+        alerts_stats = streaming_alerts_stats()
+        alerts_pending = alerts_stats.get("pending", 0)
+    except Exception as e:
+        log.warning("admin_home: streaming_alerts_stats failed: %s", e)
+        alerts_pending = 0
+
+    return templates.TemplateResponse(
+        request=request, name="admin_home.html",
+        context={
+            "request": request,
+            "stats": stats,
+            "alerts_pending": alerts_pending,
+        },
     )
 
 

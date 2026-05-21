@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+{% block title %}Admin Home — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<div style="padding-bottom:48px;">
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#93c5fd;margin-bottom:4px;">
+                🔐 Area Admin
+            </div>
+            <h1 style="font-size:1.6rem;font-weight:900;margin:0;">CosaGuardo Admin</h1>
+            <p style="font-size:0.85rem;color:var(--muted);margin:6px 0 0;">
+                Gestione utenti, analytics, SEO e operations
+            </p>
+        </div>
+        <form action="/admin/logout" method="post">
+            <button type="submit"
+                    style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);font-family:inherit;">
+                Esci dall'admin
+            </button>
+        </form>
+    </div>
+
+    {# ─── WIDGET STATUS SISTEMA ─────────────────────────────────────────
+       Statico: se l'utente vede questo widget significa che il sito è up
+       (dashboard admin è hostato sullo stesso server). Per dettaglio
+       cronologico (tempi di risposta, incident history) → status page
+       pubblica UptimeRobot. #}
+    <a href="https://stats.uptimerobot.com/rfvarmexRH" target="_blank" rel="noopener"
+       style="display:flex;align-items:center;justify-content:space-between;gap:12px;
+              margin-bottom:24px;padding:14px 18px;
+              background:linear-gradient(135deg,rgba(74,222,128,0.10),rgba(110,168,254,0.06));
+              border:1px solid rgba(74,222,128,0.25);
+              border-radius:12px;
+              text-decoration:none;color:inherit;
+              transition:border-color 0.15s, transform 0.15s;"
+       onmouseover="this.style.borderColor='rgba(74,222,128,0.5)';this.style.transform='translateY(-1px)'"
+       onmouseout="this.style.borderColor='rgba(74,222,128,0.25)';this.style.transform='translateY(0)'">
+        <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:10px;height:10px;border-radius:50%;background:#4ade80;
+                        box-shadow:0 0 8px rgba(74,222,128,0.7);flex-shrink:0;"></div>
+            <div>
+                <div style="font-weight:700;font-size:0.95rem;color:#fff;">
+                    Sistema operativo
+                </div>
+                <div style="font-size:0.78rem;color:var(--muted);margin-top:2px;">
+                    UptimeRobot monitora 3 endpoint ogni 5 min · clicca per cronologia e response time
+                </div>
+            </div>
+        </div>
+        <div style="font-size:0.85rem;color:#93c5fd;font-weight:600;white-space:nowrap;">
+            Vedi status →
+        </div>
+    </a>
+
+    {# ─── MINI STATS COLPO D'OCCHIO ─────────────────────────────────────
+       I 5 numeri più importanti senza dover entrare nelle sotto-pagine.
+       Per il dettaglio analitico → /admin/report. #}
+    <div class="admin-home-stats">
+        <div class="admin-home-stat">
+            <div class="admin-home-stat-val">{{ stats.total_users }}</div>
+            <div class="admin-home-stat-label">Utenti totali</div>
+        </div>
+        <div class="admin-home-stat">
+            <div class="admin-home-stat-val" style="color:#4ade80;">+{{ stats.new_users_7d }}</div>
+            <div class="admin-home-stat-label">Nuovi (7gg)</div>
+        </div>
+        <div class="admin-home-stat">
+            <div class="admin-home-stat-val" style="color:#fbbf24;">{{ stats.total_searches }}</div>
+            <div class="admin-home-stat-label">Ricerche totali</div>
+        </div>
+        <div class="admin-home-stat">
+            <div class="admin-home-stat-val" style="color:#a78bfa;">{{ stats.total_liked }}</div>
+            <div class="admin-home-stat-label">Preferiti</div>
+        </div>
+        <div class="admin-home-stat">
+            <div class="admin-home-stat-val" style="color:#f87171;">{{ alerts_pending }}</div>
+            <div class="admin-home-stat-label">Alert in attesa</div>
+        </div>
+    </div>
+
+    {# ─── MENU SEZIONI ADMIN ─────────────────────────────────────────────
+       Grid di card cliccabili, una per ogni sotto-pagina admin. Layout
+       responsive: 2 colonne desktop, 1 colonna mobile. #}
+    <div class="admin-home-section-header">
+        <h2>📂 Sezioni</h2>
+    </div>
+    <div class="admin-home-menu">
+
+        <a href="/admin/utenti" class="admin-home-card">
+            <div class="admin-home-card-icon" style="background:rgba(110,168,254,0.15);color:#93c5fd;">👥</div>
+            <div class="admin-home-card-body">
+                <div class="admin-home-card-title">Utenti</div>
+                <div class="admin-home-card-desc">Lista completa registrati, ricerche, preferiti</div>
+            </div>
+            <div class="admin-home-card-arrow">›</div>
+        </a>
+
+        <a href="/admin/report" class="admin-home-card">
+            <div class="admin-home-card-icon" style="background:rgba(251,191,36,0.15);color:#fbbf24;">📊</div>
+            <div class="admin-home-card-body">
+                <div class="admin-home-card-title">Report</div>
+                <div class="admin-home-card-desc">Analytics oggi/7gg/30gg, top ricerche, conversioni</div>
+            </div>
+            <div class="admin-home-card-arrow">›</div>
+        </a>
+
+        <a href="/admin/seo" class="admin-home-card">
+            <div class="admin-home-card-icon" style="background:rgba(167,139,250,0.15);color:#a78bfa;">🔍</div>
+            <div class="admin-home-card-body">
+                <div class="admin-home-card-title">SEO Refresh</div>
+                <div class="admin-home-card-desc">Pagine SEO, refresh settimanale, log esecuzioni</div>
+            </div>
+            <div class="admin-home-card-arrow">›</div>
+        </a>
+
+        <a href="/admin/streaming-alerts" class="admin-home-card">
+            <div class="admin-home-card-icon" style="background:rgba(248,113,113,0.15);color:#f87171;">📧</div>
+            <div class="admin-home-card-body">
+                <div class="admin-home-card-title">Streaming Alerts</div>
+                <div class="admin-home-card-desc">Email "Avvisami" raccolte e titoli più richiesti</div>
+            </div>
+            <div class="admin-home-card-arrow">›</div>
+        </a>
+
+    </div>
+
+    {# ─── LINK ESTERNI UTILI ─────────────────────────────────────────────
+       Tools che usi spesso ma sono di terze parti. #}
+    <div class="admin-home-section-header" style="margin-top:32px;">
+        <h2>🔗 Tools esterni</h2>
+    </div>
+    <div class="admin-home-external">
+        <a href="https://stats.uptimerobot.com/rfvarmexRH" target="_blank" rel="noopener" class="admin-home-external-link">
+            <span>📡</span> UptimeRobot status page
+        </a>
+        <a href="https://analytics.google.com/" target="_blank" rel="noopener" class="admin-home-external-link">
+            <span>📈</span> Google Analytics (GA4)
+        </a>
+        <a href="https://search.google.com/search-console" target="_blank" rel="noopener" class="admin-home-external-link">
+            <span>🔎</span> Google Search Console
+        </a>
+        <a href="https://clarity.microsoft.com/" target="_blank" rel="noopener" class="admin-home-external-link">
+            <span>🖱️</span> Microsoft Clarity (heatmap)
+        </a>
+        <a href="https://dashboard.render.com/" target="_blank" rel="noopener" class="admin-home-external-link">
+            <span>🚀</span> Render dashboard (deploy/logs)
+        </a>
+    </div>
+
+</div>
+
+<style>
+/* Mini stats (colpo d'occhio) */
+.admin-home-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 28px;
+}
+.admin-home-stat {
+    background: rgba(22,31,61,0.7);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 14px;
+    text-align: center;
+    backdrop-filter: blur(8px);
+}
+.admin-home-stat-val {
+    font-size: 1.75rem;
+    font-weight: 900;
+    color: #93c5fd;
+    line-height: 1;
+    margin-bottom: 4px;
+    letter-spacing: -0.03em;
+}
+.admin-home-stat-label {
+    font-size: 0.68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 700;
+}
+
+/* Section header */
+.admin-home-section-header {
+    margin: 0 0 14px;
+}
+.admin-home-section-header h2 {
+    font-size: 1rem;
+    font-weight: 800;
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #cbd5e1;
+}
+
+/* Menu cards */
+.admin-home-menu {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 12px;
+}
+.admin-home-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 18px;
+    background: rgba(22,31,61,0.6);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.admin-home-card:hover {
+    background: rgba(22,31,61,0.95);
+    border-color: rgba(110,168,254,0.35);
+    transform: translateY(-1px);
+}
+.admin-home-card-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+.admin-home-card-body {
+    flex: 1;
+    min-width: 0;
+}
+.admin-home-card-title {
+    font-size: 1rem;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 3px;
+}
+.admin-home-card-desc {
+    font-size: 0.78rem;
+    color: var(--muted);
+    line-height: 1.4;
+}
+.admin-home-card-arrow {
+    color: var(--muted);
+    font-size: 22px;
+    font-weight: 300;
+    opacity: 0.5;
+    flex-shrink: 0;
+    transition: transform 0.15s, opacity 0.15s;
+}
+.admin-home-card:hover .admin-home-card-arrow {
+    opacity: 1;
+    transform: translateX(3px);
+}
+
+/* External links */
+.admin-home-external {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.admin-home-external-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    background: rgba(22,31,61,0.5);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px;
+    text-decoration: none;
+    color: #cbd5e1;
+    font-size: 0.82rem;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.admin-home-external-link:hover {
+    background: rgba(22,31,61,0.85);
+    border-color: rgba(110,168,254,0.3);
+    color: #fff;
+}
+
+@media (max-width: 720px) {
+    .admin-home-stats { grid-template-columns: repeat(2, 1fr); }
+    .admin-home-stat-val { font-size: 1.45rem; }
+    .admin-home-menu { grid-template-columns: 1fr; }
+}
+</style>
+{% endblock %}
