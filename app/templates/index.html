@@ -125,49 +125,60 @@
 
         /* Mobile (≤600px): layout VERTICALE — 3 righe "icona + frase" stacked.
            Più verboso ma comunicativo: l'utente capisce il prodotto al volo.
-           Icone Lucide ingrandite (20px) + cerchio accent viola per leggibilità.
-           Link "Come funziona ›" a fondo box, allineato a destra. */
+           Icone Lucide ingrandite (18px) + cerchio accent viola per leggibilità.
+           Link "Come funziona ›" allineato a destra dell'ultima riga (no divider,
+           no margine extra) per mantenere il box compatto. */
         @media (max-width: 600px) {
             .cg-howit-strip {
                 flex-direction: column;
                 align-items: stretch;
-                padding: 14px 16px;
+                padding: 12px 14px;
                 margin: 8px 0 16px;
                 gap: 0;
+                position: relative;
             }
             .cg-howit-steps {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 10px;
+                gap: 9px;
                 overflow: visible;
             }
             .cg-howit-step {
                 gap: 12px;
-                font-size: 14px;
-                white-space: normal;  /* permetti wrap se serve */
+                font-size: 13.5px;
+                white-space: normal;
                 line-height: 1.35;
             }
             .cg-howit-icon {
-                width: 32px;
-                height: 32px;
+                width: 30px;
+                height: 30px;
                 background: rgba(167,139,250,0.12);
                 border-radius: 8px;
             }
             .cg-howit-icon svg {
-                width: 18px;
-                height: 18px;
+                width: 17px;
+                height: 17px;
                 stroke-width: 2;
             }
             /* Frecce orizzontali non hanno senso in layout verticale */
             .cg-howit-arrow { display: none; }
-            /* Link a destra in fondo, con divider sottile sopra */
+            /* Link posizionato assoluto in basso a destra del box, sovrapposto
+               all'altezza dell'ultima riga. Niente divider, niente margine extra. */
             .cg-howit-link {
-                font-size: 12.5px;
-                margin-top: 12px;
-                padding-top: 10px;
-                border-top: 1px solid rgba(255,255,255,0.06);
-                text-align: right;
-                align-self: stretch;
+                position: absolute;
+                bottom: 12px;
+                right: 14px;
+                font-size: 12px;
+                margin: 0;
+                padding: 0;
+                border: none;
+                background: transparent;
+                line-height: 1;
+            }
+            /* L'ultimo .cg-howit-step deve lasciare spazio a destra per il link
+               sovrapposto (~110px), così il testo non finisce sotto. */
+            .cg-howit-step:last-child {
+                padding-right: 110px;
             }
         }
 
