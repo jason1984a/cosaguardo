@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 
 {% block title %}{{ seo_title }}{% endblock %}
+{# meta_robots: 'noindex, follow' se ?tipo=film/serie (sub-version), index altrimenti.
+   Vedi route /piattaforma/{slug} in main.py. #}
+{% block meta_robots %}{{ meta_robots or "index, follow" }}{% endblock %}
 
 {% block head_extra %}
 <meta name="description" content="{{ seo_desc }}">

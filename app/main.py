@@ -2470,6 +2470,11 @@ def dove_vedere_hub(request: Request, tipo: str = "", p: int = 1):
     items, total = list_seo_titles(content_type=content_type, page=page, per_page=per_page)
     total_pages = max(1, (total + per_page - 1) // per_page)
 
+    # SEO: paginate (p>1) = noindex (thin duplicate del page 1).
+    # page=1 con qualsiasi 'tipo' resta index: sono 3 viste distinte di valore
+    # (/dove-vedere = all, /dove-vedere?tipo=film, /dove-vedere?tipo=serie).
+    meta_robots = "noindex, follow" if page > 1 else "index, follow"
+
     return templates.TemplateResponse(
         request=request,
         name="dove_vedere_hub.html",
@@ -2480,6 +2485,7 @@ def dove_vedere_hub(request: Request, tipo: str = "", p: int = 1):
             "page": page,
             "total_pages": total_pages,
             "total": total,
+            "meta_robots": meta_robots,
         },
     )
 
@@ -2564,6 +2570,8 @@ def come_simili(request: Request, slug: str):
     item = get_title_by_slug(slug)
     if not item:
         # 404: titolo non in DB SEO. Reindirizza alla home con messaggio.
+        # noindex perché è una 404 page (Google la rileverebbe come 404 dal
+        # status_code comunque, ma esplicitarlo non guasta).
         return templates.TemplateResponse(
             request=request,
             name="dove_vedere_hub.html",
@@ -2575,6 +2583,7 @@ def come_simili(request: Request, slug: str):
                 "total_pages": 1,
                 "total": 0,
                 "_not_found_slug": slug,
+                "meta_robots": "noindex, follow",
             },
             status_code=404,
         )
@@ -3606,6 +3615,13 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
         # related_best resta vuoto, la pagina funziona comunque.
         log.warning("platform_page: related_best fallback per slug=%s: %s", slug, e)
 
+    # SEO meta_robots:
+    # - /piattaforma/{slug} default (tipo='tutti') = INDEX
+    # - /piattaforma/{slug}?tipo=film o ?tipo=serie = NOINDEX
+    #   Ragione: le sub-versioni sono filtri di UNA singola pagina canonical
+    #   (/piattaforma/{slug}), non pagine indipendenti da indicizzare.
+    meta_robots = "noindex, follow" if tipo in ("film", "serie") else "index, follow"
+
     return templates.TemplateResponse(
         request=request,
         name="platform.html",
@@ -3618,6 +3634,7 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
             "related_best": related_best,
             "seo_title":    seo_title,
             "seo_desc":     seo_desc,
+            "meta_robots":  meta_robots,
         },
     )
 
@@ -3653,6 +3670,18 @@ def scopri(
 
     seo_title, seo_desc = _scopri_seo(tipo, genere, mood, piattaforma, anno, voto)
 
+    # SEO meta robots:
+    # - /scopri senza filtri = hub editoriale, INDEX (= entry point del browse)
+    # - /scopri con qualsiasi filtro o pagina >1 = NOINDEX
+    #   Ragione: combinazioni filtri = teorica esplosione URL (30 generi * 10 mood *
+    #   10 piattaforme * 3 anni * 3 voti * 2 tipi * N pagine = migliaia di URL),
+    #   tutti con contenuto sovrapponibile a /dove-vedere/, /piattaforma/*, ecc.
+    #   Indicizzarle confonderebbe Google e drenerebbe crawl budget.
+    if has_filters or page > 1:
+        meta_robots = "noindex, follow"
+    else:
+        meta_robots = "index, follow"
+
     return templates.TemplateResponse(
         request=request,
         name="scopri.html",
@@ -3672,6 +3701,7 @@ def scopri(
             "voto":        voto,
             "seo_title":   seo_title,
             "seo_desc":    seo_desc,
+            "meta_robots": meta_robots,
         },
     )
 

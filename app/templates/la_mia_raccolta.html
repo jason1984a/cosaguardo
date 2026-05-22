@@ -2,6 +2,8 @@
 
 {% block title %}La mia raccolta | CosaGuardo{% endblock %}
 {% block meta_description %}Tieni traccia dei film e delle serie TV che stai guardando, vuoi guardare, hai visto o ami. Notifiche quando esce una nuova stagione delle tue serie.{% endblock %}
+{# User-content page: protetta da login, mostra dati specifici utente, no SEO value #}
+{% block meta_robots %}noindex, follow{% endblock %}
 
 {% block content %}
 <style>

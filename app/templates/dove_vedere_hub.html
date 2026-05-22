@@ -4,6 +4,8 @@
 {% block meta_description %}La guida completa per scoprire dove guardare film e serie TV in streaming in Italia. Netflix, Disney+, Prime Video, NOW, Paramount+ e altre piattaforme.{% endblock %}
 {% block og_title %}Dove vedere film e serie TV in streaming{% endblock %}
 {% block og_description %}Scopri dove guardare i tuoi film e serie preferiti su Netflix, Disney+, Prime Video e altre piattaforme italiane.{% endblock %}
+{# meta_robots: 'noindex, follow' su pagine paginate p>1 (thin duplicate) o 404; index altrimenti #}
+{% block meta_robots %}{{ meta_robots or "index, follow" }}{% endblock %}
 
 {% block content %}
 <style>

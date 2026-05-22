@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 
 {% block title %}Login | CosaGuardo{% endblock %}
+{# User page: nessun valore SEO, evita di indicizzarla per non drenare crawl budget #}
+{% block meta_robots %}noindex, follow{% endblock %}
 
 {% block content %}
 

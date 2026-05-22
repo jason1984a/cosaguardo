@@ -4,6 +4,9 @@
 {% block meta_description %}{{ seo_desc }}{% endblock %}
 {% block og_title %}{{ seo_title }}{% endblock %}
 {% block og_description %}{{ seo_desc }}{% endblock %}
+{# meta_robots passato da main.py: 'noindex, follow' se has_filters o page>1,
+   altrimenti 'index, follow' (hub editoriale). Vedi route /scopri. #}
+{% block meta_robots %}{{ meta_robots or "index, follow" }}{% endblock %}
 
 {% block head_extra %}
 {# PRELOAD del primo poster — è il candidate LCP della pagina.
