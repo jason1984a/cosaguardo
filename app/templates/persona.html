@@ -5,6 +5,15 @@
 {% block og_title %}{{ detail.name }} — CosaGuardo{% endblock %}
 {% block og_image %}{{ detail.profile_url or "https://cosaguardo.com/static/og-default.jpg" }}{% endblock %}
 
+{# noindex: le pagine /persona/{id} hanno valore SEO basso (query "[nome
+   attore] filmografia" sono già dominate da Wikipedia/IMDb) e drenano crawl
+   budget di Google dalle pagine importanti (/come/, /dove-vedere/, /film/,
+   /serie/). Restano navigabili agli utenti che cliccano un nome del cast
+   da una scheda film/serie; semplicemente Google non le considera pagine
+   da indicizzare. 'follow' = Google segue comunque i link interni verso
+   le filmografie (es. da /persona/Tom-Cruise → /film/{id} di Top Gun). #}
+{% block meta_robots %}noindex, follow{% endblock %}
+
 {% block content %}
 <div style="padding-bottom:48px;">
 
