@@ -1212,11 +1212,21 @@ html, body {
     background: rgba(22,31,61,0.5);
     border: 1px solid rgba(255,255,255,0.06);
     border-radius: 14px;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    cursor: pointer;  /* card cliccabile → apre modal */
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+    -webkit-tap-highlight-color: rgba(110,168,254,0.15);  /* mobile tap feedback */
 }
 .episode-item:hover {
-    border-color: rgba(110,168,254,0.25);
-    background: rgba(22,31,61,0.7);
+    border-color: rgba(110,168,254,0.35);
+    background: rgba(22,31,61,0.85);
+    transform: translateY(-1px);
+}
+.episode-item:focus-visible {
+    outline: 2px solid #6ea8fe;
+    outline-offset: 2px;
+}
+.episode-item:active {
+    transform: translateY(0);
 }
 .episode-item--future {
     opacity: 0.85;
@@ -1346,6 +1356,215 @@ html, body {
     }
     .episode-title { font-size: 14px; }
     .episode-overview { font-size: 12.5px; -webkit-line-clamp: 4; }
+}
+
+/* ── EPISODE DETAIL MODAL ─────────────────────────────────────────────── */
+.episode-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+}
+.episode-modal--open {
+    display: block;
+    opacity: 1;
+}
+.episode-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 12, 28, 0.82);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.episode-modal-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 92%;
+    max-width: 620px;
+    max-height: 90vh;
+    background: #131c3a;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 18px;
+    padding: 22px;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+    -webkit-overflow-scrolling: touch;
+}
+.episode-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #cbd5e1;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    z-index: 2;
+    transition: background 0.15s, color 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+.episode-modal-close:hover {
+    background: rgba(255,255,255,0.16);
+    color: #fff;
+}
+.ep-modal-title {
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1.25;
+    margin: 0 50px 14px 0;  /* spazio per il close button */
+    color: #fff;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+}
+.ep-modal-snum {
+    font-size: 13px;
+    font-weight: 700;
+    color: #93c5fd;
+    background: rgba(110,168,254,0.15);
+    padding: 3px 9px;
+    border-radius: 999px;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+.ep-modal-title-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.ep-modal-future-badge {
+    font-size: 11px;
+    font-weight: 700;
+    color: #fbbf24;
+    background: rgba(251,191,36,0.14);
+    padding: 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.ep-modal-still-wrap {
+    width: 100%;
+    aspect-ratio: 16/9;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.04);
+    margin-bottom: 14px;
+}
+.ep-modal-still {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.ep-modal-still-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(255,255,255,0.3);
+    font-weight: 700;
+    font-size: 22px;
+}
+.ep-modal-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: rgba(255,255,255,0.65);
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+.ep-modal-meta-sep {
+    opacity: 0.5;
+}
+.ep-modal-overview {
+    color: #cbd5e1;
+    font-size: 14.5px;
+    line-height: 1.6;
+    margin: 0 0 18px;
+}
+.ep-modal-overview--missing,
+.ep-modal-overview--future {
+    color: rgba(255,255,255,0.45);
+    font-style: italic;
+}
+.ep-modal-providers {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+.ep-modal-providers-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 10px;
+}
+.ep-modal-providers-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.ep-modal-prov-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(110,168,254,0.10);
+    border: 1px solid rgba(110,168,254,0.30);
+    border-radius: 10px;
+    color: #cbd5e1;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+}
+.ep-modal-prov-chip:hover {
+    background: rgba(110,168,254,0.20);
+    border-color: rgba(110,168,254,0.55);
+    color: #fff;
+    transform: translateY(-1px);
+}
+.ep-modal-prov-logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 5px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+/* Mobile: modal occupa quasi tutto lo schermo */
+@media (max-width: 640px) {
+    .episode-modal-content {
+        width: 96%;
+        max-height: 92vh;
+        padding: 18px 16px 18px;
+        border-radius: 14px;
+    }
+    .ep-modal-title {
+        font-size: 17px;
+        margin-right: 44px;
+    }
+    .ep-modal-overview {
+        font-size: 14px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .episode-modal { transition: none; }
+    .episode-item { transition: none; }
 }
 </style>
 {% endblock %}
@@ -1730,6 +1949,41 @@ html, body {
                     <div class="episodes-skeleton-item"></div>
                 </div>
             </div>
+
+            {# ─── EPISODE DETAIL MODAL ──────────────────────────────────────
+               Aperto al click su una .episode-item. Mostra still grande,
+               overview completa, meta + (se serie su streaming) micro-strip
+               provider "Disponibile su" linkato al catalogo serie sulla
+               piattaforma (i singoli episodi non hanno deep-link).
+               Pattern UX coerente con poster-lightbox: ESC chiude, click
+               backdrop chiude, body scroll lock, focus trap basico. #}
+            <div id="episode-modal" class="episode-modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="episode-modal-title">
+                <div class="episode-modal-backdrop" onclick="closeEpisodeModal()" aria-hidden="true"></div>
+                <div class="episode-modal-content" role="document">
+                    <button type="button" class="episode-modal-close" onclick="closeEpisodeModal()" aria-label="Chiudi">×</button>
+                    <div id="episode-modal-body">
+                        {# riempito da JS in openEpisodeModal(ep) #}
+                    </div>
+                </div>
+            </div>
+
+            {# Provider serie serializzati in JS per uso nel popup.
+               Stesso dato di detail.providers già usato in 'Dove vederlo in Italia'. #}
+            <script>
+                window._cgSeriesProviders = (function() {
+                    try {
+                        return {
+                            flatrate: {{ (detail.providers.flatrate or []) | tojson }},
+                            rent:     {{ (detail.providers.rent or []) | tojson }},
+                            link:     {{ (detail.providers.link or '') | tojson }}
+                        };
+                    } catch (_) {
+                        return { flatrate: [], rent: [], link: '' };
+                    }
+                })();
+                window._cgSeriesTitle = {{ (detail.title or '') | tojson }};
+                window._cgSeriesTmdbId = {{ detail.tmdb_id | tojson }};
+            </script>
         </div>
         {% endif %}
 
@@ -2057,6 +2311,14 @@ function renderEpisodesList(episodes) {
         return;
     }
 
+    // Salviamo i dati episodio in un buffer global indicizzato per stagione
+    // per consentire al popup di trovare l'episodio quando si clicca, senza
+    // serializzare JSON nel DOM (che richiederebbe escape pesante).
+    // _epCurrentSeason è già gestito da loadSeasonEpisodes (riusato).
+    window._cgEpisodesBySeason = window._cgEpisodesBySeason || {};
+    var currentSeason = window._epCurrentSeason || 1;
+    window._cgEpisodesBySeason[currentSeason] = episodes;
+
     var html = '';
     for (var i = 0; i < episodes.length; i++) {
         var ep = episodes[i];
@@ -2094,8 +2356,16 @@ function renderEpisodesList(episodes) {
             ? '<p class="episode-overview">' + escapeHtml(ep.overview) + '</p>'
             : '';
 
+        // Card cliccabile: onclick apre il modal di dettaglio episodio.
+        // Tutta la card è clickable, non solo un bottoncino — coerente con
+        // l'intuizione utente vista nei dead-click Clarity.
+        // role/tabindex + keydown per a11y (Enter/Space).
         html +=
-            '<div class="episode-item' + futureClass + '">' +
+            '<div class="episode-item' + futureClass + '" ' +
+                 'role="button" tabindex="0" ' +
+                 'data-ep-index="' + i + '" data-ep-season="' + currentSeason + '" ' +
+                 'onclick="openEpisodeModal(' + currentSeason + ',' + i + ')" ' +
+                 'onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();openEpisodeModal(' + currentSeason + ',' + i + ');}">' +
                 stillHtml +
                 '<div class="episode-body">' +
                     '<div class="episode-header">' +
@@ -2196,6 +2466,171 @@ function openEpisodesSection(seasonNumber) {
         renderEpisodesList(window._epCache[seasonNumber]);
     }
 }
+
+// ─── EPISODE DETAIL MODAL ─────────────────────────────────────────────────
+// Aperto dal click su .episode-item. Mostra still grande, overview completa,
+// meta + (se serie disponibile su streaming) micro-strip provider linkato
+// al catalogo serie (i singoli episodi non hanno deep-link sulle piattaforme).
+// Tracking: emette evento GA4 'episode_click' per misurare engagement.
+function openEpisodeModal(seasonNumber, episodeIndex) {
+    var eps = window._cgEpisodesBySeason && window._cgEpisodesBySeason[seasonNumber];
+    if (!eps || !eps[episodeIndex]) {
+        // Edge case: render perso (re-render tab nel frattempo), fallback silenzioso
+        return;
+    }
+    var ep = eps[episodeIndex];
+
+    var modal = document.getElementById('episode-modal');
+    var body = document.getElementById('episode-modal-body');
+    if (!modal || !body) return;
+
+    body.innerHTML = renderEpisodeModalContent(seasonNumber, ep);
+    modal.classList.add('episode-modal--open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';  // scroll lock
+
+    // Focus management: focus sul bottone close per a11y (keyboard users)
+    setTimeout(function() {
+        var closeBtn = modal.querySelector('.episode-modal-close');
+        if (closeBtn) closeBtn.focus();
+    }, 50);
+
+    // Tracking GA4 (se attivo)
+    try {
+        if (typeof window.cgTrack === 'function') {
+            window.cgTrack('episode_click', {
+                series_tmdb_id: window._cgSeriesTmdbId,
+                series_title:   window._cgSeriesTitle,
+                season:         seasonNumber,
+                episode_number: ep.ep,
+                is_future:      !!ep.is_future
+            });
+        }
+    } catch (_) { /* tracking non deve mai rompere UX */ }
+}
+
+function closeEpisodeModal() {
+    var modal = document.getElementById('episode-modal');
+    if (!modal) return;
+    modal.classList.remove('episode-modal--open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+
+    // Restituisci il focus alla card episodio cliccata (se esiste ancora nel DOM)
+    var lastFocused = window._cgLastEpisodeCard;
+    if (lastFocused && document.body.contains(lastFocused)) {
+        try { lastFocused.focus(); } catch (_) {}
+    }
+}
+
+function renderEpisodeModalContent(seasonNumber, ep) {
+    // Still grande: trasformo URL w300 -> w500 per qualità migliore nel popup.
+    // Se still_url vuoto, placeholder testuale.
+    var bigStill = '';
+    if (ep.still_url) {
+        var stillHd = ep.still_url.replace('/w300/', '/w500/');
+        bigStill =
+            '<div class="ep-modal-still-wrap">' +
+                '<img class="ep-modal-still" src="' + escapeHtml(stillHd) + '" alt="" loading="eager">' +
+            '</div>';
+    } else {
+        bigStill =
+            '<div class="ep-modal-still-wrap">' +
+                '<div class="ep-modal-still-placeholder">' +
+                    '<span>S' + escapeHtml(String(seasonNumber)) + ' · Ep ' + escapeHtml(String(ep.ep)) + '</span>' +
+                '</div>' +
+            '</div>';
+    }
+
+    // Meta riga (data · durata · rating)
+    var metaParts = [];
+    if (ep.air_date) {
+        metaParts.push(ep.is_future
+            ? 'In uscita ' + escapeHtml(formatDate(ep.air_date))
+            : escapeHtml(formatDate(ep.air_date)));
+    }
+    if (ep.runtime) {
+        metaParts.push(ep.runtime + ' min');
+    }
+    if (ep.vote_avg && ep.vote_avg > 0 && !ep.is_future) {
+        metaParts.push('★ ' + ep.vote_avg.toFixed(1));
+    }
+    var metaHtml = metaParts.length
+        ? '<div class="ep-modal-meta">' +
+          metaParts.map(function(p, idx) {
+              return (idx > 0 ? '<span class="ep-modal-meta-sep">·</span>' : '') + '<span>' + p + '</span>';
+          }).join('') +
+          '</div>'
+        : '';
+
+    // Overview completa (non troncata, lasciamo che scrolli internamente al modal)
+    var overviewHtml = '';
+    if (ep.overview && !ep.is_future) {
+        overviewHtml = '<p class="ep-modal-overview">' + escapeHtml(ep.overview) + '</p>';
+    } else if (ep.is_future) {
+        overviewHtml = '<p class="ep-modal-overview ep-modal-overview--future">Trama non ancora disponibile (episodio in uscita).</p>';
+    } else {
+        overviewHtml = '<p class="ep-modal-overview ep-modal-overview--missing">Descrizione non disponibile per questo episodio.</p>';
+    }
+
+    // Micro-strip provider "Disponibile su": link al CATALOGO SERIE (i singoli
+    // episodi non hanno deep-link nelle piattaforme streaming italiane).
+    // Mostrata solo se la serie ha provider flatrate (= incluso abbonamento).
+    // Non mostrata per episodi futuri (= confonderebbe l'utente).
+    var providersHtml = '';
+    var prov = window._cgSeriesProviders || { flatrate: [], rent: [], link: '' };
+    if (!ep.is_future && prov.flatrate && prov.flatrate.length > 0) {
+        var providerChips = prov.flatrate.slice(0, 4).map(function(p) {
+            var href = p.link || prov.link || '#';
+            var logoSrc = p.logo_url || '';
+            var logoHtml = logoSrc
+                ? '<img src="' + escapeHtml(logoSrc) + '" alt="" class="ep-modal-prov-logo">'
+                : '';
+            return '<a class="ep-modal-prov-chip" href="' + escapeHtml(href) + '" ' +
+                       'target="_blank" rel="nofollow noopener noreferrer" ' +
+                       'data-prov-name="' + escapeHtml(p.name || '') + '">' +
+                       logoHtml + '<span>' + escapeHtml(p.name || '') + '</span>' +
+                   '</a>';
+        }).join('');
+        providersHtml =
+            '<div class="ep-modal-providers">' +
+                '<div class="ep-modal-providers-label">📺 Guarda ' + escapeHtml(window._cgSeriesTitle || 'la serie') + ' su:</div>' +
+                '<div class="ep-modal-providers-chips">' + providerChips + '</div>' +
+            '</div>';
+    }
+
+    // Future badge inline al titolo
+    var futureBadge = ep.is_future
+        ? ' <span class="ep-modal-future-badge">⏳ In uscita</span>'
+        : '';
+
+    return '' +
+        '<h2 class="ep-modal-title" id="episode-modal-title">' +
+            '<span class="ep-modal-snum">S' + escapeHtml(String(seasonNumber)) + ' · E' + escapeHtml(String(ep.ep)) + '</span>' +
+            '<span class="ep-modal-title-text">' + escapeHtml(ep.title || ('Episodio ' + ep.ep)) + '</span>' +
+            futureBadge +
+        '</h2>' +
+        bigStill +
+        metaHtml +
+        overviewHtml +
+        providersHtml;
+}
+
+// ESC key chiude il modal episodio
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        var modal = document.getElementById('episode-modal');
+        if (modal && modal.classList.contains('episode-modal--open')) {
+            closeEpisodeModal();
+        }
+    }
+});
+
+// Capture click su episode-item per memorizzare riferimento (per focus restore al close)
+document.addEventListener('click', function(e) {
+    var el = e.target.closest && e.target.closest('.episode-item');
+    if (el) window._cgLastEpisodeCard = el;
+}, true);
 
 // Al boot: se ci sono pillole "stagioni/episodi" e la sezione episodi esiste,
 // pre-carichiamo silenziosamente la stagione 1 dopo 1s (idle). Migliora UX:
