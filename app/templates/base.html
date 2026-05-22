@@ -985,18 +985,23 @@
                 currentWidth = 0;
                 bar.classList.add('cg-progress-active');
                 bar.style.transition = 'width 0.25s ease-out, opacity 0.2s ease-out';
-                // Salto rapido al 25% per feedback istantaneo al click
+                // Salto rapido al 45% per feedback istantaneo al click.
+                // Era 25%: troppo conservativo, su pagine veloci (<1s) la bar
+                // non arrivava neanche a metà prima del fade-out. YouTube/GitHub
+                // partono molto più aggressivi: l'utente deve vedere movimento.
                 requestAnimationFrame(function() {
-                    currentWidth = 25;
-                    bar.style.width = '25%';
+                    currentWidth = 45;
+                    bar.style.width = '45%';
                 });
-                // Poi cresce graduale verso 90% (mai 100% finché non arriva la nuova pagina)
+                // Poi cresce graduale verso 95% (mai 100% finché non arriva la nuova pagina).
+                // Aggiungiamo il 25% della distanza restante ogni 180ms (era 10% ogni 250ms),
+                // così la bar riempie velocemente nei primi 500-800ms e poi rallenta verso il 95%.
                 progressInterval = setInterval(function() {
-                    if (currentWidth < 90) {
-                        currentWidth += (90 - currentWidth) * 0.1;
+                    if (currentWidth < 95) {
+                        currentWidth += (95 - currentWidth) * 0.25;
                         bar.style.width = currentWidth + '%';
                     }
-                }, 250);
+                }, 180);
                 // Safety: se la nav non avviene entro 4s, resetta
                 resetTimeout = setTimeout(reset, 4000);
             }
