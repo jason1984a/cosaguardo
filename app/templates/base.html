@@ -1070,11 +1070,22 @@
                 }
             }, true);
 
-            // Cleanup quando la nuova pagina si carica
-            window.addEventListener('beforeunload', finish);
+            // Cleanup quando la pagina viene davvero scaricata.
+            //
+            // BUG FIX: precedente codice usava 'beforeunload' che scatta QUANDO il
+            // browser INIZIA la navigazione (decine di ms dopo il click), NON quando
+            // la nuova pagina arriva. Su mobile con pagine 2-5s la bar sembrava
+            // scomparire prematuramente. Usiamo:
+            //   - 'pagehide': scatta più tardi, quando la pagina viene davvero
+            //     distaccata dal DOM (= la nuova è quasi visibile). Standard moderno.
+            //   - 'pageshow' con persisted: per back/forward da bfcache (caso edge).
+            // Niente 'beforeunload' qui: era la causa del fade-out prematuro.
+            window.addEventListener('pagehide', finish);
             window.addEventListener('pageshow', function(e) {
-                // pageshow scatta anche su back/forward dalla bfcache
-                if (e.persisted || progressInterval) finish();
+                // pageshow scatta su back/forward dalla bfcache: completa la bar
+                // se stava ancora correndo (= utente è tornato indietro mentre la
+                // bar era attiva)
+                if (e.persisted && progressInterval) finish();
             });
             // Safety: se per qualsiasi motivo la bar resta attiva dopo onload, reset
             window.addEventListener('load', function() {
