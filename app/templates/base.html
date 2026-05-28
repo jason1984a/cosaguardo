@@ -268,12 +268,16 @@
         }
 
         /* ── MENU TRIGGER + DRAWER ─────────────────────────────────────── */
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
         .cg-menu-trigger {
             display: inline-flex;
             align-items: center;
             gap: 7px;
-            padding: 7px 12px 7px 10px;
-            margin-left: 4px;
+            padding: 8px 12px;
             border-radius: 12px;
             border: 1px solid var(--border);
             background: rgba(255,255,255,0.04);
@@ -369,11 +373,14 @@
         }
         .cg-drawer-link:hover { background: rgba(255,255,255,0.06); }
         .cg-drawer-ico {
-            font-size: 1.15rem;
             width: 26px;
-            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             flex-shrink: 0;
+            color: var(--muted);
         }
+        .cg-drawer-link:hover .cg-drawer-ico { color: var(--text); }
         .cg-drawer-link-txt {
             display: flex;
             flex-direction: column;
@@ -396,7 +403,7 @@
             border: 1px solid rgba(110,168,254,0.3);
         }
         .cg-drawer-link--cta:hover { background: rgba(110,168,254,0.2); }
-        .cg-drawer-link--cta .cg-drawer-ico { color: var(--primary); font-weight: 800; }
+        .cg-drawer-link--cta .cg-drawer-ico { color: var(--primary); }
 
         .cg-drawer-sep {
             height: 1px;
@@ -1033,7 +1040,8 @@
             .nav-icon svg, .nav-icon i { width: 18px !important; height: 18px !important; }
             .qs-trigger { margin-right: 2px; padding: 0 8px; height: 34px; }
             /* Sotto i 480px: solo icona hamburger, niente label "Menu" (spazio) */
-            .cg-menu-trigger { padding: 7px 9px; margin-left: 0; }
+            .header-left { gap: 8px; }
+            .cg-menu-trigger { padding: 7px 9px; }
             .cg-menu-trigger-label { display: none; }
         }
     </style>
@@ -1242,6 +1250,7 @@
     <div class="site-wrapper">
         <header class="site-header">
             <div class="container header-inner">
+                <div class="header-left">
                 <a href="/" class="brand">
                     <svg viewBox="0 0 104 112" xmlns="http://www.w3.org/2000/svg" class="brand-icon" aria-hidden="true">
                         <defs>
@@ -1268,9 +1277,10 @@
                 <button type="button" class="cg-menu-trigger" id="cg-menu-trigger"
                         aria-label="Apri menu di navigazione" aria-expanded="false"
                         aria-controls="cg-drawer">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
                     <span class="cg-menu-trigger-label">Menu</span>
                 </button>
+                </div>
 
                 <nav class="nav">
                     <div class="nav-links">
@@ -1336,31 +1346,31 @@
 
             <nav class="cg-drawer-nav" aria-label="Sezioni del sito">
                 <a href="/" class="cg-drawer-link">
-                    <span class="cg-drawer-ico">🏠</span>
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>Home</strong><small>Trova consigli su misura</small></span>
                 </a>
                 <a href="/scopri" class="cg-drawer-link">
-                    <span class="cg-drawer-ico">🧭</span>
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>Scopri</strong><small>Sfoglia per genere e umore</small></span>
                 </a>
                 <a href="/dove-vedere" class="cg-drawer-link">
-                    <span class="cg-drawer-ico">📺</span>
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="13" rx="2"/><polyline points="8 3 12 7 16 3"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>Dove vedere</strong><small>Su quale piattaforma è disponibile</small></span>
                 </a>
                 <a href="/migliori" class="cg-drawer-link">
-                    <span class="cg-drawer-ico">🏆</span>
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>I migliori</strong><small>Le classifiche per genere e piattaforma</small></span>
                 </a>
                 <a href="/cosa-serve" class="cg-drawer-link">
-                    <span class="cg-drawer-ico">🛋️</span>
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>Cosa serve per guardare</strong><small>TV, dispositivi e accessori consigliati</small></span>
                 </a>
                 <a href="/la-mia-raccolta" class="cg-drawer-link">
-                    <span class="cg-drawer-ico">🔖</span>
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>La mia raccolta</strong><small>Titoli salvati e serie tracciate</small></span>
                 </a>
                 <a href="/come-funziona" class="cg-drawer-link">
-                    <span class="cg-drawer-ico">💡</span>
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>Come funziona</strong><small>Cos'è CosaGuardo in 3 passi</small></span>
                 </a>
 
@@ -1368,12 +1378,12 @@
 
                 {% if is_logged_in %}
                 <a href="/profilo" class="cg-drawer-link">
-                    <span class="cg-drawer-ico">👤</span>
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>Profilo</strong><small>{{ user_email }}</small></span>
                 </a>
                 {% else %}
                 <a href="/login" class="cg-drawer-link cg-drawer-link--cta">
-                    <span class="cg-drawer-ico">→</span>
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>Accedi o registrati</strong><small>Gratis, sblocca salvataggi e avvisi</small></span>
                 </a>
                 {% endif %}
