@@ -267,6 +267,147 @@
             border-color: rgba(110,168,254,0.5);
         }
 
+        /* ── MENU TRIGGER + DRAWER ─────────────────────────────────────── */
+        .cg-menu-trigger {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 7px 12px 7px 10px;
+            margin-left: 4px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.04);
+            color: var(--muted);
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.9rem;
+            transition: 0.2s ease;
+            flex-shrink: 0;
+        }
+        .cg-menu-trigger:hover {
+            background: rgba(255,255,255,0.08);
+            color: var(--text);
+        }
+        .cg-menu-trigger svg { flex-shrink: 0; }
+        .cg-menu-trigger-label { font-weight: 600; }
+
+        .cg-drawer-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(5,8,18,0.6);
+            backdrop-filter: blur(2px);
+            z-index: 90;
+            opacity: 0;
+            transition: opacity 0.22s ease;
+        }
+        .cg-drawer-backdrop.cg-open { opacity: 1; }
+
+        .cg-drawer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 312px;
+            max-width: 86vw;
+            background: var(--bg-soft);
+            border-right: 1px solid var(--border);
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            z-index: 100;
+            transform: translateX(-100%);
+            transition: transform 0.26s cubic-bezier(0.4,0,0.2,1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .cg-drawer.cg-open { transform: translateX(0); }
+
+        .cg-drawer-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 18px 14px;
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            background: var(--bg-soft);
+        }
+        .cg-drawer-title {
+            font-weight: 800;
+            font-size: 0.95rem;
+            letter-spacing: -0.01em;
+            color: var(--text);
+        }
+        .cg-drawer-close {
+            background: none;
+            border: none;
+            color: var(--muted);
+            font-size: 1.6rem;
+            line-height: 1;
+            cursor: pointer;
+            padding: 0 4px;
+            border-radius: 8px;
+            transition: 0.15s ease;
+        }
+        .cg-drawer-close:hover { color: var(--text); }
+
+        .cg-drawer-nav {
+            padding: 10px 12px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .cg-drawer-link {
+            display: flex;
+            align-items: center;
+            gap: 13px;
+            padding: 11px 12px;
+            border-radius: 12px;
+            color: var(--text);
+            text-decoration: none;
+            transition: 0.15s ease;
+        }
+        .cg-drawer-link:hover { background: rgba(255,255,255,0.06); }
+        .cg-drawer-ico {
+            font-size: 1.15rem;
+            width: 26px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .cg-drawer-link-txt {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            min-width: 0;
+        }
+        .cg-drawer-link-txt strong {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+        .cg-drawer-link-txt small {
+            font-size: 0.78rem;
+            color: var(--muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cg-drawer-link--cta {
+            background: rgba(110,168,254,0.12);
+            border: 1px solid rgba(110,168,254,0.3);
+        }
+        .cg-drawer-link--cta:hover { background: rgba(110,168,254,0.2); }
+        .cg-drawer-link--cta .cg-drawer-ico { color: var(--primary); font-weight: 800; }
+
+        .cg-drawer-sep {
+            height: 1px;
+            background: var(--border);
+            margin: 10px 12px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .cg-drawer, .cg-drawer-backdrop { transition: none; }
+        }
+
         /* ── QUICK SEARCH (lente nell'header) ─────────────────────────── */
         .qs-trigger {
             display: inline-flex;
@@ -891,6 +1032,9 @@
             .nav-icon { width: 18px; min-width: 18px; }
             .nav-icon svg, .nav-icon i { width: 18px !important; height: 18px !important; }
             .qs-trigger { margin-right: 2px; padding: 0 8px; height: 34px; }
+            /* Sotto i 480px: solo icona hamburger, niente label "Menu" (spazio) */
+            .cg-menu-trigger { padding: 7px 9px; margin-left: 0; }
+            .cg-menu-trigger-label { display: none; }
         }
     </style>
 
@@ -1118,6 +1262,16 @@
                     <span class="brand-text">CosaGuardo</span>
                 </a>
 
+                {# ─── MENU TRIGGER (apre il drawer di navigazione) ───────────────
+                   Raccoglie tutte le sezioni SEO/navigazione in un pannello laterale,
+                   così la barra in alto resta leggera anche su mobile stretto. #}
+                <button type="button" class="cg-menu-trigger" id="cg-menu-trigger"
+                        aria-label="Apri menu di navigazione" aria-expanded="false"
+                        aria-controls="cg-drawer">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    <span class="cg-menu-trigger-label">Menu</span>
+                </button>
+
                 <nav class="nav">
                     <div class="nav-links">
                         <button type="button" class="qs-trigger" id="qs-trigger" aria-label="Cerca film o serie TV">
@@ -1167,6 +1321,64 @@
                 </nav>
             </div>
         </header>
+
+        {# ─── DRAWER DI NAVIGAZIONE ──────────────────────────────────────────
+           Pannello laterale con tutte le sezioni del sito. Aperto da #cg-menu-trigger.
+           Chiuso da: backdrop click, tasto ×, ESC, click su un link.
+           Self-contained: stili e JS inline più sotto. #}
+        <div class="cg-drawer-backdrop" id="cg-drawer-backdrop" hidden></div>
+        <aside class="cg-drawer" id="cg-drawer" role="dialog" aria-modal="true"
+               aria-label="Menu di navigazione" aria-hidden="true">
+            <div class="cg-drawer-head">
+                <span class="cg-drawer-title">Esplora CosaGuardo</span>
+                <button type="button" class="cg-drawer-close" id="cg-drawer-close" aria-label="Chiudi menu">×</button>
+            </div>
+
+            <nav class="cg-drawer-nav" aria-label="Sezioni del sito">
+                <a href="/" class="cg-drawer-link">
+                    <span class="cg-drawer-ico">🏠</span>
+                    <span class="cg-drawer-link-txt"><strong>Home</strong><small>Trova consigli su misura</small></span>
+                </a>
+                <a href="/scopri" class="cg-drawer-link">
+                    <span class="cg-drawer-ico">🧭</span>
+                    <span class="cg-drawer-link-txt"><strong>Scopri</strong><small>Sfoglia per genere e umore</small></span>
+                </a>
+                <a href="/dove-vedere" class="cg-drawer-link">
+                    <span class="cg-drawer-ico">📺</span>
+                    <span class="cg-drawer-link-txt"><strong>Dove vedere</strong><small>Su quale piattaforma è disponibile</small></span>
+                </a>
+                <a href="/migliori" class="cg-drawer-link">
+                    <span class="cg-drawer-ico">🏆</span>
+                    <span class="cg-drawer-link-txt"><strong>I migliori</strong><small>Le classifiche per genere e piattaforma</small></span>
+                </a>
+                <a href="/cosa-serve" class="cg-drawer-link">
+                    <span class="cg-drawer-ico">🛋️</span>
+                    <span class="cg-drawer-link-txt"><strong>Cosa serve per guardare</strong><small>TV, dispositivi e accessori consigliati</small></span>
+                </a>
+                <a href="/la-mia-raccolta" class="cg-drawer-link">
+                    <span class="cg-drawer-ico">🔖</span>
+                    <span class="cg-drawer-link-txt"><strong>La mia raccolta</strong><small>Titoli salvati e serie tracciate</small></span>
+                </a>
+                <a href="/come-funziona" class="cg-drawer-link">
+                    <span class="cg-drawer-ico">💡</span>
+                    <span class="cg-drawer-link-txt"><strong>Come funziona</strong><small>Cos'è CosaGuardo in 3 passi</small></span>
+                </a>
+
+                <div class="cg-drawer-sep"></div>
+
+                {% if is_logged_in %}
+                <a href="/profilo" class="cg-drawer-link">
+                    <span class="cg-drawer-ico">👤</span>
+                    <span class="cg-drawer-link-txt"><strong>Profilo</strong><small>{{ user_email }}</small></span>
+                </a>
+                {% else %}
+                <a href="/login" class="cg-drawer-link cg-drawer-link--cta">
+                    <span class="cg-drawer-ico">→</span>
+                    <span class="cg-drawer-link-txt"><strong>Accedi o registrati</strong><small>Gratis, sblocca salvataggi e avvisi</small></span>
+                </a>
+                {% endif %}
+            </nav>
+        </aside>
 
         <main class="main-content">
             <div class="container">
@@ -1983,6 +2195,62 @@
                     el.style.pointerEvents = '';
                 });
         }
+    })();
+    </script>
+
+    {# ─── DRAWER NAV: open/close logic ──────────────────────────────────────
+       Self-contained. Apertura da #cg-menu-trigger, chiusura da × / backdrop /
+       ESC / click su un link. Gestione focus + body scroll lock + aria. #}
+    <script>
+    (function () {
+        var trigger  = document.getElementById('cg-menu-trigger');
+        var drawer   = document.getElementById('cg-drawer');
+        var backdrop = document.getElementById('cg-drawer-backdrop');
+        var closeBtn = document.getElementById('cg-drawer-close');
+        if (!trigger || !drawer || !backdrop) return;
+
+        var lastFocus = null;
+
+        function openDrawer() {
+            lastFocus = document.activeElement;
+            backdrop.hidden = false;
+            // forza reflow così la transizione di opacità parte
+            void backdrop.offsetWidth;
+            drawer.classList.add('cg-open');
+            backdrop.classList.add('cg-open');
+            drawer.setAttribute('aria-hidden', 'false');
+            trigger.setAttribute('aria-expanded', 'true');
+            document.body.style.overflow = 'hidden';
+            if (closeBtn) closeBtn.focus();
+            document.addEventListener('keydown', onKeydown);
+        }
+
+        function closeDrawer() {
+            drawer.classList.remove('cg-open');
+            backdrop.classList.remove('cg-open');
+            drawer.setAttribute('aria-hidden', 'true');
+            trigger.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+            document.removeEventListener('keydown', onKeydown);
+            // nascondi il backdrop a fine transizione (evita click-blocking invisibile)
+            setTimeout(function () {
+                if (!drawer.classList.contains('cg-open')) backdrop.hidden = true;
+            }, 260);
+            if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+        }
+
+        function onKeydown(e) {
+            if (e.key === 'Escape' || e.key === 'Esc') closeDrawer();
+        }
+
+        trigger.addEventListener('click', openDrawer);
+        backdrop.addEventListener('click', closeDrawer);
+        if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+
+        // Click su un link: chiudi subito (la navigazione parte comunque).
+        drawer.querySelectorAll('a.cg-drawer-link').forEach(function (a) {
+            a.addEventListener('click', function () { closeDrawer(); });
+        });
     })();
     </script>
 

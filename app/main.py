@@ -3149,6 +3149,8 @@ def sitemap():
         ("/dove-vedere?tipo=film",  "daily", "0.7"),
         ("/dove-vedere?tipo=serie", "daily", "0.7"),
         ("/installa",        "monthly", "0.5"),
+        ("/come-funziona",   "monthly", "0.6"),
+        ("/cosa-serve",      "monthly", "0.6"),
         ("/privacy",         "yearly",  "0.3"),
         ("/termini",         "yearly",  "0.3"),
     ]
@@ -3244,6 +3246,19 @@ def come_funziona(request: Request):
     """
     return templates.TemplateResponse(
         request=request, name="come_funziona.html", context={"request": request}
+    )
+
+
+@app.get("/cosa-serve", response_class=HTMLResponse)
+def cosa_serve(request: Request):
+    """
+    Pagina "Cosa serve per guardare in streaming": guida hardware/accessori
+    (smart TV, streaming device, soundbar, proiettori) con link affiliati Amazon.
+    SEO target: "cosa serve per guardare netflix", "miglior dispositivo streaming",
+    "come rendere smart la tv". Monetizzazione via Amazon Associates.
+    """
+    return templates.TemplateResponse(
+        request=request, name="cosa_serve.html", context={"request": request}
     )
 
 

@@ -1,0 +1,369 @@
+{% extends "base.html" %}
+
+{% block title %}Cosa serve per guardare film e serie in streaming: TV, dispositivi e accessori{% endblock %}
+
+{% block meta_description %}La guida pratica a tutto ciò che serve per goderti film e serie in streaming: smart TV, dispositivi per rendere smart la tua TV, soundbar, proiettori e accessori. Consigli concreti per ogni budget.{% endblock %}
+
+{% block og_title %}Cosa serve per guardare in streaming — La guida di CosaGuardo{% endblock %}
+{% block og_description %}Smart TV, Fire TV Stick, soundbar, proiettori: tutto ciò che ti serve per guardare film e serie al meglio, spiegato semplice.{% endblock %}
+{% block og_image %}https://cosaguardo.com/static/og-default.jpg{% endblock %}
+
+{% block head_extra %}
+{# JSON-LD: BreadcrumbList per rich snippet Google. #}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {"@type": "ListItem", "position": 1, "name": "Home", "item": "https://cosaguardo.com/"},
+    {"@type": "ListItem", "position": 2, "name": "Cosa serve per guardare", "item": "https://cosaguardo.com/cosa-serve"}
+  ]
+}
+</script>
+
+<style>
+/* Page-scoped: CSS inline per componente standalone (convenzione CosaGuardo). */
+.cs-page {
+  max-width: 920px;
+  margin: 24px auto 60px;
+  padding: 0 16px;
+  color: var(--text);
+}
+
+.cs-breadcrumb {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.cs-breadcrumb a { color: var(--muted); text-decoration: none; }
+.cs-breadcrumb a:hover { color: var(--text); }
+.cs-breadcrumb-sep { margin: 0 6px; opacity: 0.5; }
+
+.cs-hero {
+  text-align: center;
+  padding: 18px 0 24px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  margin-bottom: 26px;
+}
+.cs-hero h1 {
+  font-size: 32px;
+  line-height: 1.18;
+  margin: 0 0 12px;
+  font-weight: 700;
+}
+.cs-hero p.cs-lead {
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--muted);
+  margin: 0 auto;
+  max-width: 660px;
+}
+
+/* Disclosure affiliazione — obbligatoria, ben visibile ma non invadente */
+.cs-disclosure {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 12px 15px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+  margin: 0 0 30px;
+}
+.cs-disclosure strong { color: var(--text); }
+
+.cs-section { margin: 0 0 38px; }
+.cs-section > h2 {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 6px;
+}
+.cs-section > p.cs-section-intro {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0 0 18px;
+}
+
+/* Griglia prodotti */
+.cs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.cs-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 20px 18px;
+  display: flex;
+  flex-direction: column;
+}
+.cs-card-tag {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--primary);
+  background: rgba(110,168,254,0.12);
+  border: 1px solid rgba(110,168,254,0.25);
+  padding: 3px 9px;
+  border-radius: 999px;
+  margin-bottom: 12px;
+}
+.cs-card h3 {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.cs-card p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 0 0 18px;
+  flex-grow: 1;
+}
+.cs-card-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  align-self: flex-start;
+  background: linear-gradient(135deg, #ff9900, #ff7a00);
+  color: #1a1300;
+  text-decoration: none;
+  padding: 11px 18px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 14.5px;
+  transition: transform .15s, box-shadow .15s;
+  box-shadow: 0 4px 14px rgba(255,153,0,0.25);
+}
+.cs-card-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(255,153,0,0.4);
+}
+
+/* Mini FAQ / nota finale */
+.cs-note {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
+  padding: 18px 18px;
+  margin: 8px 0 0;
+}
+.cs-note h3 { font-size: 15px; font-weight: 700; margin: 0 0 8px; }
+.cs-note p { font-size: 14px; line-height: 1.6; color: var(--muted); margin: 0; }
+
+.cs-final-cta {
+  text-align: center;
+  margin: 38px 0 0;
+  padding: 26px 0 0;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.cs-final-cta p { font-size: 17px; margin: 0 0 14px; color: var(--text); }
+.cs-final-cta-btn {
+  display: inline-block;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  color: #fff;
+  text-decoration: none;
+  padding: 13px 28px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 16px;
+  box-shadow: 0 4px 14px rgba(79,70,229,0.35);
+  transition: transform .15s, box-shadow .15s;
+}
+.cs-final-cta-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(79,70,229,0.5);
+}
+
+@media (max-width: 700px) {
+  .cs-hero h1 { font-size: 26px; }
+  .cs-hero p.cs-lead { font-size: 15.5px; }
+  .cs-section > h2 { font-size: 19px; }
+  .cs-grid { grid-template-columns: 1fr; gap: 12px; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="cs-page">
+
+  <nav class="cs-breadcrumb" aria-label="Briciole di pane">
+    <a href="/">Home</a>
+    <span class="cs-breadcrumb-sep">›</span>
+    <span>Cosa serve per guardare</span>
+  </nav>
+
+  <header class="cs-hero">
+    <h1>Cosa serve per guardare film e serie in streaming</h1>
+    <p class="cs-lead">
+      Hai trovato cosa guardare, ora ti serve il modo migliore per godertelo.
+      Ecco i dispositivi e gli accessori che fanno davvero la differenza —
+      spiegati semplici, per ogni esigenza e budget.
+    </p>
+  </header>
+
+  {# Disclosure affiliazione — OBBLIGATORIA per ToS Amazon e per trasparenza. #}
+  <p class="cs-disclosure">
+    <strong>Trasparenza:</strong> in qualità di Affiliato Amazon, CosaGuardo riceve un guadagno
+    dagli acquisti idonei effettuati tramite i link in questa pagina. Per te il prezzo non cambia,
+    e ci aiuti a mantenere il servizio gratuito. Consigliamo solo prodotti che riteniamo validi.
+  </p>
+
+  <!-- ════════════ SEZIONE 1: RENDERE SMART LA TV ════════════ -->
+  <section class="cs-section">
+    <h2>Rendi smart la tua TV</h2>
+    <p class="cs-section-intro">
+      Se hai una TV senza app di streaming (o con un sistema lento e datato), un piccolo
+      dispositivo da collegare alla porta HDMI le dà accesso a Netflix, Prime Video, Disney+ e tutte le altre.
+    </p>
+    <div class="cs-grid">
+
+      <article class="cs-card">
+        <span class="cs-card-tag">Il più popolare</span>
+        <h3>Amazon Fire TV Stick 4K</h3>
+        <p>
+          Il modo più economico per rendere smart qualsiasi TV con ingresso HDMI. Supporta 4K,
+          telecomando vocale con Alexa, e tutte le app di streaming italiane. Perfetto se vuoi spendere poco.
+        </p>
+        <a class="cs-card-btn" href="https://www.amazon.it/s?k=fire+tv+stick+4k&tag=cosaguardo-21"
+           target="_blank" rel="nofollow sponsored noopener">Vedi su Amazon →</a>
+      </article>
+
+      <article class="cs-card">
+        <span class="cs-card-tag">Alternativa premium</span>
+        <h3>Chromecast / Google TV</h3>
+        <p>
+          Se usi l'ecosistema Google e Android, lo streaming device con Google TV offre
+          un'interfaccia che aggrega i consigli da tutte le app. Ottimo telecomando incluso.
+        </p>
+        <a class="cs-card-btn" href="https://www.amazon.it/s?k=chromecast+google+tv&tag=cosaguardo-21"
+           target="_blank" rel="nofollow sponsored noopener">Vedi su Amazon →</a>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ════════════ SEZIONE 2: LA TV ════════════ -->
+  <section class="cs-section">
+    <h2>Una nuova smart TV</h2>
+    <p class="cs-section-intro">
+      Se è il momento di cambiare TV, oggi anche i modelli di fascia media hanno ottimo pannello
+      e app di streaming integrate. Punta su risoluzione 4K e, se guardi molti film, su un pannello con buoni neri.
+    </p>
+    <div class="cs-grid">
+
+      <article class="cs-card">
+        <span class="cs-card-tag">Qualità / prezzo</span>
+        <h3>Smart TV 4K 50-55"</h3>
+        <p>
+          La misura più equilibrata per un salotto medio. Cerca un modello 4K con HDR
+          e sistema smart integrato (Google TV, Fire TV o webOS): avrai le app già pronte senza accessori.
+        </p>
+        <a class="cs-card-btn" href="https://www.amazon.it/s?k=smart+tv+4k+50+pollici&tag=cosaguardo-21"
+           target="_blank" rel="nofollow sponsored noopener">Vedi su Amazon →</a>
+      </article>
+
+      <article class="cs-card">
+        <span class="cs-card-tag">Per i cinefili</span>
+        <h3>TV OLED</h3>
+        <p>
+          Se ami i film e le serie con tante scene scure, un pannello OLED offre neri assoluti
+          e contrasto che trasforma la visione. È l'upgrade più sensibile per chi guarda spesso al buio.
+        </p>
+        <a class="cs-card-btn" href="https://www.amazon.it/s?k=tv+oled+4k&tag=cosaguardo-21"
+           target="_blank" rel="nofollow sponsored noopener">Vedi su Amazon →</a>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ════════════ SEZIONE 3: AUDIO ════════════ -->
+  <section class="cs-section">
+    <h2>Audio: senti la differenza</h2>
+    <p class="cs-section-intro">
+      L'audio integrato delle TV sottili è quasi sempre il punto debole. Una soundbar è l'upgrade
+      che si nota di più, soprattutto sui dialoghi dei film e sulle colonne sonore delle serie.
+    </p>
+    <div class="cs-grid">
+
+      <article class="cs-card">
+        <span class="cs-card-tag">Upgrade più sentito</span>
+        <h3>Soundbar</h3>
+        <p>
+          Collegamento semplice (HDMI ARC o ottico), dialoghi più chiari e bassi che la TV
+          da sola non può dare. Anche un modello entry-level cambia completamente l'esperienza.
+        </p>
+        <a class="cs-card-btn" href="https://www.amazon.it/s?k=soundbar+tv&tag=cosaguardo-21"
+           target="_blank" rel="nofollow sponsored noopener">Vedi su Amazon →</a>
+      </article>
+
+      <article class="cs-card">
+        <span class="cs-card-tag">Per guardare di notte</span>
+        <h3>Cuffie wireless</h3>
+        <p>
+          Per goderti film e serie senza disturbare chi dorme, o per immergerti totalmente.
+          Le cuffie Bluetooth si collegano direttamente a molte smart TV e ai dispositivi di streaming.
+        </p>
+        <a class="cs-card-btn" href="https://www.amazon.it/s?k=cuffie+wireless+bluetooth&tag=cosaguardo-21"
+           target="_blank" rel="nofollow sponsored noopener">Vedi su Amazon →</a>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ════════════ SEZIONE 4: ESPERIENZA CINEMA ════════════ -->
+  <section class="cs-section">
+    <h2>L'esperienza cinema a casa</h2>
+    <p class="cs-section-intro">
+      Per chi vuole fare il salto verso il grande schermo, o semplicemente rendere più comode
+      le maratone di serie.
+    </p>
+    <div class="cs-grid">
+
+      <article class="cs-card">
+        <span class="cs-card-tag">Grande schermo</span>
+        <h3>Proiettore</h3>
+        <p>
+          Un proiettore moderno trasforma una parete in uno schermo da cinema. Molti modelli
+          hanno già le app di streaming integrate e si configurano in pochi minuti.
+        </p>
+        <a class="cs-card-btn" href="https://www.amazon.it/s?k=proiettore+full+hd&tag=cosaguardo-21"
+           target="_blank" rel="nofollow sponsored noopener">Vedi su Amazon →</a>
+      </article>
+
+      <article class="cs-card">
+        <span class="cs-card-tag">Comfort</span>
+        <h3>Accessori per la serata film</h3>
+        <p>
+          Una buona connessione conta: un cavo HDMI di qualità o un mesh Wi-Fi eliminano i
+          buffering durante i momenti clou. E per le maratone, un plaid e un supporto tablet non guastano.
+        </p>
+        <a class="cs-card-btn" href="https://www.amazon.it/s?k=cavo+hdmi+4k&tag=cosaguardo-21"
+           target="_blank" rel="nofollow sponsored noopener">Vedi su Amazon →</a>
+      </article>
+
+    </div>
+  </section>
+
+  <div class="cs-note">
+    <h3>Come scegliamo i prodotti</h3>
+    <p>
+      Indichiamo categorie e tipologie utili per guardare film e serie in streaming, non
+      sponsorizzazioni di singoli marchi. Ti rimandiamo alle pagine Amazon dove puoi confrontare
+      modelli, prezzi aggiornati e recensioni reali prima di decidere.
+    </p>
+  </div>
+
+  <div class="cs-final-cta">
+    <p>Hardware a posto? Adesso trova cosa guardare.</p>
+    <a href="/" class="cs-final-cta-btn">Dimmi cosa hai amato →</a>
+  </div>
+
+</div>
+{% endblock %}
