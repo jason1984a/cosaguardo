@@ -36,9 +36,9 @@
         <div class="scopri-header-actions">
             <!-- Toggle tipo -->
             <div class="scopri-tipo-toggle">
-                <a href="/scopri?tipo=film{% if genere %}&genere={{ genere }}{% endif %}{% if mood %}&mood={{ mood }}{% endif %}{% if piattaforma %}&piattaforma={{ piattaforma }}{% endif %}{% if anno %}&anno={{ anno }}{% endif %}"
+                <a href="/scopri?tipo=film{% if genere %}&genere={{ genere }}{% endif %}{% if mood %}&mood={{ mood }}{% endif %}{% if piattaforma %}&piattaforma={{ piattaforma }}{% endif %}{% if anno %}&anno={{ anno }}{% endif %}{% if voto %}&voto={{ voto }}{% endif %}"
                    class="tipo-btn {% if tipo == 'film' %}active{% endif %}">🎬 Film</a>
-                <a href="/scopri?tipo=serie{% if genere %}&genere={{ genere }}{% endif %}{% if mood %}&mood={{ mood }}{% endif %}{% if piattaforma %}&piattaforma={{ piattaforma }}{% endif %}{% if anno %}&anno={{ anno }}{% endif %}"
+                <a href="/scopri?tipo=serie{% if genere %}&genere={{ genere }}{% endif %}{% if mood %}&mood={{ mood }}{% endif %}{% if piattaforma %}&piattaforma={{ piattaforma }}{% endif %}{% if anno %}&anno={{ anno }}{% endif %}{% if voto %}&voto={{ voto }}{% endif %}"
                    class="tipo-btn {% if tipo == 'serie' %}active{% endif %}">📺 Serie</a>
             </div>
             <!-- Filtri toggle -->
@@ -256,7 +256,7 @@
     <!-- PAGINAZIONE -->
     <div class="scopri-pagination">
         {% if has_prev %}
-        <a href="/scopri?tipo={{ tipo }}&genere={{ genere }}&mood={{ mood }}&piattaforma={{ piattaforma }}&anno={{ anno }}&page={{ page - 1 }}"
+        <a href="/scopri?tipo={{ tipo }}&genere={{ genere }}&mood={{ mood }}&piattaforma={{ piattaforma }}&anno={{ anno }}&voto={{ voto }}&page={{ page - 1 }}"
            class="scopri-page-btn">
             <i data-lucide="arrow-left" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
             Precedente
@@ -264,7 +264,7 @@
         {% endif %}
         <span class="scopri-page-info">Pagina {{ page }}</span>
         {% if has_next %}
-        <a href="/scopri?tipo={{ tipo }}&genere={{ genere }}&mood={{ mood }}&piattaforma={{ piattaforma }}&anno={{ anno }}&page={{ page + 1 }}"
+        <a href="/scopri?tipo={{ tipo }}&genere={{ genere }}&mood={{ mood }}&piattaforma={{ piattaforma }}&anno={{ anno }}&voto={{ voto }}&page={{ page + 1 }}"
            class="scopri-page-btn">
             Successiva
             <i data-lucide="arrow-right" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
