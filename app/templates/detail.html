@@ -399,6 +399,22 @@ html, body {
     border: 1px solid rgba(110,168,254,0.2);
 }
 
+/* Variante cliccabile: <a> verso /scopri filtrato per genere. */
+a.detail-genre-tag--link {
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+a.detail-genre-tag--link:hover {
+    background: rgba(110,168,254,0.22);
+    border-color: rgba(110,168,254,0.45);
+    transform: translateY(-1px);
+}
+a.detail-genre-tag--link:focus-visible {
+    outline: 2px solid #93c5fd;
+    outline-offset: 2px;
+}
+
 /* ── ACTIONS ─────────────────────────────────────────────────────────────── */
 .detail-actions {
     display: flex;
@@ -1713,7 +1729,17 @@ html, body {
             {% if detail.genres %}
             <div class="detail-genres">
                 {% for g in detail.genres %}
-                <span class="detail-genre-tag">{{ g }}</span>
+                    {# Se il genere TMDb è mappabile su uno slug /scopri,
+                       il chip diventa cliccabile → /scopri?tipo=...&genere=slug.
+                       Altrimenti resta <span> non-cliccabile (no dead click). #}
+                    {% set gslug = genre_to_slug(g) if genre_to_slug else None %}
+                    {% if gslug %}
+                    <a class="detail-genre-tag detail-genre-tag--link"
+                       href="/scopri?tipo={{ scopri_tipo }}&genere={{ gslug }}"
+                       aria-label="Scopri {% if scopri_tipo == "serie" %}altre serie{% else %}altri film{% endif %} del genere {{ g }}">{{ g }}</a>
+                    {% else %}
+                    <span class="detail-genre-tag">{{ g }}</span>
+                    {% endif %}
                 {% endfor %}
             </div>
             {% endif %}
@@ -2131,7 +2157,15 @@ html, body {
                     <div style="font-size:0.7rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px;">Generi</div>
                     <div style="display:flex;flex-wrap:wrap;gap:4px;">
                         {% for g in detail.genres %}
-                        <span class="detail-genre-tag" style="font-size:0.7rem;">{{ g }}</span>
+                            {% set gslug = genre_to_slug(g) if genre_to_slug else None %}
+                            {% if gslug %}
+                            <a class="detail-genre-tag detail-genre-tag--link"
+                               style="font-size:0.7rem;"
+                               href="/scopri?tipo={{ scopri_tipo }}&genere={{ gslug }}"
+                               aria-label="Scopri {% if scopri_tipo == "serie" %}altre serie{% else %}altri film{% endif %} del genere {{ g }}">{{ g }}</a>
+                            {% else %}
+                            <span class="detail-genre-tag" style="font-size:0.7rem;">{{ g }}</span>
+                            {% endif %}
                         {% endfor %}
                     </div>
                 </div>

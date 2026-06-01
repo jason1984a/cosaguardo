@@ -2131,6 +2131,9 @@ def film_detail(request: Request, tmdb_id: int):
             "is_liked":   title_state.get("preference") == "liked",
             "is_seen":    title_state.get("seen", 0) == 1,
             "seo_slug":   get_slug_by_tmdb_id(tmdb_id, "movie"),
+            # Per chip generi cliccabili → /scopri (vedi GENRE_TO_SCOPRI_SLUG)
+            "scopri_tipo":      "film",
+            "genre_to_slug":    genre_to_scopri_slug,
         },
     )
 
@@ -2198,6 +2201,9 @@ def serie_detail(request: Request, tmdb_id: int):
             "is_seen":    title_state.get("seen", 0) == 1,
             "seo_slug":   get_slug_by_tmdb_id(tmdb_id, "tv"),
             "series_tracking": series_tracking,
+            # Per chip generi cliccabili → /scopri (vedi GENRE_TO_SCOPRI_SLUG)
+            "scopri_tipo":      "serie",
+            "genre_to_slug":    genre_to_scopri_slug,
         },
     )
 
@@ -3149,8 +3155,6 @@ def sitemap():
         ("/dove-vedere?tipo=film",  "daily", "0.7"),
         ("/dove-vedere?tipo=serie", "daily", "0.7"),
         ("/installa",        "monthly", "0.5"),
-        ("/come-funziona",   "monthly", "0.6"),
-        ("/cosa-serve",      "monthly", "0.6"),
         ("/privacy",         "yearly",  "0.3"),
         ("/termini",         "yearly",  "0.3"),
     ]
@@ -3246,19 +3250,6 @@ def come_funziona(request: Request):
     """
     return templates.TemplateResponse(
         request=request, name="come_funziona.html", context={"request": request}
-    )
-
-
-@app.get("/cosa-serve", response_class=HTMLResponse)
-def cosa_serve(request: Request):
-    """
-    Pagina "Cosa serve per guardare in streaming": guida hardware/accessori
-    (smart TV, streaming device, soundbar, proiettori) con link affiliati Amazon.
-    SEO target: "cosa serve per guardare netflix", "miglior dispositivo streaming",
-    "come rendere smart la tv". Monetizzazione via Amazon Associates.
-    """
-    return templates.TemplateResponse(
-        request=request, name="cosa_serve.html", context={"request": request}
     )
 
 
@@ -3419,6 +3410,56 @@ def persona_detail(request: Request, person_id: int):
         name="persona.html",
         context={"request": request, "detail": detail},
     )
+
+
+# ── Mappa nomi generi TMDb (it-IT) → slug accettati da /scopri ───────────
+# Usata in film_detail/serie_detail per rendere CLICCABILI i chip generi nella
+# scheda (linkano a /scopri filtrato per genere). I generi TMDb senza match
+# qui dentro restano <span> non-cliccabili (niente dead click, ma info preservata).
+# Slug validi /scopri (vedi scopri.html riga 62): azione, thriller, horror,
+# commedia, dramma, fantascienza, romantico, animazione, crimine, documentario,
+# mistero, western.
+GENRE_TO_SCOPRI_SLUG = {
+    # Film (TMDb /genre/movie/list?language=it-IT — 19 generi)
+    "azione":          "azione",
+    "avventura":       None,            # no slug /scopri corrispondente
+    "animazione":      "animazione",
+    "commedia":        "commedia",
+    "crime":           "crimine",       # TMDb-it restituisce "Crime"
+    "crimine":         "crimine",       # safety net
+    "documentario":    "documentario",
+    "dramma":          "dramma",
+    "famiglia":        None,
+    "fantasy":         None,
+    "fantascienza":    "fantascienza",
+    "storia":          None,
+    "horror":          "horror",
+    "musica":          None,
+    "mistero":         "mistero",
+    "romance":         "romantico",     # TMDb-it restituisce "Romance"
+    "romantico":       "romantico",     # safety net
+    "thriller":        "thriller",
+    "guerra":          None,
+    "western":         "western",
+    # Serie TV (TMDb /genre/tv/list?language=it-IT — 16 generi)
+    # I nomi misti EN/IT sono come TMDb li restituisce in it-IT.
+    "action & adventure": "azione",
+    "sci-fi & fantasy":   "fantascienza",
+    "kids":               "animazione",  # best-effort
+    "soap":               None,
+    "reality":            None,
+    "news":               None,
+    "talk":               None,
+    "war & politics":     None,
+}
+
+
+def genre_to_scopri_slug(name: str) -> str | None:
+    """Restituisce lo slug /scopri per un nome di genere TMDb, o None se non c'è match.
+    Case-insensitive e tollerante a spazi: usato dai template detail per i chip."""
+    if not name:
+        return None
+    return GENRE_TO_SCOPRI_SLUG.get(name.strip().lower())
 
 
 # ── Titoli SEO dinamici per /scopri ──────────────────────────────────────
