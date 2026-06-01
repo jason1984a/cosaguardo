@@ -2110,15 +2110,36 @@ def film_detail(request: Request, tmdb_id: int):
                 for rec in recs:
                     tmdb_info = tmdb_by_title.get(rec["title"])
                     if tmdb_info and tmdb_info.get("poster_url"):
+                        sim_tmdb_id = tmdb_info.get("tmdb_id")
                         similar.append({
                             "title":      tmdb_info.get("display_title") or rec["title"],
                             "poster_url": tmdb_info["poster_url"],
-                            "tmdb_id":    tmdb_info.get("tmdb_id"),
+                            "tmdb_id":    sim_tmdb_id,
                             "content_type": "movie",
+                            # PR-3: se il simile è un titolo SEO curato, linkiamo
+                            # alla pagina canonica /dove-vedere/{slug} invece che
+                            # alla /film/{id} (che potrebbe essere noindex).
+                            "seo_slug":   get_slug_by_tmdb_id(sim_tmdb_id, "movie") if sim_tmdb_id else None,
                         })
         except Exception as e:
             # Sezione "simili" è opzionale: la pagina detail funziona senza.
             log.warning("film_detail: similar build fallito per '%s': %s", detail.get("title"), e)
+
+    # ── Indicizzazione (PR-3, 01/06/2026) ─────────────────────────────────
+    # Strategia: /film/{id} è una pagina ricca per UX ma duplica
+    # /dove-vedere/{slug} quando il titolo è nei nostri SEO curati. Per non
+    # creare cannibalizzazione tra ~1.400 pagine curate e ~50K pagine
+    # /film/{id} generiche (che Google stava indicizzando in massa):
+    #   - SE il titolo è in seo_titles → INDEX + canonical → /dove-vedere/{slug}
+    #     (autorità concentrata sull'URL curato, UX preservata per gli utenti)
+    #   - SE NON è in seo_titles → NOINDEX, follow (la maggioranza dei TMDb id)
+    seo_slug = get_slug_by_tmdb_id(tmdb_id, "movie")
+    if seo_slug:
+        meta_robots = "index, follow"
+        canonical_url = f"https://cosaguardo.com/dove-vedere/{seo_slug}"
+    else:
+        meta_robots = "noindex, follow"
+        canonical_url = None
 
     return templates.TemplateResponse(
         request=request,
@@ -2130,7 +2151,9 @@ def film_detail(request: Request, tmdb_id: int):
             "is_logged_in": bool(user_id),
             "is_liked":   title_state.get("preference") == "liked",
             "is_seen":    title_state.get("seen", 0) == 1,
-            "seo_slug":   get_slug_by_tmdb_id(tmdb_id, "movie"),
+            "seo_slug":   seo_slug,
+            "meta_robots":  meta_robots,
+            "canonical_url": canonical_url,
             # Per chip generi cliccabili → /scopri (vedi GENRE_TO_SCOPRI_SLUG)
             "scopri_tipo":      "film",
             "genre_to_slug":    genre_to_scopri_slug,
@@ -2170,11 +2193,14 @@ def serie_detail(request: Request, tmdb_id: int):
             res = recommend_tv_from_seed_titles([detail["title"]])
             for rec in res.get("recommendations", [])[:6]:
                 pp = rec.get("poster_path", "")
+                sim_tmdb_id = rec.get("tv_id")
                 similar.append({
                     "title":        rec.get("title", ""),
                     "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
-                    "tmdb_id":      rec.get("tv_id"),
+                    "tmdb_id":      sim_tmdb_id,
                     "content_type": "tv",
+                    # PR-3: link a /dove-vedere/{slug} se il titolo è curato.
+                    "seo_slug":     get_slug_by_tmdb_id(sim_tmdb_id, "tv") if sim_tmdb_id else None,
                 })
         except Exception as e:
             log.warning("serie_detail: similar build fallito per '%s': %s", detail.get("title"), e)
@@ -2189,6 +2215,15 @@ def serie_detail(request: Request, tmdb_id: int):
             log.warning("serie_detail: get_series_tracking uid=%s tmdb_id=%s: %s",
                         user_id, tmdb_id, e)
 
+    # Indicizzazione (PR-3): vedi commento in film_detail per dettagli completi.
+    seo_slug = get_slug_by_tmdb_id(tmdb_id, "tv")
+    if seo_slug:
+        meta_robots = "index, follow"
+        canonical_url = f"https://cosaguardo.com/dove-vedere/{seo_slug}"
+    else:
+        meta_robots = "noindex, follow"
+        canonical_url = None
+
     return templates.TemplateResponse(
         request=request,
         name="detail.html",
@@ -2199,7 +2234,9 @@ def serie_detail(request: Request, tmdb_id: int):
             "is_logged_in": bool(user_id),
             "is_liked":   title_state.get("preference") == "liked",
             "is_seen":    title_state.get("seen", 0) == 1,
-            "seo_slug":   get_slug_by_tmdb_id(tmdb_id, "tv"),
+            "seo_slug":   seo_slug,
+            "meta_robots":   meta_robots,
+            "canonical_url": canonical_url,
             "series_tracking": series_tracking,
             # Per chip generi cliccabili → /scopri (vedi GENRE_TO_SCOPRI_SLUG)
             "scopri_tipo":      "serie",
@@ -3408,7 +3445,15 @@ def persona_detail(request: Request, person_id: int):
     return templates.TemplateResponse(
         request=request,
         name="persona.html",
-        context={"request": request, "detail": detail},
+        context={
+            "request": request,
+            "detail": detail,
+            # PR-3 (01/06/2026): /persona/{id} è una pagina utility (filmografia
+            # da TMDb, niente contenuto editoriale nostro). Indicizzata in massa
+            # da Google portava traffico inutile su nomi di attori (es. "rachel
+            # mcadams" 1.182 impr, 2 click). NOINDEX, follow per chiudere il leak.
+            "meta_robots": "noindex, follow",
+        },
     )
 
 

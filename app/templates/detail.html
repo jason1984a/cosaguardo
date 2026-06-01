@@ -6,12 +6,24 @@
 {% block og_description %}{% if detail.tagline %}"{{ detail.tagline }}" — {% endif %}{{ detail.overview[:200] if detail.overview else "Scopri dove guardarlo, cast e trailer su CosaGuardo." }}{% endblock %}
 {% block og_image %}{{ detail.poster_url or "https://cosaguardo.com/static/og-default.jpg" }}{% endblock %}
 {% block og_type %}video.movie{% endblock %}
-{% block og_url %}https://cosaguardo.com/{{ "serie" if detail.content_type == "tv" else "film" }}/{{ detail.tmdb_id }}{% endblock %}
+{% block og_url %}{{ canonical_url or "https://cosaguardo.com/" ~ ("serie" if detail.content_type == "tv" else "film") ~ "/" ~ detail.tmdb_id }}{% endblock %}
 {% block tw_title %}{{ detail.title }} — CosaGuardo{% endblock %}
 {% block tw_description %}{{ detail.overview[:160] if detail.overview else "Scopri dove guardarlo in streaming." }}{% endblock %}
 {% block tw_image %}{{ detail.poster_url or "https://cosaguardo.com/static/og-default.jpg" }}{% endblock %}
 
+{# PR-3 (01/06/2026): meta_robots passato dal backend.
+   - index, follow + canonical → /dove-vedere/{slug} se il titolo è in seo_titles
+   - noindex, follow altrimenti (la maggioranza dei TMDb id) #}
+{% block meta_robots %}{{ meta_robots or "noindex, follow" }}{% endblock %}
+
 {% block head_extra %}
+{# Canonical: punta a /dove-vedere/{slug} per i titoli SEO curati, in modo da
+   concentrare autorità sull'URL editoriale invece di disperderla tra /film/{id}
+   e /dove-vedere/{slug}. Per i titoli non curati canonical_url è None → niente
+   tag (e la pagina è comunque noindex). #}
+{% if canonical_url %}
+<link rel="canonical" href="{{ canonical_url }}">
+{% endif %}
 <!-- JSON-LD Schema markup per Google rich snippets -->
 <script type="application/ld+json">
 {
@@ -2117,12 +2129,25 @@ a.detail-genre-tag--link:focus-visible {
             </div>
             <div class="cg-alert-similar-grid">
                 {% for s in similar[:4] %}
-                <a href="{{ '/serie/' if s.content_type == 'tv' else '/film/' }}{{ s.tmdb_id }}"
+                {# PR-3: prefer link to /dove-vedere/{slug} (curated SEO page).
+                   Fallback /film/{id} or /serie/{id} con rel=nofollow per non
+                   spingere PageRank verso pagine noindex. #}
+                {% if s.seo_slug %}
+                <a href="/dove-vedere/{{ s.seo_slug }}"
                    class="cg-alert-similar-card-link"
                    title="{{ s.title }}">
                     <img src="{{ s.poster_url }}" alt="{{ s.title }}" loading="lazy">
                     <span class="cg-alert-similar-title">{{ s.title }}</span>
                 </a>
+                {% else %}
+                <a href="{{ '/serie/' if s.content_type == 'tv' else '/film/' }}{{ s.tmdb_id }}"
+                   class="cg-alert-similar-card-link"
+                   rel="nofollow"
+                   title="{{ s.title }}">
+                    <img src="{{ s.poster_url }}" alt="{{ s.title }}" loading="lazy">
+                    <span class="cg-alert-similar-title">{{ s.title }}</span>
+                </a>
+                {% endif %}
                 {% endfor %}
             </div>
         </div>

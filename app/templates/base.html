@@ -111,7 +111,10 @@
     {# ── SEO & Open Graph ── #}
     <meta name="description" content="{% block meta_description %}CosaGuardo — Scopri film e serie TV perfetti per te. Consigli personalizzati basati sui tuoi gusti.{% endblock %}">
     <meta name="theme-color" content="#0b1020">
-    <meta name="robots" content="{% block meta_robots %}index, follow{% endblock %}">
+    {# meta_robots: i template figli possono sovrascrivere il block; in
+       alternativa qualsiasi route può passare la variabile `meta_robots` nel
+       context e questa avrà la precedenza sul default 'index, follow'. #}
+    <meta name="robots" content="{% block meta_robots %}{{ meta_robots if meta_robots is defined and meta_robots else 'index, follow' }}{% endblock %}">
 
     {# Open Graph (WhatsApp, Telegram, Facebook) #}
     <meta property="og:site_name" content="CosaGuardo">
