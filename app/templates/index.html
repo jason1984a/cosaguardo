@@ -20,7 +20,7 @@
     <section class="home-hero">
         <div class="hero-copy">
             <h1>Cosa guardo stasera?</h1>
-            <p class="hero-subtitle">Dicci 2-3 film o serie che hai amato. Ti diciamo cosa vedere dopo.</p>
+            <p class="hero-subtitle">Il tuo consigliere streaming personale.</p>
         </div>
     </section>
 
@@ -31,23 +31,17 @@
     <section class="cg-howit-strip" aria-label="Come funziona in 3 passi">
         <div class="cg-howit-steps">
             <div class="cg-howit-step">
-                <span class="cg-howit-icon" aria-hidden="true">
-                    <i data-lucide="pencil-line"></i>
-                </span>
+                <span class="cg-howit-icon cg-howit-icon--num" aria-hidden="true">1</span>
                 <span class="cg-howit-text">Dicci 2-3 titoli che ami</span>
             </div>
             <span class="cg-howit-arrow" aria-hidden="true">→</span>
             <div class="cg-howit-step">
-                <span class="cg-howit-icon" aria-hidden="true">
-                    <i data-lucide="sparkles"></i>
-                </span>
+                <span class="cg-howit-icon cg-howit-icon--num" aria-hidden="true">2</span>
                 <span class="cg-howit-text">Trova titoli pensati per te</span>
             </div>
             <span class="cg-howit-arrow" aria-hidden="true">→</span>
             <div class="cg-howit-step">
-                <span class="cg-howit-icon" aria-hidden="true">
-                    <i data-lucide="tv"></i>
-                </span>
+                <span class="cg-howit-icon cg-howit-icon--num" aria-hidden="true">3</span>
                 <span class="cg-howit-text">Scopri dove guardarli ora</span>
             </div>
         </div>
@@ -90,10 +84,23 @@
             align-items: center;
             justify-content: center;
             line-height: 1;
-            color: #a78bfa;  /* viola accent per le icone Lucide */
+            color: #a78bfa;  /* viola accent */
             flex-shrink: 0;
         }
-        /* Lucide renderizza un <svg> dentro <i data-lucide>: gli diamo dimensione esplicita */
+        /* Variante numerica: cerchio con dentro il numero step (1/2/3).
+           Sostituisce le vecchie icone Lucide. Più chiaro come "sequenza". */
+        .cg-howit-icon--num {
+            width: 22px;
+            height: 22px;
+            background: rgba(167,139,250,0.15);
+            border: 1px solid rgba(167,139,250,0.35);
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: 700;
+            color: #c4b5fd;
+        }
+        /* Lucide renderizza un <svg> dentro <i data-lucide>: gli diamo dimensione esplicita.
+           Mantenuto per retrocompatibilità anche se la home ora usa --num. */
         .cg-howit-icon svg {
             width: 16px;
             height: 16px;
@@ -140,7 +147,7 @@
             .cg-howit-steps {
                 flex-direction: column;
                 align-items: stretch;
-                gap: 9px;
+                gap: 14px;
                 overflow: visible;
             }
             .cg-howit-step {
@@ -154,6 +161,35 @@
                 height: 30px;
                 background: rgba(167,139,250,0.12);
                 border-radius: 8px;
+            }
+            /* Variante numerica mobile: cerchio più grande, numero più visibile.
+               Sovrascrive il bordo/dimensione desktop. */
+            .cg-howit-icon--num {
+                width: 30px;
+                height: 30px;
+                border-radius: 50%;
+                background: rgba(167,139,250,0.18);
+                border: 1px solid rgba(167,139,250,0.4);
+                font-size: 14px;
+                font-weight: 700;
+                color: #c4b5fd;
+                /* Posizione relativa per ancorare la timeline ::before */
+                position: relative;
+            }
+            /* Timeline tratteggiata verticale che connette gli step 1→2→3.
+               Visibile SOLO su utenti anon (la strip è esposta sopra al box
+               algoritmo, dove il flusso temporale ha senso). Per gli utenti
+               loggati la strip è in fondo come riferimento didascalico,
+               la timeline confonderebbe. */
+            .page-home--anon .cg-howit-step:not(:first-child) .cg-howit-icon--num::before {
+                content: "";
+                position: absolute;
+                left: 50%;
+                bottom: 100%;
+                width: 0;
+                height: 14px;
+                border-left: 1.5px dashed rgba(167,139,250,0.45);
+                transform: translateX(-50%);
             }
             .cg-howit-icon svg {
                 width: 17px;
