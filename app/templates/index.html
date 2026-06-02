@@ -16,11 +16,11 @@
 {% endblock %}
 
 {% block content %}
-<div class="page page-home home-v2">
+<div class="page page-home home-v2 {% if is_logged_in %}page-home--logged{% else %}page-home--anon{% endif %}">
     <section class="home-hero">
         <div class="hero-copy">
             <h1>Cosa guardo stasera?</h1>
-            <p class="hero-subtitle">Inserisci 2-3 titoli che ami, ti diamo consigli su misura.</p>
+            <p class="hero-subtitle">Dicci 2-3 film o serie che hai amato. Ti diciamo cosa vedere dopo.</p>
         </div>
     </section>
 
@@ -41,14 +41,14 @@
                 <span class="cg-howit-icon" aria-hidden="true">
                     <i data-lucide="sparkles"></i>
                 </span>
-                <span class="cg-howit-text">L'algoritmo trova i simili</span>
+                <span class="cg-howit-text">Trova titoli pensati per te</span>
             </div>
             <span class="cg-howit-arrow" aria-hidden="true">→</span>
             <div class="cg-howit-step">
                 <span class="cg-howit-icon" aria-hidden="true">
                     <i data-lucide="tv"></i>
                 </span>
-                <span class="cg-howit-text">Scopri dove vederli</span>
+                <span class="cg-howit-text">Scopri dove guardarli ora</span>
             </div>
         </div>
         <a href="/come-funziona" class="cg-howit-link">Come funziona <span aria-hidden="true">›</span></a>
@@ -182,21 +182,19 @@
             }
         }
 
-        /* Mobile reorder: ricreiamo l'ordine "originale" della home pre-strip,
-           ma con la strip "Come funziona" spostata DOPO il search.
-           Razionale: la strip è didascalica e serve a chi non conosce il prodotto;
-           messa subito dopo il search funziona da "spiegazione visiva" non invasiva
-           del motore che l'utente ha appena visto.
-
-           Ordine visivo mobile (≤600px):
-             1. hero (titolo + sottotitolo)
-             2. platform-strip (loghi Netflix, Prime, ecc.)
-             3. hero-trending-strip ("I più apprezzati del momento")
-             4. home-new-season-banner (se popolato dal JS)
-             5. home-personal-strip ("Scelti per te" — solo loggati con picks)
-             6. search-panel (il core)
-             7. cg-howit-strip (la strip 3-step, ora sotto)
-             8. resto (signup card, cinema, news...) in ordine DOM
+        /* Mobile reorder: la sequenza dipende dallo stato login dell'utente.
+           Utente NON LOGGATO (anon): l'esperienza è ottimizzata per la
+           comprensione del prodotto in 4-5 secondi (analisi Clarity ha
+           mostrato bounce a 4-5s su utenti nuovi). Sequenza:
+             1. hero (titolo + sottotitolo riformulato, più operativo)
+             2. platform-strip (rassicurazione "copertura")
+             3. cg-howit-strip (3-step esplicativi, SPOSTATA SOPRA il box)
+             4. search-panel (l'utente ora capisce e può agire)
+             5. hero-trending-strip ("I più apprezzati", SPOSTATA SOTTO il box)
+             6. home-new-season-banner / home-personal-strip
+             7. resto in ordine DOM
+           Utente LOGGATO: sa già usare il sito, vede prima i contenuti
+           (trending + scelti per te) poi search → ordine originale invariato.
 
            Su desktop tutto resta INVARIATO (queste regole scattano solo <600px). */
         @media (max-width: 600px) {
@@ -204,18 +202,46 @@
                 display: flex;
                 flex-direction: column;
             }
-            .page-home > .home-hero                { order: 1; }
-            .page-home > .platform-strip           { order: 2; }
-            .page-home > .hero-trending-strip      { order: 3; }
-            .page-home > .home-new-season-banner   { order: 4; }
-            .page-home > .home-personal-strip      { order: 5; }
-            .page-home > .search-panel             { order: 6; }
-            .page-home > .cg-howit-strip           { order: 7; }
-            /* Tutti gli altri sibling (signup card, cinema strip, news...) restano
-               nell'ordine DOM ma DOPO i nostri 7 elementi sopra. */
-            .page-home > *:not(.home-hero):not(.platform-strip):not(.hero-trending-strip):not(.home-new-season-banner):not(.home-personal-strip):not(.search-panel):not(.cg-howit-strip) {
+
+            /* ── ORDINE ANON: optimized per comprensione ─────────────── */
+            .page-home--anon > .home-hero                { order: 1; }
+            .page-home--anon > .platform-strip           { order: 2; }
+            .page-home--anon > .cg-howit-strip           { order: 3; }
+            .page-home--anon > .search-panel             { order: 4; }
+            .page-home--anon > .hero-trending-strip      { order: 5; }
+            .page-home--anon > .home-new-season-banner   { order: 6; }
+            .page-home--anon > .home-personal-strip      { order: 7; }
+            .page-home--anon > *:not(.home-hero):not(.platform-strip):not(.cg-howit-strip):not(.search-panel):not(.hero-trending-strip):not(.home-new-season-banner):not(.home-personal-strip) {
                 order: 8;
             }
+
+            /* ── ORDINE LOGGATO: come prima della modifica ───────────── */
+            .page-home--logged > .home-hero                { order: 1; }
+            .page-home--logged > .platform-strip           { order: 2; }
+            .page-home--logged > .hero-trending-strip      { order: 3; }
+            .page-home--logged > .home-new-season-banner   { order: 4; }
+            .page-home--logged > .home-personal-strip      { order: 5; }
+            .page-home--logged > .search-panel             { order: 6; }
+            .page-home--logged > .cg-howit-strip           { order: 7; }
+            .page-home--logged > *:not(.home-hero):not(.platform-strip):not(.hero-trending-strip):not(.home-new-season-banner):not(.home-personal-strip):not(.search-panel):not(.cg-howit-strip) {
+                order: 8;
+            }
+        }
+
+        /* ── Alleggerimento visivo cg-howit-strip per utenti anon ──────────
+           Quando la strip 3-step è SOPRA il search-panel (caso anon), va
+           resa leggera per non competere col box algoritmo immediatamente
+           sotto. Niente background scuro pieno, niente bordo: solo le icone+testo,
+           con un divider sottile sotto. Più "etichetta visiva", meno "card". */
+        .page-home--anon .cg-howit-strip {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            padding: 12px 4px;
+            margin: 0 0 8px;
+        }
+        .page-home--anon .cg-howit-strip .cg-howit-link {
+            opacity: 0.85;
         }
     </style>
 
