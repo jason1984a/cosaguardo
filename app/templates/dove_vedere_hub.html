@@ -28,6 +28,35 @@
     max-width: 640px;
     line-height: 1.5;
 }
+/* Variante mobile del sottotitolo: nascosta di default (desktop) */
+.dvh-hero-sub-mobile { display: none; }
+
+/* Mobile (≤600px): hero compatto per non occupare half-screen al primo
+   caricamento. Su mobile l'utente ha già capito dalla nav drawer di cosa
+   si tratta; la descrizione lunga è poco utile e ruba spazio agli card.
+   Su desktop tutto resta come prima (gradient, padding generoso). */
+@media (max-width: 600px) {
+    .dvh-hero {
+        background: transparent;
+        border: none;
+        padding: 6px 4px 14px;
+        margin-bottom: 16px;
+        text-align: left;
+    }
+    .dvh-hero h1 {
+        font-size: 1.45rem;
+        margin: 0 0 4px;
+        line-height: 1.2;
+    }
+    .dvh-hero-sub-desktop { display: none; }
+    .dvh-hero-sub-mobile {
+        display: block;
+        font-size: 13px;
+        margin: 0;
+        max-width: none;
+        line-height: 1.4;
+    }
+}
 
 .dvh-tabs {
     display: flex;
@@ -148,7 +177,8 @@
 
     <header class="dvh-hero">
         <h1>Dove vedere film e serie TV in streaming</h1>
-        <p>Scopri su quale piattaforma guardare il tuo film o serie preferita: Netflix, Disney+, Prime Video, NOW, Paramount+, Apple TV+ e altre. Aggiornato regolarmente.</p>
+        <p class="dvh-hero-sub-desktop">Scopri su quale piattaforma guardare il tuo film o serie preferita: Netflix, Disney+, Prime Video, NOW, Paramount+, Apple TV+ e altre. Aggiornato regolarmente.</p>
+        <p class="dvh-hero-sub-mobile">Netflix, Disney+, Prime, NOW e altre piattaforme italiane.</p>
     </header>
 
     <div class="dvh-tabs">
