@@ -2224,18 +2224,18 @@ def get_scopri_results(
         raw  = data.get("results", [])
         total = min(data.get("total_results", 0), 500)
 
-        import re as _re
-        _non_latin = _re.compile(r'[\u0400-\u04FF\u0600-\u06FF\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF]')
-
         results = []
-        for item in raw[:limit]:
+        # Strategia D: iteriamo su tutti i raw fino a `limit` titoli leggibili
+        # (con `[:limit]` perdevamo titoli quando i primi N erano non-latini).
+        for item in raw:
+            if len(results) >= limit:
+                break
             pp = item.get("poster_path","")
             bp = item.get("backdrop_path","")
-            title = item.get("title") or item.get("name") or item.get("original_title") or item.get("original_name","")
+            # Filtro titoli non leggibili (devanagari, hangul, kanji, arabo,
+            # cirillico, tailandese, ecc.) — vedi pick_readable_title.
+            title = pick_readable_title(item, "tv" if is_tv else "movie")
             if not title or not pp:
-                continue
-            # Salta titoli con caratteri non latini (cirillico, arabo, cinese, giapponese)
-            if _non_latin.search(title):
                 continue
             results.append({
                 "tmdb_id":      item.get("id"),
@@ -2295,12 +2295,16 @@ def _fetch_strip(strip_cfg: dict, tipo: str, limit: int = 12) -> list:
             timeout=6
         )
         results = []
-        for item in r.json().get("results", [])[:limit]:
+        # Strategia D: iteriamo finché non raggiungiamo `limit` titoli leggibili
+        for item in r.json().get("results", []):
+            if len(results) >= limit:
+                break
             # Filtro contenuti per adulti (difensivo)
             if _is_adult_content(item):
                 continue
             pp = item.get("poster_path","")
-            title = item.get("title") or item.get("name") or ""
+            # Strategia D: titolo leggibile (latino)
+            title = pick_readable_title(item, "tv" if is_tv else "movie")
             if not title or not pp:
                 continue
             results.append({
