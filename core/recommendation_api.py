@@ -1218,7 +1218,8 @@ def get_top_rated_recent(limit: int = 10) -> list:
             if _is_adult_content(item):
                 continue
             pp = item.get("poster_path")
-            title = item.get("title") or item.get("original_title") or ""
+            # Strategia D: titolo leggibile (latino), altrimenti scarta
+            title = pick_readable_title(item, "movie")
             if not pp or not title:
                 continue
             pool.append({
@@ -1251,7 +1252,8 @@ def get_top_rated_recent(limit: int = 10) -> list:
             if _is_adult_content(item):
                 continue
             pp = item.get("poster_path")
-            title = item.get("name") or item.get("original_name") or ""
+            # Strategia D: titolo leggibile (latino), altrimenti scarta
+            title = pick_readable_title(item, "tv")
             if not pp or not title:
                 continue
             pool.append({
@@ -1310,10 +1312,11 @@ def get_trending_tmdb(limit: int = 12):
                 continue
 
             if media_type == "movie":
-                title = item.get("title") or item.get("original_title") or ""
+                # Strategia D: titolo leggibile (latino)
+                title = pick_readable_title(item, "movie")
                 label = "Film"
             else:
-                title = item.get("name") or item.get("original_name") or ""
+                title = pick_readable_title(item, "tv")
                 label = "Serie TV"
 
             if not title:
@@ -1353,7 +1356,8 @@ def get_now_playing(limit: int = 8) -> list:
             poster_path = item.get("poster_path")
             if not poster_path:
                 continue
-            title = item.get("title") or item.get("original_title") or ""
+            # Strategia D: titolo leggibile (latino)
+            title = pick_readable_title(item, "movie")
             if not title:
                 continue
             results.append({
@@ -1391,7 +1395,8 @@ def get_upcoming(limit: int = 8) -> list:
             poster_path = item.get("poster_path")
             if not poster_path:
                 continue
-            title = item.get("title") or item.get("original_title") or ""
+            # Strategia D: titolo leggibile (latino)
+            title = pick_readable_title(item, "movie")
             if not title:
                 continue
             results.append({
@@ -1762,7 +1767,8 @@ def get_cinema_news(limit: int = 8) -> list:
                 continue
             bp = item.get("backdrop_path") or item.get("poster_path")
             if not bp: continue
-            title = item.get("title") or item.get("original_title","")
+            # Strategia D: titolo leggibile (latino)
+            title = pick_readable_title(item, "movie")
             if not title: continue
             tmdb_id = item.get("id")
             items.append({
@@ -1792,7 +1798,8 @@ def get_cinema_news(limit: int = 8) -> list:
                 continue
             bp = item.get("backdrop_path") or item.get("poster_path")
             if not bp: continue
-            title = item.get("name") or item.get("original_name","")
+            # Strategia D: titolo leggibile (latino)
+            title = pick_readable_title(item, "tv")
             if not title: continue
             tmdb_id = item.get("id")
             items.append({
@@ -2372,13 +2379,18 @@ def get_similar_movies_tmdb(tmdb_id: int, limit: int = 6) -> list:
             timeout=5
         )
         results = []
-        for item in r.json().get("results", [])[:limit]:
+        # Strategia D: iteriamo tutti i risultati e fermiamo a `limit` leggibili
+        for item in r.json().get("results", []):
+            if len(results) >= limit:
+                break
             # Filtro contenuti per adulti (difensivo)
             if _is_adult_content(item):
                 continue
             pp = item.get("poster_path","")
-            title = item.get("title") or item.get("original_title","")
-            if not title: continue
+            # Strategia D: titolo leggibile (latino)
+            title = pick_readable_title(item, "movie")
+            if not title:
+                continue
             results.append({
                 "title":        title,
                 "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
@@ -2414,13 +2426,21 @@ def get_popular_by_genre_tmdb(genre_id: int, content_type: str = "movie", limit:
             timeout=5
         )
         results = []
-        for item in r.json().get("results", [])[:limit]:
+        # Strategia D: iteriamo su TUTTI i risultati (max 20 di default da TMDb)
+        # e ci fermiamo a `limit` titoli leggibili. Senza questo, il filtro
+        # potrebbe lasciare meno risultati del previsto (es. limit=6 ma 2 dei
+        # primi 6 erano non-latini → solo 4 titoli in feed).
+        for item in r.json().get("results", []):
+            if len(results) >= limit:
+                break
             # Filtro contenuti per adulti (difensivo)
             if _is_adult_content(item):
                 continue
             pp = item.get("poster_path","")
-            title = item.get("title") or item.get("name") or ""
-            if not title: continue
+            # Strategia D: titolo leggibile (latino)
+            title = pick_readable_title(item, content_type)
+            if not title:
+                continue
             results.append({
                 "title":        title,
                 "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
@@ -2857,10 +2877,10 @@ def _discover_tmdb(ct: str, with_provider: int = None, limit: int = 60) -> list:
                     continue
 
                 if ct == "movie":
-                    title = item.get("title") or item.get("original_title", "")
+                    title = pick_readable_title(item, "movie")
                     date  = item.get("release_date", "")
                 else:
-                    title = item.get("name") or item.get("original_name", "")
+                    title = pick_readable_title(item, "tv")
                     date  = item.get("first_air_date", "")
                 if not title:
                     continue
@@ -3053,10 +3073,10 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
                     continue
 
                 if ct == "movie":
-                    title = item.get("title") or item.get("original_title", "")
+                    title = pick_readable_title(item, "movie")
                     date  = item.get("release_date", "")
                 else:
-                    title = item.get("name") or item.get("original_name", "")
+                    title = pick_readable_title(item, "tv")
                     date  = item.get("first_air_date", "")
                 if not title:
                     continue
@@ -3185,3 +3205,62 @@ def filter_adult_results(items: list) -> list:
     if not items:
         return items
     return [it for it in items if not _is_adult_content(it)]
+
+
+# ─── Filtro leggibilità titoli (Strategia D, 06/2026) ───────────────────────
+# TMDb a volte restituisce titoli nella lingua originale (devanagari per
+# hindi/tamil/telugu, hangul per coreano, kanji/kana per giapponese, arabo,
+# cirillico, tailandese, ecc.) quando manca la traduzione italiana. Per un
+# utente italiano questi titoli sembrano "bug" perché illeggibili. Filtriamo
+# tutti gli item dove né il titolo localizzato né l'original_title sono in
+# alfabeto leggibile (latino + accenti europei). Pattern chirurgico: NON
+# filtriamo per original_language (escluderebbe anche titoli stranieri con
+# titolo italiano disponibile) ma per leggibilità reale del display title.
+
+# Pattern: lettere latine (a-zA-Z) + cifre + spazi + punteggiatura comune
+# + accenti latini estesi U+00C0-U+017F (italiano/francese/spagnolo/tedesco
+# /portoghese) + dash/quote tipografici U+2013-U+201D.
+_LATIN_READABLE_PATTERN = re.compile(
+    r"^[A-Za-z0-9\s\-:.,'!?&()\[\]/+*\u00C0-\u017F\u2013\u2014\u2018\u2019\u201C\u201D]+$"
+)
+
+
+def _is_latin_readable(text: str) -> bool:
+    """True se il testo è leggibile da un utente italiano (caratteri latini).
+    Falso per stringhe vuote, None, o testi con caratteri non-latini."""
+    if not text or not isinstance(text, str):
+        return False
+    return bool(_LATIN_READABLE_PATTERN.match(text.strip()))
+
+
+def pick_readable_title(item: dict, content_type: str = "movie") -> "str | None":
+    """
+    Ritorna il miglior titolo leggibile da un item TMDb, o None se nessuno
+    è leggibile (in quel caso l'item va escluso dal feed).
+
+    Logica:
+      1. Prova `title` / `name` (titolo localizzato it-IT)
+      2. Se non latino, prova `original_title` / `original_name`
+      3. Se neanche quello è latino → None (item da escludere)
+
+    `content_type`: "movie" o "tv", determina quali campi TMDb usare.
+    """
+    if not isinstance(item, dict):
+        return None
+    is_tv = content_type == "tv"
+    primary = item.get("name") if is_tv else item.get("title")
+    if _is_latin_readable(primary):
+        return primary
+    original = item.get("original_name") if is_tv else item.get("original_title")
+    if _is_latin_readable(original):
+        return original
+    return None
+
+
+def filter_unreadable_titles(items: list, content_type: str = "movie") -> list:
+    """Rimuove item TMDb con titoli non leggibili (es. devanagari, hangul, ecc.).
+    Da usare quando un payload upstream non passa già per pick_readable_title."""
+    if not items:
+        return items
+    return [it for it in items if pick_readable_title(it, content_type) is not None]
+
