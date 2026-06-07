@@ -565,6 +565,96 @@ async def head_to_get_fallback(request: Request, call_next):
     )
 
 
+# ─── Cloudflare cache-ability per pagine pubbliche (07/06/2026) ────────────
+# SessionMiddleware di Starlette aggiunge `Vary: Cookie` ad OGNI response,
+# anche su pagine pubbliche statiche. Conseguenza: Cloudflare rifiuta di
+# cachare (cf-cache-status: DYNAMIC) perché significherebbe cachare versioni
+# diverse per ogni cookie value possibile. Su Free plan non abbiamo cookie
+# key features per gestire questo bypass nativamente.
+#
+# Soluzione: su URL pubbliche statiche, rimuoviamo `Vary: Cookie` dalla
+# response (lasciando intatti gli altri vary come Accept-Encoding). In più
+# emettiamo esplicito Cache-Control per dire a Cloudflare di cachare.
+#
+# IMPORTANTE: queste pagine possono essere viste sia da utenti loggati che
+# anonimi. Per piano Free Cloudflare, accettiamo che utenti loggati vedano
+# la versione "anonima" cachata (es. navbar mostra "Accedi" invece di
+# "Profilo" per max 4h edge / 2h browser). Trade-off scelto consapevolmente
+# (Opzione A) per massimizzare risparmio banda Render.
+#
+# Path NON inclusi (continuano ad avere Vary: Cookie → DYNAMIC su Cloudflare):
+# /, /scopri*, /admin/*, /api/*, /login*, /register*, /logout*, /profile*,
+# /raccolta*, /come/*, e altri endpoint dinamici/personalizzati.
+import re as _re_cache
+_CACHEABLE_PATH_PATTERNS = [
+    _re_cache.compile(r"^/migliori-"),         # /migliori-thriller-su-netflix, ecc.
+    _re_cache.compile(r"^/dove-vedere(/|$)"),  # /dove-vedere e /dove-vedere/{slug}
+    _re_cache.compile(r"^/film/\d+"),          # /film/{tmdb_id}
+    _re_cache.compile(r"^/serie/\d+"),         # /serie/{tmdb_id}
+    _re_cache.compile(r"^/persona/\d+"),       # /persona/{tmdb_id}
+    _re_cache.compile(r"^/come-funziona$"),    # /come-funziona (statica)
+    _re_cache.compile(r"^/cosa-serve$"),       # /cosa-serve (statica)
+]
+
+
+def _is_cacheable_path(path: str) -> bool:
+    """Ritorna True se il path è in whitelist Cloudflare cache aggressive."""
+    if not path:
+        return False
+    for pattern in _CACHEABLE_PATH_PATTERNS:
+        if pattern.match(path):
+            return True
+    return False
+
+
+@app.middleware("http")
+async def cloudflare_cache_headers(request: Request, call_next):
+    """
+    Su URL pubbliche statiche, rimuove `Vary: Cookie` ed emette
+    Cache-Control esplicito per permettere a Cloudflare di cachare.
+    Esegue dopo la response, modificando solo gli header.
+    """
+    response = await call_next(request)
+
+    # Solo GET (POST/PUT/DELETE mai cachabili)
+    if request.method != "GET":
+        return response
+
+    # Solo se path è in whitelist cachable
+    if not _is_cacheable_path(request.url.path):
+        return response
+
+    # Solo response di successo (200/304/etc); errori non cachiamo
+    if response.status_code not in (200, 304):
+        return response
+
+    # Rimuovi `Cookie` dal header `Vary` lasciando intatti gli altri valori.
+    # Es: "Cookie, Accept-Encoding" → "Accept-Encoding"
+    vary_header = response.headers.get("vary", "")
+    if vary_header:
+        # Split su virgola, strip spazi, escludi Cookie (case-insensitive)
+        new_vary_parts = [
+            v.strip() for v in vary_header.split(",")
+            if v.strip().lower() != "cookie"
+        ]
+        if new_vary_parts:
+            response.headers["vary"] = ", ".join(new_vary_parts)
+        else:
+            # Se Cookie era l'unico valore, rimuovi del tutto l'header
+            try:
+                del response.headers["vary"]
+            except KeyError:
+                pass
+
+    # Cache-Control esplicito per Cloudflare e browser.
+    # public        = ok cachare anche da proxy condivisi
+    # max-age=7200  = browser cacha 2h (allineato a Browser TTL Cloudflare)
+    # s-maxage=14400 = CDN cacha 4h (allineato a Edge TTL Cloudflare)
+    response.headers["cache-control"] = "public, max-age=7200, s-maxage=14400"
+
+    return response
+
+
 init_db()
 
 app.mount(
