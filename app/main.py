@@ -682,6 +682,11 @@ class CloudflareCacheMiddleware:
                     headers["content-length"] = str(len(full_body))
                     if "transfer-encoding" in headers:
                         del headers["transfer-encoding"]
+                    # ── DEBUG TEMPORANEO (rimuovere dopo diagnosi) ──
+                    # Cloudflare lascia passare gli header custom che non conosce.
+                    # Se li vediamo lato client → il middleware ha girato.
+                    headers["x-cg-mw"] = "asgi-1"
+                    headers["x-cg-clen"] = str(len(full_body))
 
                 await send({
                     "type": "http.response.start",
