@@ -607,109 +607,52 @@ def _is_cacheable_path(path: str) -> bool:
     return False
 
 
-# ─── Cloudflare cache-ability: PURE ASGI middleware (08/06/2026) ───────────
-# PERCHÉ ASGI E NON @app.middleware: i middleware in stile BaseHTTPMiddleware
-# (cioè @app.middleware("http")) ri-streammano la response come
-# _StreamingResponse. Effetto collaterale: RIMUOVONO il Content-Length e
-# uvicorn emette `Transfer-Encoding: chunked`. Cloudflare NON cacha risposte
-# chunked prive di Content-Length → cf-cache-status: DYNAMIC su OGNI pagina.
-# La versione precedente di questo middleware era essa stessa un
-# BaseHTTPMiddleware, quindi peggiorava il problema che cercava di risolvere.
-#
-# Questo middleware è ASGI puro e montato come strato PIÙ ESTERNO. Per le GET
-# su path pubblici cacheable:
-#   1. bufferizza il body completo (pagine HTML piccole, costo trascurabile)
-#   2. ripristina un Content-Length corretto e rimuove Transfer-Encoding
-#   3. rimuove `Vary: Cookie` (lasciando intatto Accept-Encoding)
-#   4. emette Cache-Control esplicito (allineato a Edge/Browser TTL Cloudflare)
-# Per tutto il resto (POST, path non-cacheable, HEAD): passthrough trasparente,
-# nessun buffering. Riusa _is_cacheable_path / _CACHEABLE_PATH_PATTERNS sopra.
-from starlette.datastructures import MutableHeaders as _MutableHeaders
+@app.middleware("http")
+async def cloudflare_cache_headers(request: Request, call_next):
+    """
+    Su URL pubbliche statiche, rimuove `Vary: Cookie` ed emette
+    Cache-Control esplicito per permettere a Cloudflare di cachare.
+    Esegue dopo la response, modificando solo gli header.
+    """
+    response = await call_next(request)
 
+    # Solo GET (POST/PUT/DELETE mai cachabili)
+    if request.method != "GET":
+        return response
 
-class CloudflareCacheMiddleware:
-    def __init__(self, app):
-        self.app = app
+    # Solo se path è in whitelist cachable
+    if not _is_cacheable_path(request.url.path):
+        return response
 
-    async def __call__(self, scope, receive, send):
-        # Solo GET HTTP su path cachable; tutto il resto passthrough puro.
-        if (
-            scope.get("type") != "http"
-            or scope.get("method") != "GET"
-            or not _is_cacheable_path(scope.get("path", ""))
-        ):
-            await self.app(scope, receive, send)
-            return
+    # Solo response di successo (200/304/etc); errori non cachiamo
+    if response.status_code not in (200, 304):
+        return response
 
-        start_message = None
-        body_parts: list = []
+    # Rimuovi `Cookie` dal header `Vary` lasciando intatti gli altri valori.
+    # Es: "Cookie, Accept-Encoding" → "Accept-Encoding"
+    vary_header = response.headers.get("vary", "")
+    if vary_header:
+        # Split su virgola, strip spazi, escludi Cookie (case-insensitive)
+        new_vary_parts = [
+            v.strip() for v in vary_header.split(",")
+            if v.strip().lower() != "cookie"
+        ]
+        if new_vary_parts:
+            response.headers["vary"] = ", ".join(new_vary_parts)
+        else:
+            # Se Cookie era l'unico valore, rimuovi del tutto l'header
+            try:
+                del response.headers["vary"]
+            except KeyError:
+                pass
 
-        async def buffered_send(message):
-            nonlocal start_message
-            mtype = message["type"]
+    # Cache-Control esplicito per Cloudflare e browser.
+    # public        = ok cachare anche da proxy condivisi
+    # max-age=7200  = browser cacha 2h (allineato a Browser TTL Cloudflare)
+    # s-maxage=14400 = CDN cacha 4h (allineato a Edge TTL Cloudflare)
+    response.headers["cache-control"] = "public, max-age=7200, s-maxage=14400"
 
-            if mtype == "http.response.start":
-                # Trattieni lo start: aspettiamo l'intero body per calcolare
-                # il Content-Length corretto.
-                start_message = message
-                return
-
-            if mtype == "http.response.body":
-                body_parts.append(message.get("body", b""))
-                if message.get("more_body", False):
-                    return
-
-                # Ultimo chunk → ricostruisci la response completa.
-                full_body = b"".join(body_parts)
-                status = start_message["status"]
-                headers = _MutableHeaders(raw=list(start_message["headers"]))
-
-                # Solo 200 viene reso cachable (errori/redirect lasciati intatti).
-                if status == 200:
-                    vary = headers.get("vary", "")
-                    if vary:
-                        parts = [
-                            v.strip() for v in vary.split(",")
-                            if v.strip().lower() != "cookie"
-                        ]
-                        if parts:
-                            headers["vary"] = ", ".join(parts)
-                        elif "vary" in headers:
-                            del headers["vary"]
-                    headers["cache-control"] = "public, max-age=7200, s-maxage=14400"
-                    # Ripristina Content-Length e togli il chunked: questo è ciò
-                    # che rende la risposta cachable da Cloudflare.
-                    headers["content-length"] = str(len(full_body))
-                    if "transfer-encoding" in headers:
-                        del headers["transfer-encoding"]
-                    # ── DEBUG TEMPORANEO (rimuovere dopo diagnosi) ──
-                    # Cloudflare lascia passare gli header custom che non conosce.
-                    # Se li vediamo lato client → il middleware ha girato.
-                    headers["x-cg-mw"] = "asgi-1"
-                    headers["x-cg-clen"] = str(len(full_body))
-
-                await send({
-                    "type": "http.response.start",
-                    "status": status,
-                    "headers": headers.raw,
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": full_body,
-                    "more_body": False,
-                })
-                return
-
-            # Altri tipi di messaggio (es. trailers) → passthrough.
-            await send(message)
-
-        await self.app(scope, receive, buffered_send)
-
-
-# Montato per ULTIMO = strato PIÙ ESTERNO. Deve avvolgere tutti i
-# BaseHTTPMiddleware sottostanti per poter ricostruire il Content-Length sulla
-# risposta finale che arriva a Cloudflare.
-app.add_middleware(CloudflareCacheMiddleware)
+    return response
 
 
 init_db()
