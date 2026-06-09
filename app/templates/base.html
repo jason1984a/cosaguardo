@@ -67,12 +67,25 @@
 
         function loadClarity() {
             if (!CLARITY_PROJECT_ID || !/^[a-z0-9]{6,20}$/i.test(CLARITY_PROJECT_ID)) return;
-            if (window.clarity) return;
-            (function(c,l,a,r,i,t,y){
-                c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-                t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-                y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-            })(window, document, "clarity", "script", CLARITY_PROJECT_ID);
+            if (!window.clarity) {
+                (function(c,l,a,r,i,t,y){
+                    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+                })(window, document, "clarity", "script", CLARITY_PROJECT_ID);
+            }
+            // Segnale di consenso esplicito (Consent v2). NECESSARIO: dal 31/10/2025
+            // Clarity, per il traffico EEA (utenti IT), aspetta un segnale valido
+            // prima di mantenere i cookie di sessione. Caricare lo script NON basta:
+            // senza questo segnale ogni pagina prende un ID nuovo → sessioni
+            // frammentate (1 sessione per pagina). loadClarity() è chiamato solo in
+            // contesto già consentito, quindi qui il consenso è sempre "accepted".
+            //   analytics_Storage: granted → abilita _clck/_clsk = stitching sessioni
+            //   ad_Storage: denied → coerente con privacy policy (no cookie pubblicitari)
+            window.clarity('consentv2', {
+                ad_Storage: "denied",
+                analytics_Storage: "granted"
+            });
         }
 
         // ── Helper unificato per tracking conversioni su entrambe le piattaforme ─
