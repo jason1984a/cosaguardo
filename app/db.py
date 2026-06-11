@@ -1,5 +1,6 @@
 import os
 import sqlite3
+import json
 from werkzeug.security import generate_password_hash, check_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -375,6 +376,28 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_streaming_alerts_pending
             ON streaming_alerts (tmdb_id, content_type)
             WHERE notified_at IS NULL
+        """)
+        # ───────────────────────────────────────────────────────────────────────
+
+        # Feedback sulla QUALITÀ della lista di consigli prodotta dall'algoritmo
+        # (microform su results.html). Funziona anche per anonimi: chiave =
+        # session_id. user_id valorizzato solo se loggato. Liste salvate in JSON.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS recommendation_feedback (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id          TEXT,
+                user_id             INTEGER,
+                rating              INTEGER NOT NULL,
+                seed_titles         TEXT,
+                recommended_titles  TEXT,
+                complaint_buttons   TEXT,
+                free_text           TEXT,
+                created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_recfeedback_created
+            ON recommendation_feedback (created_at)
         """)
         # ───────────────────────────────────────────────────────────────────────
 
@@ -1487,3 +1510,109 @@ def save_search_cache(cache_key: str, results: list):
         conn.close()
 
 
+
+
+# ─── Recommendation feedback (qualità lista algoritmo) ──────────────────────
+def save_recommendation_feedback(rating, session_id=None, user_id=None,
+                                 seed_titles=None, recommended_titles=None,
+                                 complaint_buttons=None, free_text=None):
+    """
+    Salva una valutazione (1-10) dell'utente sulla qualità della lista di
+    consigli prodotta dall'algoritmo, dal microform su results.html.
+    Funziona anche per anonimi (chiave = session_id; user_id solo se loggato).
+    Le liste (seed/recommended/complaint) vengono serializzate in JSON.
+    Restituisce l'id della riga inserita.
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO recommendation_feedback
+                (session_id, user_id, rating, seed_titles, recommended_titles,
+                 complaint_buttons, free_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            session_id,
+            user_id,
+            int(rating),
+            json.dumps(seed_titles or [], ensure_ascii=False),
+            json.dumps(recommended_titles or [], ensure_ascii=False),
+            json.dumps(complaint_buttons or [], ensure_ascii=False),
+            (free_text or "").strip() or None,
+        ))
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def get_recommendation_feedback_stats(limit_comments=50):
+    """
+    Aggregati per la dashboard admin /admin/feedback-stats.
+    Ritorna dict con: totale risposte, media voto, distribuzione per fascia
+    (1-5 / 6-7 / 8-10) e per singolo voto (1-10), frequenza dei bottoni
+    quick-select, e ultimi commenti liberi.
+    NB metodologico: selection bias (rispondono i molto contenti/delusi);
+    non interpretare le medie sotto le 30 risposte.
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) AS n, AVG(rating) AS avg_rating "
+                    "FROM recommendation_feedback")
+        row = cur.fetchone()
+        total = row["n"] or 0
+        avg_rating = round(row["avg_rating"], 2) if row["avg_rating"] is not None else None
+
+        cur.execute("""
+            SELECT
+                SUM(CASE WHEN rating BETWEEN 1 AND 5  THEN 1 ELSE 0 END) AS neg,
+                SUM(CASE WHEN rating BETWEEN 6 AND 7  THEN 1 ELSE 0 END) AS mid,
+                SUM(CASE WHEN rating BETWEEN 8 AND 10 THEN 1 ELSE 0 END) AS pos
+            FROM recommendation_feedback
+        """)
+        b = cur.fetchone()
+        buckets = {
+            "negativi_1_5":  b["neg"] or 0,
+            "medi_6_7":      b["mid"] or 0,
+            "positivi_8_10": b["pos"] or 0,
+        }
+
+        cur.execute("SELECT rating, COUNT(*) AS n FROM recommendation_feedback "
+                    "GROUP BY rating")
+        per_rating = {r["rating"]: r["n"] for r in cur.fetchall()}
+        distribution = {i: per_rating.get(i, 0) for i in range(1, 11)}
+
+        cur.execute("SELECT complaint_buttons FROM recommendation_feedback "
+                    "WHERE complaint_buttons IS NOT NULL")
+        complaint_counts = {}
+        for r in cur.fetchall():
+            try:
+                for btn in json.loads(r["complaint_buttons"] or "[]"):
+                    complaint_counts[btn] = complaint_counts.get(btn, 0) + 1
+            except (ValueError, TypeError):
+                continue
+
+        cur.execute("""
+            SELECT rating, free_text, created_at
+            FROM recommendation_feedback
+            WHERE free_text IS NOT NULL AND TRIM(free_text) != ''
+            ORDER BY created_at DESC
+            LIMIT ?
+        """, (int(limit_comments),))
+        comments = [
+            {"rating": r["rating"], "text": r["free_text"], "created_at": r["created_at"]}
+            for r in cur.fetchall()
+        ]
+    finally:
+        conn.close()
+
+    return {
+        "total": total,
+        "avg_rating": avg_rating,
+        "buckets": buckets,
+        "distribution": distribution,
+        "complaint_counts": dict(sorted(complaint_counts.items(), key=lambda x: -x[1])),
+        "recent_comments": comments,
+    }

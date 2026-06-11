@@ -1384,6 +1384,58 @@ def save_feedback(request: Request, data: dict = Body(...)):
     return {"status": "ok"}
 
 
+@app.post("/api/recommendation-feedback")
+def save_recommendation_feedback_api(request: Request, data: dict = Body(...)):
+    """
+    Riceve dal microform su results.html il voto (1-10) sulla QUALITÀ della
+    lista di consigli prodotta dall'algoritmo, più eventuali bottoni
+    quick-select e testo libero. Funziona anche per anonimi: nessun login
+    richiesto, chiave = session_id stabile salvato in sessione.
+    """
+    try:
+        rating = int(data.get("rating"))
+    except (TypeError, ValueError):
+        return {"status": "error", "message": "rating mancante o non valido"}
+    if not (1 <= rating <= 10):
+        return {"status": "error", "message": "rating fuori range (1-10)"}
+
+    # session_id stabile per la sessione (anche anonima)
+    sid = request.session.get("cg_sid")
+    if not sid:
+        import uuid
+        sid = uuid.uuid4().hex
+        request.session["cg_sid"] = sid
+
+    user_id = request.session.get("user_id")  # None se anonimo
+
+    # Sanitizzazione input (cap dimensioni: difesa contro payload abnormi)
+    def _clean_list(v, maxn=20):
+        if not isinstance(v, list):
+            return []
+        return [str(x)[:200] for x in v[:maxn]]
+
+    seed        = _clean_list(data.get("seed_titles"))
+    recommended = _clean_list(data.get("recommended_titles"))
+    complaints  = _clean_list(data.get("complaint_buttons"), maxn=10)
+    free_text   = data.get("free_text") or ""
+    if not isinstance(free_text, str):
+        free_text = ""
+    free_text = free_text.strip()[:1000]
+
+    try:
+        from app.db import save_recommendation_feedback
+        save_recommendation_feedback(
+            rating=rating, session_id=sid, user_id=user_id,
+            seed_titles=seed, recommended_titles=recommended,
+            complaint_buttons=complaints, free_text=free_text,
+        )
+    except Exception as e:
+        log.warning("save_recommendation_feedback_api: insert fallito: %s", e)
+        return {"status": "error", "message": "errore salvataggio"}
+
+    return {"status": "ok"}
+
+
 # ─── Series tracking API ────────────────────────────────────────────────
 # Permette all'utente di mantenere una lista delle serie con stato:
 #   watchlist  voglio guardare
