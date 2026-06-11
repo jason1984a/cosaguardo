@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Admin Feedback Consigli — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% block content %}
+<div style="padding-bottom:48px;">
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#93c5fd;margin-bottom:4px;">
+                🔐 Area Admin
+            </div>
+            <h1 style="font-size:1.6rem;font-weight:900;margin:0;">Feedback consigli</h1>
+            <p style="font-size:0.85rem;color:var(--muted);margin:6px 0 0;">
+                Voti 1-10 sulla qualità delle liste prodotte dall'algoritmo (microform su results)
+            </p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="/admin/home" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);">
+                ← Home Admin
+            </a>
+            <form action="/admin/logout" method="post" style="display:inline;">
+                <button type="submit" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);font-family:inherit;">
+                    Esci dall'admin
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- NOTA METODOLOGICA -->
+    <div class="fb-note">
+        ⚠️ <strong>Selection bias</strong>: rispondono soprattutto i molto contenti e i molto delusi, quindi i dati sono polarizzati. Leggi le medie con cautela e <strong>non agire sotto le 30 risposte</strong>.
+    </div>
+
+    {% if fb.total < 1 %}
+    <div class="admin-empty">
+        <div style="font-size:2.5rem;margin-bottom:12px;">📭</div>
+        <p style="font-size:0.95rem;font-weight:600;margin:0 0 6px;">Nessun feedback ancora raccolto</p>
+        <p style="font-size:0.8rem;color:var(--muted);margin:0;">
+            I voti iniziano ad arrivare quando un utente usa l'algoritmo e valuta i consigli ricevuti.
+        </p>
+    </div>
+    {% else %}
+
+    <!-- STATISTICHE -->
+    <div class="admin-stats-grid">
+        <div class="admin-stat">
+            <div class="admin-stat-val">{{ fb.total }}</div>
+            <div class="admin-stat-label">Risposte totali</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#fbbf24;">{{ fb.avg_rating if fb.avg_rating is not none else '—' }}</div>
+            <div class="admin-stat-label">Voto medio</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#4ade80;">{{ fb.buckets.positivi_8_10 }}</div>
+            <div class="admin-stat-label">Positivi (8-10)</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#93c5fd;">{{ fb.buckets.medi_6_7 }}</div>
+            <div class="admin-stat-label">Medi (6-7)</div>
+        </div>
+        <div class="admin-stat">
+            <div class="admin-stat-val" style="color:#f87171;">{{ fb.buckets.negativi_1_5 }}</div>
+            <div class="admin-stat-label">Negativi (1-5)</div>
+        </div>
+    </div>
+
+    <!-- DISTRIBUZIONE 1-10 -->
+    <div class="admin-section-header" style="margin-top:28px;">
+        <h2 style="font-size:1.05rem;font-weight:800;margin:0 0 12px;">📊 Distribuzione voti</h2>
+    </div>
+    <div class="fb-dist">
+        {% for v in range(1, 11) %}
+        {% set count = fb.distribution[v] %}
+        {% set pct = (count * 100.0 / fb.total) if fb.total else 0 %}
+        <div class="fb-dist-row">
+            <div class="fb-dist-label">{{ v }}</div>
+            <div class="fb-dist-bar-wrap">
+                <div class="fb-dist-bar {% if v >= 8 %}pos{% elif v >= 6 %}mid{% else %}neg{% endif %}" style="width:{{ pct }}%;"></div>
+            </div>
+            <div class="fb-dist-count">{{ count }}</div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- MOTIVI (quick-select) -->
+    {% if fb.complaint_counts %}
+    <div class="admin-section-header" style="margin-top:32px;">
+        <h2 style="font-size:1.05rem;font-weight:800;margin:0 0 12px;">🔻 Motivi più segnalati (voti 1-7)</h2>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 14px;">
+            Cosa non ha funzionato, secondo chi ha votato basso.
+        </p>
+    </div>
+    <div class="admin-top-grid">
+        {% for reason, n in fb.complaint_counts.items() %}
+        <div class="admin-top-item">
+            <div class="admin-top-rank">{{ loop.index }}</div>
+            <div class="admin-top-info">
+                <div class="admin-top-title">{{ reason }}</div>
+            </div>
+            <div class="admin-top-count">
+                <span class="admin-top-count-num">{{ n }}</span>
+                <span class="admin-top-count-label">volte</span>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- COMMENTI LIBERI -->
+    {% if fb.recent_comments %}
+    <div class="admin-section-header" style="margin-top:32px;">
+        <h2 style="font-size:1.05rem;font-weight:800;margin:0 0 12px;">💬 Ultimi commenti</h2>
+    </div>
+    <div class="fb-comments">
+        {% for c in fb.recent_comments %}
+        <div class="fb-comment">
+            <div class="fb-comment-head">
+                <span class="fb-comment-rating {% if c.rating >= 8 %}pos{% elif c.rating >= 6 %}mid{% else %}neg{% endif %}">{{ c.rating }}/10</span>
+                <span class="fb-comment-date">{{ c.created_at[:16] if c.created_at else '' }}</span>
+            </div>
+            <div class="fb-comment-text">{{ c.text }}</div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% endif %}
+
+</div>
+
+<style>
+.fb-note {
+    background: rgba(251,191,36,0.08);
+    border: 1px solid rgba(251,191,36,0.25);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 0.82rem;
+    color: #fcd34d;
+    line-height: 1.5;
+    margin-bottom: 24px;
+}
+.fb-note strong { color: #fde68a; }
+
+/* Stats grid (stile admin) */
+.admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.admin-stat {
+    background: rgba(22,31,61,0.7);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 16px;
+    text-align: center;
+    backdrop-filter: blur(8px);
+}
+.admin-stat-val { font-size: 1.8rem; font-weight: 900; color: #93c5fd; line-height: 1; margin-bottom: 4px; letter-spacing: -0.03em; }
+.admin-stat-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+
+.admin-section-header { margin: 24px 0 14px; }
+
+/* Distribuzione */
+.fb-dist { display: flex; flex-direction: column; gap: 6px; }
+.fb-dist-row { display: flex; align-items: center; gap: 10px; }
+.fb-dist-label { width: 22px; text-align: right; font-weight: 700; font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.fb-dist-bar-wrap { flex: 1; background: rgba(255,255,255,0.04); border-radius: 6px; height: 18px; overflow: hidden; }
+.fb-dist-bar { height: 100%; border-radius: 6px; min-width: 2px; transition: width 0.3s ease; }
+.fb-dist-bar.pos { background: linear-gradient(90deg,#16a34a,#4ade80); }
+.fb-dist-bar.mid { background: linear-gradient(90deg,#2563eb,#60a5fa); }
+.fb-dist-bar.neg { background: linear-gradient(90deg,#dc2626,#f87171); }
+.fb-dist-count { width: 36px; text-align: left; font-weight: 700; font-size: 0.8rem; color: #cbd5e1; font-variant-numeric: tabular-nums; }
+
+/* Top grid (stile admin) */
+.admin-top-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 8px; }
+.admin-top-item { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: rgba(22,31,61,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; }
+.admin-top-rank { flex-shrink: 0; width: 28px; height: 28px; background: rgba(110,168,254,0.18); color: #93c5fd; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.78rem; }
+.admin-top-info { flex: 1; min-width: 0; }
+.admin-top-title { font-size: 0.85rem; font-weight: 700; color: #fff; }
+.admin-top-count { flex-shrink: 0; text-align: right; }
+.admin-top-count-num { display: block; font-size: 1.15rem; font-weight: 900; color: #fbbf24; line-height: 1; }
+.admin-top-count-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* Commenti */
+.fb-comments { display: flex; flex-direction: column; gap: 8px; }
+.fb-comment { background: rgba(22,31,61,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 12px; padding: 12px 14px; }
+.fb-comment-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+.fb-comment-rating { font-weight: 800; font-size: 0.75rem; padding: 2px 9px; border-radius: 999px; }
+.fb-comment-rating.pos { background: rgba(74,222,128,0.15); color: #4ade80; }
+.fb-comment-rating.mid { background: rgba(110,168,254,0.15); color: #93c5fd; }
+.fb-comment-rating.neg { background: rgba(248,113,113,0.15); color: #f87171; }
+.fb-comment-date { font-size: 0.72rem; color: var(--muted); }
+.fb-comment-text { font-size: 0.85rem; color: #cbd5e1; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+
+/* Empty */
+.admin-empty { background: rgba(22,31,61,0.5); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 36px 24px; text-align: center; }
+
+@media (max-width: 720px) {
+    .admin-stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .admin-stat-val { font-size: 1.5rem; }
+}
+</style>
+{% endblock %}

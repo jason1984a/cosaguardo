@@ -4073,6 +4073,31 @@ def admin_streaming_alerts(request: Request):
     )
 
 
+@app.get("/admin/feedback-stats", response_class=HTMLResponse)
+def admin_feedback_stats(request: Request):
+    """
+    Dashboard admin: aggregati del feedback sulla QUALITÀ delle liste di
+    consigli (microform su results.html). NB metodologico: selection bias —
+    rispondono i molto contenti e i molto delusi più dei medi → dati
+    polarizzati. Non interpretare le medie sotto le 30 risposte.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    try:
+        from app.db import get_recommendation_feedback_stats
+        fb = get_recommendation_feedback_stats()
+    except Exception as e:
+        log.warning("admin_feedback_stats: get stats failed: %s", e)
+        fb = {"total": 0, "avg_rating": None, "buckets": {},
+              "distribution": {}, "complaint_counts": {}, "recent_comments": []}
+
+    return templates.TemplateResponse(
+        request=request, name="admin_feedback_stats.html",
+        context={"request": request, "fb": fb}
+    )
+
+
 @app.post("/admin/logout")
 def admin_logout(request: Request):
     request.session.pop("is_admin", None)

@@ -13,11 +13,16 @@
             </div>
             <h1 style="font-size:1.6rem;font-weight:900;margin:0;">Utenti registrati</h1>
         </div>
-        <form action="/admin/logout" method="post">
-            <button type="submit" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);font-family:inherit;">
-                Esci dall'admin
-            </button>
-        </form>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="/admin/home" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);">
+                ← Home Admin
+            </a>
+            <form action="/admin/logout" method="post" style="display:inline;">
+                <button type="submit" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);font-family:inherit;">
+                    Esci dall'admin
+                </button>
+            </form>
+        </div>
     </div>
 
     <!-- STATISTICHE -->
