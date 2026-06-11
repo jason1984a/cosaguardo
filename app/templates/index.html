@@ -468,11 +468,10 @@
             </div>
 
             <div class="example-combos">
-                <span class="example-combos-label">Non sai da dove iniziare? Prova un esempio:</span>
+                <span class="example-combos-label">Non sai da dove iniziare? Tocca un esempio, poi premi «Trova consigli»:</span>
                 <div class="example-combos-btns">
                     <button type="button" class="example-combo-btn" onclick="fillExample('movie','Inception','Interstellar')">🎬 Inception + Interstellar</button>
                     <button type="button" class="example-combo-btn" onclick="fillExample('tv','Breaking Bad','I Soprano')">📺 Breaking Bad + I Soprano</button>
-                    <button type="button" class="example-combo-btn" onclick="fillExample('tv','Chernobyl','Band of Brothers')">📺 Chernobyl + Band of Brothers</button>
                 </div>
             </div>
 
@@ -626,39 +625,44 @@
         }
 
         /* ── Bottoni ricerche preimpostate (esempi) ── */
-        .example-combos {
-            margin: 4px 0 2px;
+        #recommend-form .example-combos {
+            margin: 2px 0 0;
             text-align: center;
         }
-        .example-combos-label {
+        #recommend-form .example-combos-label {
             display: block;
             font-size: 0.8rem;
+            line-height: 1.35;
             color: var(--muted, #94a3b8);
-            margin-bottom: 10px;
+            margin-bottom: 9px;
         }
-        .example-combos-btns {
+        #recommend-form .example-combos-btns {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
             justify-content: center;
         }
-        .example-combo-btn {
+        #recommend-form .example-combo-btn {
+            -webkit-appearance: none;
+            appearance: none;
             padding: 8px 14px;
             border-radius: 999px;
-            border: 1px solid rgba(110,168,254,0.3);
+            border: 1px solid rgba(110,168,254,0.35);
             background: rgba(110,168,254,0.08);
             color: #cfe2ff;
             font-size: 0.82rem;
             font-weight: 600;
             font-family: inherit;
+            line-height: 1.2;
             cursor: pointer;
+            box-shadow: none;
             transition: background 0.15s, border-color 0.15s, transform 0.1s;
         }
-        .example-combo-btn:hover {
+        #recommend-form .example-combo-btn:hover {
             background: rgba(110,168,254,0.18);
             border-color: rgba(110,168,254,0.6);
         }
-        .example-combo-btn:active { transform: scale(0.97); }
+        #recommend-form .example-combo-btn:active { transform: scale(0.97); }
     </style>
     <script>
         try {
