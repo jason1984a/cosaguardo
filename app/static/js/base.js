@@ -307,6 +307,13 @@
         function isAndroid() {
             return /Android/.test(navigator.userAgent);
         }
+        function isInAppBrowser() {
+            // Webview interni delle app social (dove atterra il traffico da
+            // annunci): NON possono installare PWA né "Aggiungi a Home".
+            // Vanno indirizzati ad aprire in Safari/Chrome vero.
+            var ua = navigator.userAgent || '';
+            return /FBAN|FBAV|FB_IAB|Instagram|Messenger|Line\/|Twitter|TikTok|Pinterest|Snapchat|LinkedInApp|WhatsApp|GSA\//i.test(ua);
+        }
         function isMobile() {
             // Pointer coarse = touch device. Width sotto 1024 = mobile/tablet.
             // Più affidabile dell'UA sniffing (futureproof + iPad iOS13+).
@@ -500,10 +507,58 @@
             if (b) b.classList.remove('show');
             bannerShown = false;
         }
+        // Costruisce al volo il contenuto dell'overlay guida e lo mostra.
+        // Riusa #ios-install-guide come contenitore (il markup statico in
+        // base.html fa da fallback no-JS e viene sovrascritto qui).
+        function renderGuideOverlay(title, stepsHtml, trackName) {
+            var guide = document.getElementById('ios-install-guide');
+            if (!guide) return;
+            var inner = guide.querySelector('.ios-guide-inner');
+            if (!inner) return;
+            inner.innerHTML =
+                '<button class="ios-guide-close" id="ios-guide-close" aria-label="Chiudi">\u00d7</button>' +
+                '<h3 class="ios-guide-title">' + title + '</h3>' +
+                stepsHtml;
+            var newClose = inner.querySelector('#ios-guide-close');
+            if (newClose) {
+                newClose.addEventListener('click', function() {
+                    hideIosGuide();
+                    dismissBanner('ios_guide_close');
+                });
+            }
+            guide.classList.add('show');
+            if (trackName) track(trackName, {});
+        }
+        // iOS Safari "vero": istruzioni Aggiungi alla schermata Home
+        // (etichetta verificata su iOS attuale = "Aggiungi alla schermata Home").
         function showIosGuide() {
-            var g = document.getElementById('ios-install-guide');
-            if (g) g.classList.add('show');
-            track('ios_guide_shown', {});
+            renderGuideOverlay(
+                'Installa CosaGuardo sul tuo iPhone',
+                '<div class="ios-guide-step"><div class="ios-guide-step-num">1</div>' +
+                '<div>Tocca il bottone <span class="ios-guide-share">\u2b06</span> <strong>Condividi</strong> (il quadrato con la freccia, in fondo allo schermo)</div></div>' +
+                '<div class="ios-guide-step"><div class="ios-guide-step-num">2</div>' +
+                '<div>Scorri il menu verso il basso e tocca <strong>"Aggiungi alla schermata Home"</strong></div></div>' +
+                '<div class="ios-guide-step"><div class="ios-guide-step-num">3</div>' +
+                '<div>Tocca <strong>"Aggiungi"</strong> in alto a destra per confermare</div></div>',
+                'ios_guide_shown'
+            );
+        }
+        // iOS dentro browser in-app (Instagram/Facebook/ecc.) o Chrome iOS:
+        // l'install non è possibile lì → guidalo ad aprire in Safari.
+        function showOpenInSafariGuide() {
+            hideBanner();
+            renderGuideOverlay(
+                'Apri in Safari per installare',
+                '<p style="font-size:0.85rem;color:var(--muted);margin:0 0 14px;text-align:center;">' +
+                'Stai navigando in un browser interno (es. Instagram o Facebook). Su iPhone l\'app si installa solo da <strong>Safari</strong>.</p>' +
+                '<div class="ios-guide-step"><div class="ios-guide-step-num">1</div>' +
+                '<div>Tocca i <strong>tre puntini</strong> (o l\'icona di condivisione) in alto a destra</div></div>' +
+                '<div class="ios-guide-step"><div class="ios-guide-step-num">2</div>' +
+                '<div>Tocca <strong>"Apri in Safari"</strong></div></div>' +
+                '<div class="ios-guide-step"><div class="ios-guide-step-num">3</div>' +
+                '<div>In Safari: <strong>Condividi</strong> \u2192 <strong>"Aggiungi alla schermata Home"</strong></div></div>',
+                'ios_open_in_safari_shown'
+            );
         }
         function hideIosGuide() {
             var g = document.getElementById('ios-install-guide');
@@ -546,10 +601,14 @@
                 btnInstall.addEventListener('click', function() {
                     track('install_banner_clicked', {});
 
-                    // iOS Safari → mostra guida overlay
-                    if (isIOS() && isSafari()) {
+                    // iOS: l'install passa sempre per Safari.
+                    if (isIOS()) {
                         hideBanner();
-                        showIosGuide();
+                        if (isSafari() && !isInAppBrowser()) {
+                            showIosGuide();            // Safari vero → Aggiungi a Home
+                        } else {
+                            showOpenInSafariGuide();   // in-app / Chrome iOS → apri in Safari
+                        }
                         return;
                     }
 
@@ -666,12 +725,12 @@
                 alert('CosaGuardo è già installata!');
                 return;
             }
-            if (isIOS() && isSafari()) {
-                showIosGuide();
-                return;
-            }
-            if (isIOS() && isChromeIOS()) {
-                alert('Per installare CosaGuardo su iPhone devi usare Safari (non Chrome). Apri questo sito su Safari e riprova.');
+            if (isIOS()) {
+                if (isSafari() && !isInAppBrowser()) {
+                    showIosGuide();
+                } else {
+                    showOpenInSafariGuide();
+                }
                 return;
             }
             if (deferredPrompt) {
