@@ -3380,6 +3380,18 @@ def come_funziona(request: Request):
     )
 
 
+@app.get("/cosa-serve", response_class=HTMLResponse)
+def cosa_serve(request: Request):
+    """
+    Pagina "Cosa serve per guardare": spiega cosa serve (abbonamenti,
+    dispositivi, ecc.) per guardare i contenuti suggeriti da CosaGuardo.
+    Route statico, mancava (il link nel menu portava a 404).
+    """
+    return templates.TemplateResponse(
+        request=request, name="cosa_serve.html", context={"request": request}
+    )
+
+
 @app.get("/admin/db-cache-stats")
 def admin_db_cache_stats(request: Request):
     """Statistiche tabella tmdb_cache (count, size, expired, pct cap)."""
