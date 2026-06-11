@@ -467,6 +467,15 @@
                 </div>
             </div>
 
+            <div class="example-combos">
+                <span class="example-combos-label">Non sai da dove iniziare? Prova un esempio:</span>
+                <div class="example-combos-btns">
+                    <button type="button" class="example-combo-btn" onclick="fillExample('movie','Inception','Interstellar')">🎬 Inception + Interstellar</button>
+                    <button type="button" class="example-combo-btn" onclick="fillExample('tv','Breaking Bad','I Soprano')">📺 Breaking Bad + I Soprano</button>
+                    <button type="button" class="example-combo-btn" onclick="fillExample('tv','Chernobyl','Band of Brothers')">📺 Chernobyl + Band of Brothers</button>
+                </div>
+            </div>
+
             <div class="form-actions-v2">
                 <button type="submit" class="primary-submit-btn" id="submit-btn">
                     <span class="btn-text">Trova consigli</span>
@@ -615,6 +624,41 @@
             .cg-signup-card { padding: 18px 16px; }
             .cg-signup-card-title { font-size: 18px; }
         }
+
+        /* ── Bottoni ricerche preimpostate (esempi) ── */
+        .example-combos {
+            margin: 4px 0 2px;
+            text-align: center;
+        }
+        .example-combos-label {
+            display: block;
+            font-size: 0.8rem;
+            color: var(--muted, #94a3b8);
+            margin-bottom: 10px;
+        }
+        .example-combos-btns {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+        }
+        .example-combo-btn {
+            padding: 8px 14px;
+            border-radius: 999px;
+            border: 1px solid rgba(110,168,254,0.3);
+            background: rgba(110,168,254,0.08);
+            color: #cfe2ff;
+            font-size: 0.82rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s, transform 0.1s;
+        }
+        .example-combo-btn:hover {
+            background: rgba(110,168,254,0.18);
+            border-color: rgba(110,168,254,0.6);
+        }
+        .example-combo-btn:active { transform: scale(0.97); }
     </style>
     <script>
         try {
@@ -797,6 +841,28 @@ function updatePlaceholders(type) {
         const el = document.getElementById(id);
         if (el) el.placeholder = list[i];
     });
+}
+
+// Bottoni "ricerche preimpostate": riempiono i campi (NON inviano il form,
+// così l'utente vede come funziona e clicca lui "Trova consigli").
+function fillExample(type, t1, t2) {
+    // 1. imposta il tipo Film/Serie e allinea i placeholder
+    const radio = document.querySelector('input[name="content_type"][value="' + type + '"]');
+    if (radio) {
+        radio.checked = true;
+        if (typeof updatePlaceholders === "function") updatePlaceholders(type);
+    }
+    // 2. riempi i primi due titoli, svuota gli altri
+    const vals = [t1, t2, "", "", "", ""];
+    ["movie1","movie2","movie3","movie4","movie5","movie6"].forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) el.value = vals[i] || "";
+    });
+    // 3. chiudi eventuali tendine di suggerimenti aperte
+    document.querySelectorAll(".suggestions").forEach(s => { s.innerHTML = ""; });
+    // 4. porta lo sguardo sul bottone "Trova consigli"
+    const submit = document.getElementById("submit-btn");
+    if (submit) submit.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 // Reset bottone se la pagina viene ripristinata da bfcache (es. tasto Indietro browser)
