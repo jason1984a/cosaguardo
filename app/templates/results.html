@@ -225,6 +225,49 @@
             </div>
         </div>
 
+        <!-- ─── Microform: feedback sulla qualità dei consigli ─── -->
+        <div class="rec-feedback" id="rec-feedback">
+
+            <div class="rec-feedback-step" id="rfb-step-rating">
+                <p class="rec-feedback-q">Questi consigli ti convincono?</p>
+                <div class="rec-feedback-scale">
+                    <span class="rec-feedback-emoji" aria-hidden="true">😞</span>
+                    <div class="rec-feedback-nums">
+                        <button type="button" class="rfb-num" data-v="1">1</button>
+                        <button type="button" class="rfb-num" data-v="2">2</button>
+                        <button type="button" class="rfb-num" data-v="3">3</button>
+                        <button type="button" class="rfb-num" data-v="4">4</button>
+                        <button type="button" class="rfb-num" data-v="5">5</button>
+                        <button type="button" class="rfb-num" data-v="6">6</button>
+                        <button type="button" class="rfb-num" data-v="7">7</button>
+                        <button type="button" class="rfb-num" data-v="8">8</button>
+                        <button type="button" class="rfb-num" data-v="9">9</button>
+                        <button type="button" class="rfb-num" data-v="10">10</button>
+                    </div>
+                    <span class="rec-feedback-emoji" aria-hidden="true">😍</span>
+                </div>
+            </div>
+
+            <div class="rec-feedback-step" id="rfb-step-reasons" hidden>
+                <p class="rec-feedback-q" id="rfb-reasons-q"></p>
+                <div class="rec-feedback-chips">
+                    <button type="button" class="rfb-chip" data-r="Titoli troppo conosciuti">Titoli troppo conosciuti</button>
+                    <button type="button" class="rfb-chip" data-r="Titoli troppo sconosciuti">Titoli troppo sconosciuti</button>
+                    <button type="button" class="rfb-chip" data-r="Lontani dal mio gusto">Lontani dal mio gusto</button>
+                    <button type="button" class="rfb-chip" data-r="Niente di nuovo (già visti tutti)">Niente di nuovo (già visti tutti)</button>
+                    <button type="button" class="rfb-chip" data-r="Manca il titolo che cercavo">Manca il titolo che cercavo</button>
+                </div>
+                <textarea class="rfb-text" id="rfb-text" rows="2" maxlength="1000" placeholder="Altro... (facoltativo)"></textarea>
+                <div><button type="button" class="rfb-submit" id="rfb-submit">Invia</button></div>
+            </div>
+
+            <div class="rec-feedback-step rec-feedback-thanks" id="rfb-step-thanks" hidden>
+                <p class="rfb-thanks-msg" id="rfb-thanks-msg"></p>
+                <div id="rfb-cta"></div>
+            </div>
+
+        </div>
+
     {% else %}
         <div class="empty-panel">
             <h2>Nessuna raccomandazione trovata</h2>
@@ -276,6 +319,90 @@
 
 {% block scripts %}
 <script src="{{ url_for('static', path='js/feedback.js') }}"></script>
+<script>
+/* ── Microform feedback qualità consigli (vanilla, fail-silent) ── */
+(function () {
+    var box = document.getElementById("rec-feedback");
+    if (!box) return;
+
+    var stepRating  = document.getElementById("rfb-step-rating");
+    var stepReasons = document.getElementById("rfb-step-reasons");
+    var stepThanks  = document.getElementById("rfb-step-thanks");
+    var reasonsQ    = document.getElementById("rfb-reasons-q");
+    var thanksMsg   = document.getElementById("rfb-thanks-msg");
+    var ctaBox      = document.getElementById("rfb-cta");
+    var textEl      = document.getElementById("rfb-text");
+    var chosenRating = null;
+
+    function collectContext() {
+        var seeds = [].map.call(document.querySelectorAll(".seed-tag"),
+                                function (t) { return t.textContent.trim(); });
+        var recs  = [].map.call(document.querySelectorAll(".result-scroll-title"),
+                                function (t) { return t.textContent.trim(); });
+        return { seeds: seeds, recs: recs };
+    }
+
+    function send(complaints, freeText) {
+        var ctx = collectContext();
+        try {
+            fetch("/api/recommendation-feedback", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    rating: chosenRating,
+                    seed_titles: ctx.seeds,
+                    recommended_titles: ctx.recs,
+                    complaint_buttons: complaints || [],
+                    free_text: freeText || ""
+                })
+            });
+        } catch (e) { /* il feedback non deve mai rompere la pagina */ }
+    }
+
+    function showThanks() {
+        stepRating.hidden = true;
+        stepReasons.hidden = true;
+        stepThanks.hidden = false;
+        if (chosenRating >= 8) {
+            thanksMsg.textContent = "Grazie! Felici che ti siano piaciuti \uD83C\uDFAC";
+            if (window.__CG_LOGGED_IN !== true) {
+                ctaBox.innerHTML = '<a href="/register">Salvali per stasera \u2014 crea il tuo profilo</a>';
+            }
+        } else {
+            thanksMsg.textContent = "Grazie, il tuo feedback ci aiuta a migliorare i consigli.";
+        }
+    }
+
+    [].forEach.call(document.querySelectorAll(".rfb-num"), function (btn) {
+        btn.addEventListener("click", function () {
+            [].forEach.call(document.querySelectorAll(".rfb-num"),
+                            function (b) { b.classList.remove("sel"); });
+            btn.classList.add("sel");
+            chosenRating = parseInt(btn.getAttribute("data-v"), 10);
+            if (chosenRating >= 8) {
+                send([], "");
+                showThanks();
+            } else {
+                reasonsQ.textContent = (chosenRating >= 6)
+                    ? "Cosa avresti voluto vedere?"
+                    : "Ci dispiace. Cosa non ha funzionato?";
+                stepReasons.hidden = false;
+            }
+        });
+    });
+
+    [].forEach.call(document.querySelectorAll(".rfb-chip"), function (chip) {
+        chip.addEventListener("click", function () { chip.classList.toggle("sel"); });
+    });
+
+    document.getElementById("rfb-submit").addEventListener("click", function () {
+        var complaints = [].map.call(document.querySelectorAll(".rfb-chip.sel"),
+                                     function (c) { return c.getAttribute("data-r"); });
+        send(complaints, (textEl.value || "").trim());
+        showThanks();
+    });
+})();
+</script>
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     // Salva parametri ricerca per ricostruire i risultati (non l'URL che è POST)
@@ -625,6 +752,100 @@ document.addEventListener("DOMContentLoaded", function () {
         max-width: none;
         min-width: 0;
     }
+}
+
+/* ── Microform feedback qualità consigli ── */
+.rec-feedback {
+    margin: 28px auto 8px;
+    max-width: 520px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 14px;
+    padding: 18px 16px;
+    text-align: center;
+}
+.rec-feedback-q {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 14px;
+}
+.rec-feedback-scale {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+.rec-feedback-emoji { font-size: 20px; flex: none; }
+.rec-feedback-nums {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+.rfb-num {
+    width: 30px; height: 32px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    font-size: 0.85rem; font-weight: 700;
+    cursor: pointer;
+    transition: 0.12s ease;
+}
+.rfb-num:hover { background: rgba(110,168,254,0.18); border-color: rgba(110,168,254,0.5); }
+.rfb-num.sel { background: linear-gradient(135deg,#2563eb,#7c3aed); border-color: transparent; color: #fff; }
+#rfb-step-reasons { margin-top: 16px; }
+.rec-feedback-chips {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    margin-bottom: 12px;
+}
+.rfb-chip {
+    padding: 8px 13px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: 0.12s ease;
+}
+.rfb-chip:hover { border-color: rgba(110,168,254,0.5); }
+.rfb-chip.sel { background: rgba(110,168,254,0.18); border-color: rgba(110,168,254,0.6); color: #cfe2ff; }
+.rfb-text {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 10px;
+    color: var(--text);
+    padding: 9px 11px;
+    font-size: 0.85rem;
+    font-family: inherit;
+    resize: vertical;
+    margin-bottom: 12px;
+}
+.rfb-text:focus { outline: none; border-color: rgba(110,168,254,0.5); }
+.rfb-submit {
+    padding: 9px 22px;
+    border-radius: 999px;
+    border: none;
+    background: linear-gradient(135deg,#2563eb,#7c3aed);
+    color: #fff; font-weight: 700; font-size: 0.85rem;
+    cursor: pointer;
+}
+.rec-feedback-thanks .rfb-thanks-msg {
+    font-size: 0.95rem; font-weight: 700; color: var(--text); margin: 0 0 10px;
+}
+#rfb-cta a {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 9px 18px;
+    border-radius: 999px;
+    background: linear-gradient(135deg,#2563eb,#7c3aed);
+    color: #fff !important;
+    font-weight: 700; font-size: 0.83rem;
+    text-decoration: none;
 }
 </style>
 {% endblock %}
