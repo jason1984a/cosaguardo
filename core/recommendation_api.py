@@ -2,7 +2,7 @@ import os
 import sqlite3
 import re
 import requests
-from collections import defaultdict
+from collections import defaultdict, Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Optional
 from core.explainability import enrich_with_explanations
@@ -516,225 +516,375 @@ def get_movie_release_year(title: str):
 
     return 0
 
-def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed_limit: int = 50):
+# ════════════════════════════════════════════════════════════════════════
+# MOTORE FILM v2 — TMDb primario (revisione algoritmo 12/06)
+# Prima: l'unica fonte candidati era il grafo locale MovieLens (9.742 film,
+# fermo al ~2018, zero serie) → copertura insufficiente e similarità per
+# co-visione, non per tema → fallback "a caso" e seed risolti sul film
+# sbagliato (es. "Joker" → "Batman Beyond: Return of the Joker").
+# Adesso rispecchiamo il lato serie (già TMDb-primario): risolviamo il seed
+# sul film TMDb corretto, prendiamo candidati da /similar + /recommendations
+# e li ordiniamo per sovrapposizione di KEYWORD/temi con il profilo dei seed.
+# Output identico a prima ({resolved_seeds, missing_titles, recommendations})
+# e stessi campi per-card, così main.py/results.html restano invariati.
+# (MovieLens potrà rientrare come segnale BONUS in uno step successivo.)
+# ════════════════════════════════════════════════════════════════════════
+
+def get_similar_movies_rich(tmdb_id: int, limit: int = 12):
+    """Film simili (/movie/{id}/similar) con campi ricchi. Mirror di get_similar_tv."""
+    if not tmdb_id or not TMDB_API_KEY:
+        return []
+    cache_key = f"movie:similar_rich:{tmdb_id}:{limit}"
+
+    def _build():
+        try:
+            r = requests.get(
+                f"https://api.themoviedb.org/3/movie/{tmdb_id}/similar",
+                params={"api_key": TMDB_API_KEY, "language": "it-IT"},
+                timeout=5,
+            )
+            out = []
+            for item in r.json().get("results", [])[:limit]:
+                if _is_adult_content(item):
+                    continue
+                title = pick_readable_title(item, "movie")
+                if not title:
+                    continue
+                out.append({
+                    "tmdb_id": item.get("id"),
+                    "title": title,
+                    "poster_path": item.get("poster_path"),
+                    "overview": item.get("overview"),
+                    "vote_average": item.get("vote_average", 0),
+                    "popularity": item.get("popularity", 0),
+                    "genres": item.get("genre_ids", []),
+                    "original_language": item.get("original_language"),
+                    "source_type": "similar",
+                })
+            return out
+        except Exception:
+            return []
+
+    return cached_call(cache_key, _build)
+
+
+def get_recommended_movies(tmdb_id: int, limit: int = 12):
+    """Film consigliati (/movie/{id}/recommendations). Mirror di get_recommended_tv."""
+    if not tmdb_id or not TMDB_API_KEY:
+        return []
+    cache_key = f"movie:recommended:{tmdb_id}:{limit}"
+
+    def _build():
+        try:
+            r = requests.get(
+                f"https://api.themoviedb.org/3/movie/{tmdb_id}/recommendations",
+                params={"api_key": TMDB_API_KEY, "language": "it-IT"},
+                timeout=5,
+            )
+            out = []
+            for item in r.json().get("results", [])[:limit]:
+                if _is_adult_content(item):
+                    continue
+                title = pick_readable_title(item, "movie")
+                if not title:
+                    continue
+                out.append({
+                    "tmdb_id": item.get("id"),
+                    "title": title,
+                    "poster_path": item.get("poster_path"),
+                    "overview": item.get("overview"),
+                    "vote_average": item.get("vote_average", 0),
+                    "popularity": item.get("popularity", 0),
+                    "genres": item.get("genre_ids", []),
+                    "original_language": item.get("original_language"),
+                    "source_type": "recommended",
+                })
+            return out
+        except Exception:
+            return []
+
+    return cached_call(cache_key, _build)
+
+
+def get_movie_keywords_by_tmdb(tmdb_id: int):
+    """Keywords TMDb di un film per tmdb_id (lista di stringhe minuscole).
+    L'endpoint film usa data['keywords'] (le serie usano data['results'])."""
+    if not tmdb_id or not TMDB_API_KEY:
+        return []
+    cache_key = f"movie:keywords_by_tmdbid:{tmdb_id}"
+
+    def _build():
+        try:
+            r = requests.get(
+                f"https://api.themoviedb.org/3/movie/{tmdb_id}/keywords",
+                params={"api_key": TMDB_API_KEY},
+                timeout=5,
+            )
+            return [
+                k["name"].strip().lower()
+                for k in r.json().get("keywords", [])
+                if k.get("name")
+            ]
+        except Exception:
+            return []
+
+    return cached_call(cache_key, _build)
+
+
+def _resolve_movie_seed(title: str):
+    """Risolve un titolo sul film TMDb corretto (il più rilevante) e ne
+    recupera generi (ids) + keywords. Sostituisce il vecchio match sul DB
+    locale MovieLens, che sbagliava film (Joker → cartone)."""
+    match = get_movie_tmdb_match(title)
+    if not match or not match.get("tmdb_id"):
+        return None
+    tmdb_id = match["tmdb_id"]
+    return {
+        "tmdb_id": tmdb_id,
+        "title": match.get("title") or title,
+        "original_title": match.get("original_title") or match.get("title") or title,
+        "genres": match.get("genre_ids", []),          # IDS (per overlap/scoring)
+        "keywords": get_movie_keywords_by_tmdb(tmdb_id),
+    }
+
+
+_MOVIE_EXCLUDED_GENRES = {99, 10770}  # Documentario, Film TV
+
+
+def _movie_has_excluded_genres(genre_ids):
+    return any(g in _MOVIE_EXCLUDED_GENRES for g in (genre_ids or []))
+
+
+def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 10, per_seed_limit: int = 30):
+    """
+    Motore film TMDb-primario (mirror del lato serie). Stesso contratto di
+    prima: {resolved_seeds, missing_titles, recommendations}. per_seed_limit
+    è mantenuto per compatibilità di firma (non più usato).
+    """
+    # Helper di scoring/spiegazione condivisi col lato serie (import lazy
+    # per evitare qualunque import circolare).
+    from core.recommendation_tv import (
+        build_seed_keyword_profile,
+        keyword_overlap_score,
+        get_top_matching_seeds,
+        is_franchise_duplicate,
+        tokenize_title,
+        translate_keywords,
+    )
+
     resolved_seeds = []
     missing_titles = []
 
-    # Parallelizzo find_movie_by_title — ogni seed fa 1 query DB locale
-    # + 1 chiamata cached a TMDb (per i generi). In parallelo: ~3-5x più veloce.
+    # ── FASE 1 — risoluzione seed via TMDb (+ keywords), in parallelo ──
     with ThreadPoolExecutor(max_workers=8) as ex:
-        seed_results = list(ex.map(
-            lambda t: (t, find_movie_by_title(t)),
-            seed_titles
-        ))
+        seed_results = list(ex.map(lambda t: (t, _resolve_movie_seed(t)), seed_titles))
 
-    for title, movie in seed_results:
-        if movie:
-            resolved_seeds.append(movie)
+    seed_ids = set()
+    seed_titles_clean = []
+    seed_title_keys = set()
+    seed_genres = []
+
+    for orig_title, seed in seed_results:
+        if not seed:
+            missing_titles.append(orig_title)
+            continue
+        resolved_seeds.append(seed)
+        seed_ids.add(seed["tmdb_id"])
+        seed_titles_clean.append(seed.get("title", ""))
+        seed_titles_clean.append(seed.get("original_title", ""))
+        seed_genres.extend(seed.get("genres", []))
+        seed_title_keys.add((seed.get("title") or "").lower().strip())
+        seed_title_keys.add((seed.get("original_title") or "").lower().strip())
+
+    if not resolved_seeds:
+        return {"resolved_seeds": [], "missing_titles": missing_titles, "recommendations": []}
+
+    single_seed = len(resolved_seeds) == 1
+
+    # ── FASE 2 — candidati da /similar + /recommendations di ogni seed ──
+    def _fetch_seed_candidates(seed):
+        sim = get_similar_movies_rich(seed["tmdb_id"], limit=12)
+        rec = get_recommended_movies(seed["tmdb_id"], limit=12)
+        return (seed, sim + rec)
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        candidate_batches = list(ex.map(_fetch_seed_candidates, resolved_seeds))
+
+    seed_titles_clean_lower = {(t or "").lower().strip() for t in seed_titles_clean}
+    candidates_to_process = []
+    unique_keyword_ids = set()
+
+    for seed, combined in candidate_batches:
+        for c in combined:
+            cid = c.get("tmdb_id")
+            ctitle = (c.get("title") or "").strip()
+            if not ctitle or cid in seed_ids:
+                continue
+            ckey = ctitle.lower()
+            if ckey in seed_titles_clean_lower or ckey in seed_title_keys:
+                continue
+            if any(tokenize_title(ctitle) == tokenize_title(st) for st in seed_titles_clean):
+                continue
+            if is_franchise_duplicate(ctitle, seed_titles_clean):
+                continue
+            if _movie_has_excluded_genres(c.get("genres", [])):
+                continue
+            # NB: niente filtro rigido di lingua (a differenza del lato serie):
+            # per seed stranieri (Parasite, Amélie) i simili sono spesso esteri
+            # e un filtro en/it li azzererebbe. pick_readable_title (già nei
+            # fetcher) scarta i titoli non-latini illeggibili; voto/popolarità
+            # fanno emergere i titoli rilevanti per il pubblico italiano.
+            candidates_to_process.append((seed, c))
+            unique_keyword_ids.add(cid)
+
+    # keywords per tutti i candidati unici, in parallelo
+    keywords_map = {}
+    if unique_keyword_ids:
+        with ThreadPoolExecutor(max_workers=12) as ex:
+            futs = [ex.submit(lambda i: (i, get_movie_keywords_by_tmdb(i)), cid)
+                    for cid in unique_keyword_ids]
+            for fut in as_completed(futs):
+                try:
+                    cid, kws = fut.result()
+                    keywords_map[cid] = kws
+                except Exception:
+                    pass
+
+    # aggregazione candidati (traccia matched_seed_titles → idea X/Y)
+    all_candidates = {}
+    for seed, c in candidates_to_process:
+        cid = c.get("tmdb_id")
+        ctitle = (c.get("title") or "").strip()
+        ckey = ctitle.lower()
+        if ckey not in all_candidates:
+            all_candidates[ckey] = {
+                "tmdb_id": cid,
+                "title": ctitle,
+                "poster_path": c.get("poster_path"),
+                "overview": c.get("overview"),
+                "vote_sum": c.get("vote_average", 0),
+                "pop_sum": c.get("popularity", 0),
+                "appearances": 1,
+                "similar_hits": 1 if c.get("source_type") == "similar" else 0,
+                "recommended_hits": 1 if c.get("source_type") == "recommended" else 0,
+                "genres": c.get("genres", []),
+                "keywords": keywords_map.get(cid, []),
+                "matched_seed_ids": {seed["tmdb_id"]},
+                "matched_seed_titles": {seed.get("title", "")},
+            }
         else:
-            missing_titles.append(title)
+            a = all_candidates[ckey]
+            a["vote_sum"] += c.get("vote_average", 0)
+            a["pop_sum"] += c.get("popularity", 0)
+            a["appearances"] += 1
+            a["matched_seed_ids"].add(seed["tmdb_id"])
+            a["matched_seed_titles"].add(seed.get("title", ""))
+            if c.get("source_type") == "similar":
+                a["similar_hits"] += 1
+            if c.get("source_type") == "recommended":
+                a["recommended_hits"] += 1
 
-    seed_ids = [m["movie_id"] for m in resolved_seeds]
+    # ── SCORING (mirror lato serie; soglie un filo più morbide perché i
+    #    film hanno spesso meno keyword delle serie) ──
+    seed_keyword_profile = build_seed_keyword_profile(resolved_seeds)
+    genre_counts = Counter(seed_genres)
+    top_genres = {g for g, n in genre_counts.items() if n >= 2}
+    seed_genre_ids = set(seed_genres)
 
-    # prendiamo più candidati del top_k finale, così il filtro franchise
-    # non lavora su una lista troppo corta
-    expanded_top_k = max(top_k * 5, 50)
+    scored = []
+    for item in all_candidates.values():
+        appearances = item["appearances"]
+        avg_vote = item["vote_sum"] / appearances if appearances else 0
+        avg_pop = item["pop_sum"] / appearances if appearances else 0
+        seed_coverage = len(item["matched_seed_ids"])
 
-    recommendations = recommend_from_seed_ids(
-        seed_ids=seed_ids,
-        top_k=expanded_top_k,
-        per_seed_limit=per_seed_limit
-    )
-
-    seed_map = {m["movie_id"]: m["title"] for m in resolved_seeds}
-
-    for rec in recommendations:
-        rec["why_titles"] = [
-            seed_map[sid]
-            for sid in rec.get("why_seed_ids", [])
-            if sid in seed_map
-        ]
-
-        penalty = 0.0
-
-        for seed_title in seed_titles:
-            if is_same_franchise(seed_title, rec["title"]):
-
-                if is_sequel(rec["title"]):
-                    penalty = max(penalty, 0.70)  # 🔥 più forte
-                else:
-                    penalty = max(penalty, 0.45)  # media
-            else:
-                overlap = token_overlap(seed_title, rec["title"])
-                if overlap >= 0.5:
-                    penalty = max(penalty, 0.20)
-
-        components = rec.get("components", {})
-
-        avg_score = rec.get("avg_score", 0)
-        genre_score = components.get("genre_score", 0)
-        tag_score = components.get("tag_score", 0)
-        collab_score = components.get("collab_score", 0)
-        appearances = rec.get("appearances", 1)
-
-        base_score = (
-            avg_score * 0.4 +
-            collab_score * 0.2 +
-            genre_score * 0.2 +
-            tag_score * 0.1 +
-            min(appearances, 2) * 0.1
+        kw_score, matched_keywords = keyword_overlap_score(
+            item.get("keywords", []), seed_keyword_profile
         )
-        multi_seed_bonus = 0
 
-        if len(rec.get("why_seed_ids", [])) >= 2:
-            multi_seed_bonus = 0.05
+        # I candidati arrivano già da /similar o /recommendations del seed:
+        # sono rilevanti per costruzione. kw_score serve a ORDINARE (premia
+        # l'affinità tematica), NON a escludere — così i match di un solo seed
+        # (simili a X ma non a Y, e viceversa) restano visibili, ordinati sotto
+        # quelli che somigliano a entrambi. È la logica "più simili a X / a Y".
 
-        rec["final_score"] = (base_score + multi_seed_bonus) * (1 - penalty)
-        rec["franchise_key"] = get_franchise_key(rec["title"])
-        rec["franchise_penalty"] = penalty
-        rec["is_sequel"] = is_sequel(rec["title"])
+        if seed_coverage >= 3:
+            multi_seed_bonus = 8
+        elif seed_coverage == 2:
+            multi_seed_bonus = 4
+        else:
+            multi_seed_bonus = 0 if single_seed else -1
 
-    # ordinamento iniziale
-    recommendations = sorted(
-        recommendations,
-        key=lambda x: x["final_score"],
-        reverse=True
-    )
+        genre_bonus = 3 if (top_genres and any(g in top_genres for g in item.get("genres", []))) else 0
 
-    # 🧠 DIVERSITY LAYER
-    diversified = []
+        final_score = (
+            appearances * 1.0
+            + multi_seed_bonus
+            + genre_bonus
+            + item["recommended_hits"] * 1.5
+            + item["similar_hits"] * 1.0
+            + avg_vote * 0.6
+            + min(avg_pop, 100) * 0.04
+            + kw_score * 14.0
+        )
+        if kw_score < 0.04:
+            final_score *= 0.75
+        elif kw_score > 0.30:
+            final_score *= 1.25
 
-    for candidate in recommendations:
-        penalty = 0
+        spin = sum(1 for w in ("origin", "origins", "prequel", "sequel")
+                   if w in item["title"].lower())
+        final_score -= spin * 2.0
+        if avg_vote < 6.0:
+            final_score *= 0.9
 
-        for chosen in diversified:
-            sim = simple_similarity(candidate, chosen)
+        if final_score < 2.0:
+            continue
 
-            if sim >= 2:
-                penalty += 0.15
-            elif sim == 1:
-                penalty += 0.07
+        cand_genres = set(item.get("genres", []))
+        genre_frac = (len(cand_genres & seed_genre_ids) / len(cand_genres)) if cand_genres else 0.0
 
-        candidate["adjusted_score"] = candidate["final_score"] * (1 - penalty)
+        # mappa nei campi interni esistenti (badge/ui/explain invariati)
+        item["avg_score"] = min(
+            0.58,
+            0.16 + kw_score * 1.1 + (0.12 if seed_coverage >= 2 else 0.0) + genre_frac * 0.10,
+        )
+        item["components"] = {
+            "genre_score": round(genre_frac, 3),
+            "tag_score": round(kw_score, 3),
+            "collab_score": round(min(item["recommended_hits"] * 0.15, 0.45), 3),
+            "quality_score_norm": round(min(avg_vote / 10.0, 1.0), 3),
+        }
+        item["_final_score"] = final_score
+        item["matched_keywords_list"] = translate_keywords(matched_keywords)
+        scored.append(item)
 
-        diversified.append(candidate)
+    scored.sort(key=lambda x: x["_final_score"], reverse=True)
+    scored = scored[:top_k]
 
-    # riordino finale
-    recommendations = sorted(
-        diversified,
-        key=lambda x: x["adjusted_score"],
-        reverse=True
-    )
-
+    # ── formattazione output (stessi campi dell'engine precedente) ──
     filtered = []
-    franchise_count = {}
-    genre_tracker = {}
-    seed_tracker = {}
+    for i, item in enumerate(scored):
+        top_seeds = get_top_matching_seeds(item, resolved_seeds, top_n=2)
+        if top_seeds:
+            why_titles = [s.get("title", "") for s in top_seeds]
+        else:
+            why_titles = sorted(t for t in item["matched_seed_titles"] if t)
+        why_titles = [t for t in why_titles if t][:2]
 
-    for rec in recommendations:
-        
-        fk = rec.get("franchise_key", "")
-        components = rec.get("components", {})
-
-        quality_score = components.get("quality_score_norm", 0)
-        genre_score = components.get("genre_score", 0)
-        tag_score = components.get("tag_score", 0)
-        collab_score = components.get("collab_score", 0)
-
-        # filtro qualità base
-        if quality_score < 0.45:
-            continue
-
-        # filtro rilevanza generale
-        if rec.get("avg_score", 0) < 0.22:
-            continue
-
-        if rec.get("adjusted_score", 0) < 0.24:
-            continue
-
-        # filtro "film vuoti" (pochi segnali reali)
-        if genre_score < 0.2 and tag_score < 0.1 and collab_score < 0.1:
-            continue
-
-        release_year = get_movie_release_year(rec.get("title", ""))
-        best_seed = build_movie_best_seed_title(rec)
-
-        if release_year >= 2015:
-            rec["avg_score"] += 0.05
-        elif release_year < 1990:
-            rec["avg_score"] -= 0.05
-
-        main_genres = rec.get("genres", [])
-        primary_genre = main_genres[0] if main_genres else None
-
-        if primary_genre:
-            genre_count = genre_tracker.get(primary_genre, 0)
-
-            # massimo 2 film per stesso genere principale
-            if genre_count >= 2:
-                continue
-        
-        if best_seed:
-            seed_count = seed_tracker.get(best_seed, 0)
-
-            # massimo 3 film trainati dallo stesso seed
-            if seed_count >= 3:
-                continue
-        
-        # evita troppi film della stessa saga/franchise
-        if fk and franchise_count.get(fk, 0) >= 1:
-            continue
-
-        filtered.append(rec)
-        if best_seed:
-            seed_tracker[best_seed] = seed_tracker.get(best_seed, 0) + 1
-
-        if primary_genre:
-            genre_tracker[primary_genre] = genre_tracker.get(primary_genre, 0) + 1
-
-        if fk:
-            franchise_count[fk] = franchise_count.get(fk, 0) + 1
-
-        if len(filtered) >= top_k:
-            break
-
-        # fallback: se i filtri sono troppo stretti, riempi leggermente la lista
-        if len(filtered) < top_k:
-            for rec in recommendations:
-                if rec in filtered:
-                    continue
-
-                fk = rec.get("franchise_key", "")
-
-                # evita comunque troppi film della stessa saga/franchise
-                if fk and franchise_count.get(fk, 0) >= 1:
-                    continue
-
-                genre_score_fallback = rec.get("components", {}).get("genre_score", 0)
-                tag_score_fallback = rec.get("components", {}).get("tag_score", 0)
-                collab_score_fallback = rec.get("components", {}).get("collab_score", 0)
-                quality_score_fallback = rec.get("components", {}).get("quality_score_norm", 0)
-                adjusted_score_fallback = rec.get("adjusted_score", 0)
-
-                # scarta solo i film completamente vuoti
-                if genre_score_fallback == 0 and tag_score_fallback == 0 and collab_score_fallback == 0:
-                    continue
-
-                # fallback più morbido ma ancora controllato
-                if adjusted_score_fallback >= 0.18 and quality_score_fallback >= 0.50:
-                    filtered.append(rec)
-
-                    if fk:
-                        franchise_count[fk] = franchise_count.get(fk, 0) + 1
-
-                if len(filtered) >= top_k:
-                    break
-
-    for i, rec in enumerate(filtered):
+        rec = {
+            "title": item["title"],
+            "tmdb_id": item["tmdb_id"],
+            "poster_path": item.get("poster_path"),
+            "overview": item.get("overview"),
+            "genres": movie_genre_ids_to_names(item.get("genres", [])),
+            "components": item["components"],
+            "avg_score": item["avg_score"],
+            "why_titles": why_titles,
+            "matched_keywords": item.get("matched_keywords_list", []),
+        }
         rec["best_seed_title"] = build_movie_best_seed_title(rec)
-        # mappa why_titles → matched_seed_titles per explainability.py
-        rec["matched_seed_titles"] = rec.get("why_titles", [])
-        rec["matched_keywords"] = rec.get("keywords", [])
+        rec["matched_seed_titles"] = why_titles
 
         if i == 0:
             rec["badge"] = {"text": "⭐ Miglior match", "type": "top"}
@@ -742,70 +892,23 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed
             rec["badge"] = build_movie_badge(rec)
 
         rec["ui_signals"] = build_movie_ui_signals(rec)
-        components = rec.get("components", {})
-
-        avg_score = rec.get("avg_score", 0)
-        genre_score = components.get("genre_score", 0)
-        tag_score = components.get("tag_score", 0)
-        collab_score = components.get("collab_score", 0)
-
+        avg_score = rec["avg_score"]
+        gs = rec["components"]["genre_score"]
+        ts = rec["components"]["tag_score"]
+        cs = rec["components"]["collab_score"]
         rec["match_score"] = round(min(9.8, 5.5 + avg_score * 8), 1)
-        rec["genre_score_ui"] = round(min(9.7, 5.0 + genre_score * 4), 1)
-        rec["vibe_score_ui"] = round(min(9.6, 5.0 + max(tag_score, collab_score) * 8), 1)
+        rec["genre_score_ui"] = round(min(9.7, 5.0 + gs * 4), 1)
+        rec["vibe_score_ui"] = round(min(9.6, 5.0 + max(ts, cs) * 8), 1)
 
-    # genera spiegazioni personalizzate con explainability.py
-    # PRIMA arricchisce genres/keywords da TMDb per i rec che li hanno null,
-    # IN PARALLELO usando la cache (24h memoria + 7gg DB).
-    needs_enrichment = [
-        rec for rec in filtered
-        if not rec.get("genres") or not rec.get("matched_keywords")
-    ]
-
-    if needs_enrichment:
-        def _fetch_movie_keywords_by_tmdb_id(tmdb_id: int):
-            """Cache wrapper per keywords endpoint TMDb di un movie_id."""
-            if not tmdb_id:
-                return []
-            cache_key = f"movie:keywords_by_tmdbid:{tmdb_id}"
-
-            def _fetch():
-                try:
-                    url = f"https://api.themoviedb.org/3/movie/{tmdb_id}/keywords"
-                    resp = requests.get(url, params={"api_key": TMDB_API_KEY}, timeout=4)
-                    return [
-                        k["name"].strip().lower()
-                        for k in resp.json().get("keywords", [])
-                        if k.get("name")
-                    ]
-                except Exception:
-                    return []
-            return cached_call(cache_key, _fetch)
-
-        def _enrich_one(rec):
-            try:
-                tmdb = get_movie_tmdb_match(rec.get("title", ""))
-                if not tmdb:
-                    return
-                if not rec.get("genres"):
-                    rec["genres"] = movie_genre_ids_to_names(tmdb.get("genre_ids", []))
-                if not rec.get("matched_keywords") and tmdb.get("tmdb_id"):
-                    rec["matched_keywords"] = _fetch_movie_keywords_by_tmdb_id(tmdb["tmdb_id"])
-            except Exception:
-                pass
-
-        # Parallel fetch — drasticamente più veloce del loop seriale precedente
-        with ThreadPoolExecutor(max_workers=10) as ex:
-            list(ex.map(_enrich_one, needs_enrichment))
+        filtered.append(rec)
 
     enrich_with_explanations(filtered)
-
 
     return {
         "resolved_seeds": resolved_seeds,
         "missing_titles": missing_titles,
-        "recommendations": filtered
+        "recommendations": filtered,
     }
-
 
 
 def search_movies(query: str, limit: int = 10):
