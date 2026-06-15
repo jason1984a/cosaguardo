@@ -3508,26 +3508,6 @@ def cosa_serve(request: Request):
     )
 
 
-@app.get("/__debug-edge", response_class=JSONResponse)
-def __debug_edge(request: Request):
-    """
-    DIAGNOSTICA TEMPORANEA (da rimuovere): mostra la catena di IP a monte,
-    per costruire un blocco basato sull'IP di Cloudflare (non falsificabile
-    via header, a differenza di cf-ray che Render aggiunge anche ai colpi
-    diretti).
-    """
-    xff = request.headers.get("x-forwarded-for", "")
-    return {
-        "x_forwarded_for": xff,
-        "x_forwarded_for_lista": [p.strip() for p in xff.split(",") if p.strip()],
-        "client_host": request.client.host if request.client else None,
-        "cf_connecting_ip": request.headers.get("cf-connecting-ip"),
-        "x_real_ip": request.headers.get("x-real-ip"),
-        "true_client_ip": request.headers.get("true-client-ip"),
-        "cf_ray_presente": bool(request.headers.get("cf-ray")),
-    }
-
-
 
 
 @app.get("/admin/db-cache-stats")
