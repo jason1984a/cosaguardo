@@ -379,25 +379,48 @@ async def redirect_legacy_domain(request: Request, call_next):
     return await call_next(request)
 
 
-# ─── EMERGENZA: blocco colpi diretti all'IP di origine (bypass Cloudflare) ──
-# I bot hanno scoperto l'IP di Render e martellano le pagine pesanti saltando
-# Cloudflare. Diagnostica (/__debug-edge): l'header custom X-CG-Edge della
-# Transform Rule si PERDE attraverso l'infrastruttura di Render, ma gli header
-# "cf-*" messi dalla nostra Cloudflare (cf-ray, cf-connecting-ip) SOPRAVVIVONO
-# fino all'app. I colpi diretti all'IP NON passano da Cloudflare → niente
-# cf-ray. Pretendiamo quindi cf-ray sulle pagine pesanti:
-#   presente = arriva da Cloudflare (utenti veri + Googlebot) → passa;
-#   assente  = colpo diretto all'origine → 403 immediato, prima di ogni lavoro.
-# Disattivabile al volo con la env EDGE_GUARD="0" (default attivo).
+# ─── EMERGENZA: blocco scraper da datacenter sulle pagine pesanti ──────────
+# I bot colpiscono l'IP di origine di Render saltando Cloudflare. Header non
+# affidabili (X-CG-Edge strippato da Render; cf-ray aggiunto da Render anche
+# ai colpi diretti). MA cf-connecting-ip riporta in modo affidabile l'IP REALE
+# del cliente (verificato: utente vero = 93.37.x residenziale; bot = 17.x Apple
+# / AWS). Nessun utente residenziale naviga da un datacenter → blocchiamo le
+# pagine pesanti quando l'IP reale è di un cloud noto. Estendibile se i bot
+# cambiano rete. Disattivabile con env EDGE_GUARD="0" (default attivo).
+import ipaddress as _ipaddress
+
+_DATACENTER_CIDRS = [
+    "17.0.0.0/8",      # Apple (sorgente dominante del flood)
+    "3.0.0.0/8",       # AWS
+    "18.208.0.0/13",   # AWS us-east
+    "34.192.0.0/10",   # AWS us-east  (NB: NON include 34.64/10 di Google)
+    "52.0.0.0/8",      # AWS
+    "54.144.0.0/12",   # AWS
+    "54.160.0.0/11",   # AWS
+    "98.80.0.0/12",    # AWS
+]
+_DATACENTER_NETS = [_ipaddress.ip_network(c) for c in _DATACENTER_CIDRS]
 _EDGE_GUARD = os.environ.get("EDGE_GUARD", "1") == "1"
 _EDGE_PROTECTED_PREFIXES = ("/film/", "/serie/", "/persona/")
+
+
+def _real_client_ip(request: Request) -> str:
+    ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "")
+    return (ip or "").strip()
+
+
+def _is_datacenter_ip(ip: str) -> bool:
+    try:
+        addr = _ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _DATACENTER_NETS)
 
 
 @app.middleware("http")
 async def block_direct_origin(request: Request, call_next):
     if _EDGE_GUARD and request.url.path.startswith(_EDGE_PROTECTED_PREFIXES):
-        # cf-ray è presente SOLO se la richiesta è passata dalla nostra Cloudflare
-        if not request.headers.get("cf-ray"):
+        if _is_datacenter_ip(_real_client_ip(request)):
             return _PlainTextResponse("Forbidden", status_code=403)
     return await call_next(request)
 
