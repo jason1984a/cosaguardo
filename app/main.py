@@ -1818,8 +1818,12 @@ def recommend(
 
     # ── Cache check ────────────────────────────────────────────────────────
     import hashlib as _hl
+    # Versione algoritmo nella chiave: ogni cambio del motore consigli la fa
+    # cambiare → le voci vecchie diventano irraggiungibili (niente liste stale).
+    # Bump questa stringa a ogni revisione dell'algoritmo (es. "v3", "v4"...).
+    _ALGO_VERSION = "movie-tmdb-v2"
     _cache_key = _hl.md5(
-        ("|".join(sorted(t.lower() for t in seed_titles)) + content_type).encode()
+        ("|".join(sorted(t.lower() for t in seed_titles)) + content_type + _ALGO_VERSION).encode()
     ).hexdigest()
     _cached = get_search_cache(_cache_key)
     if _cached:
