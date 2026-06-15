@@ -835,6 +835,19 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 10, per_seed
         spin = sum(1 for w in ("origin", "origins", "prequel", "sequel")
                    if w in item["title"].lower())
         final_score -= spin * 2.0
+
+        # ── Correzione "fuori tema" (equilibrato, chirurgica) ──
+        cand_genres = set(item.get("genres", []))
+        # Animazione/famiglia quando NESSUN seed lo è → forte penalità
+        # (es. Toy Story / Il pianeta del tesoro con seed sci-fi adulti).
+        _family_ids = {16, 10751}  # 16=Animazione, 10751=Family
+        if (cand_genres & _family_ids) and not (seed_genre_ids & _family_ids):
+            final_score *= 0.4
+        # Taglia SOLO i palesemente fuori tema: keyword ~nulle E zero generi
+        # in comune coi seed. Soglia bassa per non svuotare le liste.
+        if kw_score < 0.02 and not (cand_genres & seed_genre_ids):
+            continue
+
         if avg_vote < 6.0:
             final_score *= 0.9
 
@@ -843,7 +856,6 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 10, per_seed
 
         cand_genres = set(item.get("genres", []))
         genre_frac = (len(cand_genres & seed_genre_ids) / len(cand_genres)) if cand_genres else 0.0
-
         # mappa nei campi interni esistenti (badge/ui/explain invariati)
         item["avg_score"] = min(
             0.58,
