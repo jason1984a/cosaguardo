@@ -390,18 +390,34 @@ async def redirect_legacy_domain(request: Request, call_next):
 import ipaddress as _ipaddress
 
 _DATACENTER_CIDRS = [
-    "17.0.0.0/8",      # Apple (sorgente dominante del flood)
+    "17.0.0.0/8",      # Apple (sorgente dominante del primo flood)
     "3.0.0.0/8",       # AWS
     "18.208.0.0/13",   # AWS us-east
     "34.192.0.0/10",   # AWS us-east  (NB: NON include 34.64/10 di Google)
+    "44.192.0.0/10",   # AWS
     "52.0.0.0/8",      # AWS
     "54.144.0.0/12",   # AWS
     "54.160.0.0/11",   # AWS
+    "54.224.0.0/11",   # AWS
     "98.80.0.0/12",    # AWS
+    "100.24.0.0/13",   # AWS
 ]
 _DATACENTER_NETS = [_ipaddress.ip_network(c) for c in _DATACENTER_CIDRS]
 _EDGE_GUARD = os.environ.get("EDGE_GUARD", "1") == "1"
 _EDGE_PROTECTED_PREFIXES = ("/film/", "/serie/", "/persona/")
+
+# Geo-restrizione delle pagine profonde: CosaGuardo serve l'Italia. Su /film,
+# /serie, /persona il traffico NON italiano è ~100% scraper (la 2ª ondata
+# arrivava da ISP residenziali vietnamiti, che la blocklist datacenter non
+# prende). Header cf-ipcountry (affidabile, arriva fino all'app). Default
+# "IT"; estendibile via env EDGE_ALLOWED_COUNTRIES (es. "IT,SM,VA,CH").
+# Queste pagine sono noindex → bloccare Googlebot (US) qui non costa SEO.
+# Le pagine SEO /dove-vedere NON sono toccate (Googlebot deve raggiungerle).
+_EDGE_ALLOWED_COUNTRIES = {
+    c.strip().upper()
+    for c in os.environ.get("EDGE_ALLOWED_COUNTRIES", "IT,SM,VA").split(",")
+    if c.strip()
+}
 
 
 def _real_client_ip(request: Request) -> str:
@@ -420,7 +436,13 @@ def _is_datacenter_ip(ip: str) -> bool:
 @app.middleware("http")
 async def block_direct_origin(request: Request, call_next):
     if _EDGE_GUARD and request.url.path.startswith(_EDGE_PROTECTED_PREFIXES):
+        # 1) IP di datacenter noto → blocca
         if _is_datacenter_ip(_real_client_ip(request)):
+            return _PlainTextResponse("Forbidden", status_code=403)
+        # 2) Paese noto e non consentito → blocca (prende la botnet residenziale
+        #    estera). Se cf-ipcountry è assente, non blocchiamo per paese.
+        country = (request.headers.get("cf-ipcountry") or "").upper()
+        if country and country not in _EDGE_ALLOWED_COUNTRIES:
             return _PlainTextResponse("Forbidden", status_code=403)
     return await call_next(request)
 
