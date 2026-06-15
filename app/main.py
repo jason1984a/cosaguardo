@@ -3474,26 +3474,22 @@ def cosa_serve(request: Request):
 @app.get("/__debug-edge", response_class=JSONResponse)
 def __debug_edge(request: Request):
     """
-    DIAGNOSTICA TEMPORANEA (da rimuovere): mostra se l'header X-CG-Edge
-    aggiunto dalla Transform Rule di Cloudflare arriva fino all'app, e se
-    coincide con EDGE_SECRET. Non espone dati sensibili (solo presenza/match).
+    DIAGNOSTICA TEMPORANEA (da rimuovere): mostra la catena di IP a monte,
+    per costruire un blocco basato sull'IP di Cloudflare (non falsificabile
+    via header, a differenza di cf-ray che Render aggiunge anche ai colpi
+    diretti).
     """
-    received = request.headers.get("x-cg-edge")
-    expected = os.environ.get("EDGE_SECRET", "")
+    xff = request.headers.get("x-forwarded-for", "")
     return {
-        "x_cg_edge_ricevuto": bool(received),
-        "lunghezza_ricevuto": len(received) if received else 0,
-        "edge_secret_impostata_su_render": bool(expected),
-        "lunghezza_attesa": len(expected) if expected else 0,
-        "coincidono": (received == expected) if (received and expected) else False,
-        # primi/ultimi caratteri per scovare spazi o a-capo, senza svelare il segreto
-        "ricevuto_inizio_fine": (received[:3] + "…" + received[-3:]) if received else None,
-        # tutti gli header che iniziano per 'cf-' o 'x-' per vedere cosa arriva da CF/Render
-        "header_cf_e_x": sorted(
-            k for k in request.headers.keys()
-            if k.lower().startswith("cf-") or k.lower().startswith("x-")
-        ),
+        "x_forwarded_for": xff,
+        "x_forwarded_for_lista": [p.strip() for p in xff.split(",") if p.strip()],
+        "client_host": request.client.host if request.client else None,
+        "cf_connecting_ip": request.headers.get("cf-connecting-ip"),
+        "x_real_ip": request.headers.get("x-real-ip"),
+        "true_client_ip": request.headers.get("true-client-ip"),
+        "cf_ray_presente": bool(request.headers.get("cf-ray")),
     }
+
 
 
 
