@@ -379,6 +379,26 @@ async def redirect_legacy_domain(request: Request, call_next):
     return await call_next(request)
 
 
+# ─── EMERGENZA: blocco colpi diretti all'IP di origine (bypass Cloudflare) ──
+# I bot hanno scoperto l'IP di Render e martellano le pagine pesanti saltando
+# Cloudflare (le regole CF non li vedono). Una Transform Rule di Cloudflare
+# aggiunge l'header X-CG-Edge a TUTTO il traffico che passa dalla nostra CF
+# (utenti veri + Googlebot). Qui rifiutiamo all'istante le pagine pesanti che
+# ne sono prive — cioè i colpi diretti all'IP — PRIMA di qualsiasi lavoro
+# TMDb/DB. Inerte finché la env EDGE_SECRET non è impostata (fail-open),
+# così il deploy è sicuro anche prima che la Transform Rule sia attiva.
+_EDGE_SECRET = os.environ.get("EDGE_SECRET", "")
+_EDGE_PROTECTED_PREFIXES = ("/film/", "/serie/", "/persona/")
+
+
+@app.middleware("http")
+async def block_direct_origin(request: Request, call_next):
+    if _EDGE_SECRET and request.url.path.startswith(_EDGE_PROTECTED_PREFIXES):
+        if request.headers.get("x-cg-edge") != _EDGE_SECRET:
+            return _PlainTextResponse("Forbidden", status_code=403)
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def anti_scanner(request: Request, call_next):
     path = request.url.path
