@@ -417,57 +417,7 @@ def get_candidates_for_movie(source_movie_id: int, limit: int = 50):
     return results
 
 
-# ── Allargamento fonte candidati (revisione algoritmo 12/06) ──────────────
-# Il grafo locale MovieLens (title_relations) è denso per i titoli mainstream
-# ma povero per film stranieri/d'autore/recenti → pool magro → fallback "a caso".
-# Quando un seed ha pochi candidati locali, integriamo da TMDb /similar,
-# normalizzati nello stesso formato così la pipeline di scoring li gestisce.
-_MIN_LOCAL_CANDIDATES = 25  # sotto questa soglia di candidati locali → integra TMDb
-
-
-def _tmdb_candidates_for_seed(seed_title: str, limit: int = 20) -> list:
-    """
-    Candidati da TMDb /similar per un seed, nel formato di
-    get_candidates_for_movie. Punteggi sintetici: collaborativo = 0 (non
-    disponibile fuori da MovieLens), ma rilevanza di contenuto alta (TMDb li
-    giudica simili) e qualità derivata dal voto. Così passano i filtri e si
-    posizionano sotto i match collaborativi forti. Cached per non appesantire
-    /recommend.
-    """
-    if not seed_title:
-        return []
-    cache_key = f"reco:tmdb_cand:{seed_title.strip().lower()}:{limit}"
-
-    def _build():
-        match = get_movie_tmdb_match(seed_title)
-        if not match or not match.get("tmdb_id"):
-            return []
-        similar = get_similar_movies_tmdb(match["tmdb_id"], limit=limit)
-        out = []
-        for s in similar:
-            tid = s.get("tmdb_id")
-            if not tid:
-                continue
-            vote = s.get("vote_average", 0) or 0
-            out.append({
-                "movie_id": f"tmdb:{tid}",        # chiave sintetica: non collide con gli id MovieLens (int)
-                "title": s.get("title", ""),
-                "score_raw": 0.50,                 # base moderata
-                "shared_users": 0,
-                "collab_score": 0.0,               # nessun segnale collaborativo fuori MovieLens
-                "genre_score": 0.50,               # TMDb 'similar' = rilevanza di contenuto
-                "tag_score": 0.30,
-                "quality_score_norm": min(max(vote / 10.0, 0.0), 1.0),
-                "content_score": 0.50,
-                "pop_penalty_norm": 0.0,
-            })
-        return out
-
-    return cached_call(cache_key, _build)
-
-
-def recommend_from_seed_ids(seed_ids: list[int], top_k: int = 20, per_seed_limit: int = 50,
-                            seed_titles_map: dict | None = None):
+def recommend_from_seed_ids(seed_ids: list[int], top_k: int = 20, per_seed_limit: int = 50):
     aggregated = defaultdict(lambda: {
         "movie_id": None,
         "title": None,
@@ -487,17 +437,9 @@ def recommend_from_seed_ids(seed_ids: list[int], top_k: int = 20, per_seed_limit
     })
 
     seed_ids_set = set(seed_ids)
-    seed_titles_map = seed_titles_map or {}
 
     for seed_id in seed_ids:
         candidates = get_candidates_for_movie(seed_id, limit=per_seed_limit)
-
-        # Allargamento fonte: se il grafo locale è povero per questo seed,
-        # integra con candidati TMDb /similar (stesso formato).
-        if len(candidates) < _MIN_LOCAL_CANDIDATES:
-            seed_title = seed_titles_map.get(seed_id)
-            if seed_title:
-                candidates = candidates + _tmdb_candidates_for_seed(seed_title, limit=per_seed_limit)
 
         for c in candidates:
             target_id = c["movie_id"]
@@ -535,26 +477,6 @@ def recommend_from_seed_ids(seed_ids: list[int], top_k: int = 20, per_seed_limit
         item["why_seed_ids"] = item["from_seed_ids"][:]
 
         results.append(item)
-
-    # Dedup per titolo normalizzato: lo stesso film può arrivare sia da MovieLens
-    # sia da TMDb. Teniamo l'entry migliore e UNIAMO i seed di provenienza, così
-    # un titolo trovato da fonti diverse per i due seed conta come intersezione.
-    by_norm = {}
-    for item in results:
-        nt = normalize_title(item.get("title", ""))
-        if not nt:
-            continue
-        if nt not in by_norm:
-            by_norm[nt] = item
-            continue
-        keep = by_norm[nt]
-        merged_seeds = list(dict.fromkeys(keep["why_seed_ids"] + item["why_seed_ids"]))
-        best = keep if (keep["appearances"], keep["avg_score"]) >= (item["appearances"], item["avg_score"]) else item
-        best["why_seed_ids"] = merged_seeds
-        best["from_seed_ids"] = merged_seeds
-        best["appearances"] = max(keep["appearances"], item["appearances"], len(merged_seeds))
-        by_norm[nt] = best
-    results = list(by_norm.values())
 
     results.sort(
         key=lambda x: (
@@ -621,8 +543,7 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 20, per_seed
     recommendations = recommend_from_seed_ids(
         seed_ids=seed_ids,
         top_k=expanded_top_k,
-        per_seed_limit=per_seed_limit,
-        seed_titles_map={m["movie_id"]: m["title"] for m in resolved_seeds},
+        per_seed_limit=per_seed_limit
     )
 
     seed_map = {m["movie_id"]: m["title"] for m in resolved_seeds}
