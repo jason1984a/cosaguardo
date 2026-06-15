@@ -2240,6 +2240,79 @@ def watch_providers(title: str = "", content_type: str = "movie"):
     return get_watch_providers(title.strip(), content_type=content_type)
 
 
+# ── Cache sezione "simili" delle schede /film e /serie ─────────────────────
+# È il pezzo costoso di queste pagine: a ogni vista lanciava il motore consigli
+# + fetch poster (~4-5s, e i bot mascherati da utente lo facevano partire). I
+# titoli simili sono uguali per tutti e cambiano di rado → li calcoliamo una
+# volta e li teniamo in cache per tmdb_id. Dalla 2ª vista: zero motore, zero
+# chiamate TMDb. Lo stato utente (preferiti/visto/tracking) resta SEMPRE
+# calcolato al volo nella rotta, fuori da questa cache.
+
+def _cached_similar_movies(tmdb_id: int, title: str) -> list:
+    from core.tmdb_cache import cached_call
+
+    def _build():
+        out = []
+        try:
+            res = recommend_from_seed_titles([title], top_k=6, per_seed_limit=20)
+            recs = res.get("recommendations", [])[:6]
+            if recs:
+                from concurrent.futures import ThreadPoolExecutor, as_completed
+
+                def _fetch_one(rec):
+                    return rec, get_movie_tmdb_info(rec["title"])
+
+                tmdb_by_title = {}
+                with ThreadPoolExecutor(max_workers=6) as ex:
+                    futures = [ex.submit(_fetch_one, r) for r in recs]
+                    for fut in as_completed(futures):
+                        try:
+                            rec, info = fut.result(timeout=4)
+                            tmdb_by_title[rec["title"]] = info
+                        except Exception as e:
+                            log.debug("similar movie tmdb fetch fail: %s", e)
+                for rec in recs:
+                    info = tmdb_by_title.get(rec["title"])
+                    if info and info.get("poster_url"):
+                        sid = info.get("tmdb_id")
+                        out.append({
+                            "title":        info.get("display_title") or rec["title"],
+                            "poster_url":   info["poster_url"],
+                            "tmdb_id":      sid,
+                            "content_type": "movie",
+                            "seo_slug":     get_slug_by_tmdb_id(sid, "movie") if sid else None,
+                        })
+        except Exception as e:
+            log.warning("_cached_similar_movies build fail '%s': %s", title, e)
+        return out
+
+    return cached_call(f"detail:similar:movie:{tmdb_id}", _build)
+
+
+def _cached_similar_tv(tmdb_id: int, title: str) -> list:
+    from core.tmdb_cache import cached_call
+
+    def _build():
+        out = []
+        try:
+            res = recommend_tv_from_seed_titles([title])
+            for rec in res.get("recommendations", [])[:6]:
+                pp = rec.get("poster_path", "")
+                sid = rec.get("tv_id")
+                out.append({
+                    "title":        rec.get("title", ""),
+                    "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
+                    "tmdb_id":      sid,
+                    "content_type": "tv",
+                    "seo_slug":     get_slug_by_tmdb_id(sid, "tv") if sid else None,
+                })
+        except Exception as e:
+            log.warning("_cached_similar_tv build fail '%s': %s", title, e)
+        return out
+
+    return cached_call(f"detail:similar:tv:{tmdb_id}", _build)
+
+
 @app.get("/film/{tmdb_id}", response_class=HTMLResponse)
 def film_detail(request: Request, tmdb_id: int):
     detail = get_detail_movie(tmdb_id)
@@ -2266,56 +2339,11 @@ def film_detail(request: Request, tmdb_id: int):
             detail["title"].strip().lower(), {}
         )
 
-    # Raccomandazioni simili dal motore interno
-    # Anti-OOM: i bot non vedono la sezione "simili" (è il pezzo costoso),
-    # vedono comunque tutto il detail principale (cache TMDb leggera).
-    #
-    # PERF: TMDb info per i 6 simili viene fetchato in PARALLELO (era seriale).
-    # Su cache-miss (= prima visita scheda) andiamo da ~3s a ~500ms su questa
-    # sezione. Stesso pattern usato nelle search principali della home (~riga 1700).
+    # Sezione "film simili" — pezzo costoso (motore consigli), in cache per
+    # tmdb_id (vedi _cached_similar_movies). I bot la saltano.
     similar = []
     if detail.get("title") and not _is_bot(request):
-        try:
-            res = recommend_from_seed_titles([detail["title"]], top_k=6, per_seed_limit=20)
-            recs = res.get("recommendations", [])[:6]
-
-            if recs:
-                from concurrent.futures import ThreadPoolExecutor, as_completed
-                def _fetch_one(rec):
-                    return rec, get_movie_tmdb_info(rec["title"])
-
-                # 6 chiamate parallele invece che sequenziali.
-                # max_workers=6 = numero esatto di rec, no overhead.
-                tmdb_by_title = {}
-                with ThreadPoolExecutor(max_workers=6) as ex:
-                    futures = [ex.submit(_fetch_one, r) for r in recs]
-                    for fut in as_completed(futures):
-                        try:
-                            rec, info = fut.result(timeout=4)
-                            tmdb_by_title[rec["title"]] = info
-                        except Exception as e:
-                            # 1 fallita su 6 è ok, gli altri rec hanno comunque poster.
-                            log.debug("film_detail: similar tmdb fetch fail: %s", e)
-
-                # Ricostruisci la lista mantenendo l'ordine originale del motore
-                # (le futures finiscono in ordine arbitrario di completamento).
-                for rec in recs:
-                    tmdb_info = tmdb_by_title.get(rec["title"])
-                    if tmdb_info and tmdb_info.get("poster_url"):
-                        sim_tmdb_id = tmdb_info.get("tmdb_id")
-                        similar.append({
-                            "title":      tmdb_info.get("display_title") or rec["title"],
-                            "poster_url": tmdb_info["poster_url"],
-                            "tmdb_id":    sim_tmdb_id,
-                            "content_type": "movie",
-                            # PR-3: se il simile è un titolo SEO curato, linkiamo
-                            # alla pagina canonica /dove-vedere/{slug} invece che
-                            # alla /film/{id} (che potrebbe essere noindex).
-                            "seo_slug":   get_slug_by_tmdb_id(sim_tmdb_id, "movie") if sim_tmdb_id else None,
-                        })
-        except Exception as e:
-            # Sezione "simili" è opzionale: la pagina detail funziona senza.
-            log.warning("film_detail: similar build fallito per '%s': %s", detail.get("title"), e)
+        similar = _cached_similar_movies(tmdb_id, detail["title"])
 
     # ── Indicizzazione (PR-3, 01/06/2026) ─────────────────────────────────
     # Strategia: /film/{id} è una pagina ricca per UX ma duplica
@@ -2377,25 +2405,11 @@ def serie_detail(request: Request, tmdb_id: int):
             detail["title"].strip().lower(), {}
         )
 
-    # Raccomandazioni simili
-    # Anti-OOM: i bot non vedono la sezione "simili" (è il pezzo costoso).
+    # Sezione "serie simili" — pezzo costoso (motore consigli TV), in cache
+    # per tmdb_id (vedi _cached_similar_tv). I bot la saltano.
     similar = []
     if detail.get("title") and not _is_bot(request):
-        try:
-            res = recommend_tv_from_seed_titles([detail["title"]])
-            for rec in res.get("recommendations", [])[:6]:
-                pp = rec.get("poster_path", "")
-                sim_tmdb_id = rec.get("tv_id")
-                similar.append({
-                    "title":        rec.get("title", ""),
-                    "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
-                    "tmdb_id":      sim_tmdb_id,
-                    "content_type": "tv",
-                    # PR-3: link a /dove-vedere/{slug} se il titolo è curato.
-                    "seo_slug":     get_slug_by_tmdb_id(sim_tmdb_id, "tv") if sim_tmdb_id else None,
-                })
-        except Exception as e:
-            log.warning("serie_detail: similar build fallito per '%s': %s", detail.get("title"), e)
+        similar = _cached_similar_tv(tmdb_id, detail["title"])
 
     # Tracking utente (sto guardando / voglio guardare / completata).
     # None se non loggato o se non ha mai tracciato questa serie.

@@ -2143,6 +2143,15 @@ def search_tv_fast(query: str, limit: int = 8) -> list:
 
 
 def get_person_detail(person_id: int) -> dict:
+    """Dati persona (bio, foto, filmografia) — in cache (era 1 chiamata TMDb
+    a ogni vista di /persona). Il filtro adult nei credits resta nella rotta."""
+    if not TMDB_API_KEY or not person_id:
+        return {}
+    return cached_call(f"person:detail:v1:{person_id}",
+                       lambda: _get_person_detail_uncached(person_id))
+
+
+def _get_person_detail_uncached(person_id: int) -> dict:
     """
     Dati completi di un attore/regista: bio, foto, filmografia completa.
     Usa append_to_response per una sola chiamata API.
