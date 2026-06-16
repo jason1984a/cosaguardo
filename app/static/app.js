@@ -45,9 +45,17 @@ function scoreMovie(movie, query) {
 
 function renderSuggestions(suggestionsBox, data, currentQuery, input) {
     suggestionsBox.innerHTML = "";
+    // Ordinamento: usa il punteggio del SERVER (`_score`) quando è presente.
+    // Le serie TV lo espongono già (ranking per fama/vote_count, gestione
+    // articoli "The/Il/La", ecc.) → niente più ri-ordinamento client che
+    // sovrascriveva la logica del server. I film NON hanno `_score` (autocomplete
+    // da DB locale) → fallback al punteggio calcolato lato client come prima.
     const ranked = [...data]
-        .map(m => ({ ...m, _score: scoreMovie(m, currentQuery) }))
-        .sort((a, b) => b._score - a._score)
+        .map(m => ({
+            ...m,
+            _rankScore: (typeof m._score === "number") ? m._score : scoreMovie(m, currentQuery)
+        }))
+        .sort((a, b) => b._rankScore - a._rankScore)
         .slice(0, 8);
 
     ranked.forEach(movie => {
