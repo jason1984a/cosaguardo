@@ -200,6 +200,56 @@ def is_sequel(title: str) -> bool:
 
     return False
 
+
+# Set delle chiavi-alias franchise "vere" restituite da get_franchise_key
+# (per distinguerle dal fallback tokens[0], che è inaffidabile su titoli IT).
+_KNOWN_FRANCHISE_KEYS = {
+    "tolkien", "wizarding_world", "batman", "spiderman", "superman",
+    "pirati_caraibi", "mcu_avengers", "mcu_iron_man", "mcu_cap", "mcu_thor",
+    "mcu_guardians", "fast_furious", "mission_impossible", "star_wars",
+    "john_wick", "matrix", "indiana_jones", "jurassic", "transformers",
+    "alien_franchise", "terminator", "rocky", "oceans",
+}
+
+_SAGA_MARKERS = {
+    "2", "3", "4", "5", "6", "7", "8", "9", "10",
+    "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x",
+    "parte", "part", "capitolo", "chapter",
+}
+
+
+def _saga_core(title: str) -> str:
+    """Radice 'saga' di un titolo: toglie il sottotitolo dopo ':' / ' - ' e i
+    marcatori di sequel finali (numeri, numeri romani, parte/part/capitolo/
+    chapter). Così 'Il Padrino - Parte II', 'Il Padrino - Parte III' e
+    'Il Padrino' collassano tutti su 'il padrino'; 'John Wick - Capitolo 4'
+    su 'john wick'. Robusta sulla numerazione italiana (a differenza dei
+    marker solo-inglesi di get_franchise_key/is_sequel)."""
+    base = title or ""
+    for sep in (":", " - ", " – "):
+        if sep in base:
+            base = base.split(sep)[0]
+            break
+    toks = normalize_title(base).split()
+    while toks and toks[-1] in _SAGA_MARKERS:
+        toks.pop()
+    return " ".join(toks)
+
+
+def _same_saga(a: str, b: str) -> bool:
+    """True se due titoli appartengono alla stessa saga. Due vie:
+    1) stesso alias franchise NOTO (gestisce saghe con titoli diversi:
+       Avengers/Iron Man, Batman/Dark Knight);
+    2) stessa radice dopo rimozione sottotitolo+marcatori (gestisce i sequel
+       numerati con lo stesso titolo base). Niente match per sottostringa →
+       nessun falso positivo su titoli corti tipo 'Her' vs 'Sherlock'."""
+    ka, kb = get_franchise_key(a), get_franchise_key(b)
+    if ka and ka == kb and ka in _KNOWN_FRANCHISE_KEYS:
+        return True
+    ca, cb = _saga_core(a), _saga_core(b)
+    return bool(ca) and ca == cb and len(ca) >= 3
+
+
 def get_connection():
     return sqlite3.connect(DB_PATH)
 
@@ -727,6 +777,11 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 10, per_seed
                 continue
             if is_franchise_duplicate(ctitle, seed_titles_clean):
                 continue
+            # Sequel/saga del seed stesso (es. seed 'Il Padrino' → scarta
+            # 'Il Padrino - Parte II/III'): chi cerca un film conosce già i
+            # suoi seguiti. Rilevazione robusta sulla numerazione IT.
+            if any(_same_saga(ctitle, st) for st in seed_titles_clean):
+                continue
             if _movie_has_excluded_genres(c.get("genres", [])):
                 continue
             # NB: niente filtro rigido di lingua (a differenza del lato serie):
@@ -872,7 +927,19 @@ def recommend_from_seed_titles(seed_titles: list[str], top_k: int = 10, per_seed
         scored.append(item)
 
     scored.sort(key=lambda x: x["_final_score"], reverse=True)
-    scored = scored[:top_k]
+
+    # Dedup saga: max 1 titolo per saga tra i consigli (evita Padrino II+III,
+    # John Wick 2+3+4, ecc.). Teniamo il meglio piazzato di ogni saga.
+    _saga_seen = set()
+    _deduped = []
+    for it in scored:
+        core = _saga_core(it["title"])
+        if core and len(core) >= 3:
+            if core in _saga_seen:
+                continue
+            _saga_seen.add(core)
+        _deduped.append(it)
+    scored = _deduped[:top_k]
 
     # ── formattazione output (stessi campi dell'engine precedente) ──
     filtered = []
