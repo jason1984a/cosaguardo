@@ -766,6 +766,13 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
     # 2b — Pre-filtro deterministico (no I/O) per identificare i candidati validi
     # e raccogliere i tv_id unici per cui dobbiamo recuperare le keywords
     seed_titles_clean_lower = {(t or "").lower().strip() for t in seed_titles_clean}
+    # Se un seed è Animazione/Family (es. cerco Peppa Pig, o due serie animate
+    # per adulti come Rick and Morty + BoJack), NON escludiamo quei generi dai
+    # candidati: l'utente li vuole. Altrimenti li escludiamo come prima.
+    seed_has_excluded = any(
+        g in EXCLUDED_GENRE_IDS
+        for s in resolved_seeds for g in (s.get("genres") or [])
+    )
     candidates_to_process = []   # (tv_show, sim) coppie che superano i filtri base
     unique_keyword_ids = set()   # tv_id per cui serve get_tv_keywords
 
@@ -794,7 +801,7 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
                 continue
             if is_franchise_duplicate(candidate_title, seed_titles_clean):
                 continue
-            if has_excluded_genres(sim.get("genres", [])):
+            if not seed_has_excluded and has_excluded_genres(sim.get("genres", [])):
                 continue
             if not _is_readable_title(candidate_title):
                 continue
@@ -1162,12 +1169,12 @@ def search_tv_series(query: str, limit: int = 8):
     if norm_key in _tv_search_cache and norm_key != cache_key:
         return _tv_search_cache[norm_key][:limit]
 
-    def _fetch(q):
+    def _fetch(q, page=1):
         try:
             r = requests.get(
                 "https://api.themoviedb.org/3/search/tv",
                 params={"api_key": TMDB_API_KEY, "query": q, "language": "it-IT",
-                "include_adult":  "false",
+                "include_adult":  "false", "page": page,
             },
                 timeout=5
             )
@@ -1175,12 +1182,24 @@ def search_tv_series(query: str, limit: int = 8):
         except Exception:
             return []
 
-    raw = _fetch(query)
+    # Pagine 1+2 in parallelo. TMDb ordina per rilevanza TESTUALE e può spingere
+    # un titolo popolarissimo (es. The Walking Dead per "walk") oltre la pagina 1,
+    # dietro match più "esatti" ma oscuri (Walk the Prank...). Allarghiamo il
+    # bacino e poi riordiniamo NOI per popolarità (vedi score()).
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        pages = list(ex.map(lambda p: _fetch(query, p), (1, 2)))
+    raw = []
+    seen_fetch_ids = set()
+    for pg in pages:
+        for r in pg:
+            rid = r.get("id")
+            if rid not in seen_fetch_ids:
+                seen_fetch_ids.add(rid)
+                raw.append(r)
     # Se pochi risultati prova con query normalizzata
     if len(raw) < 3 and q_norm != query.lower():
         raw2 = _fetch(q_norm)
-        seen_ids = {r.get("id") for r in raw}
-        raw += [r for r in raw2 if r.get("id") not in seen_ids]
+        raw += [r for r in raw2 if r.get("id") not in seen_fetch_ids]
 
     q_lower = query.lower()
 
