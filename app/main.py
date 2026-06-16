@@ -1889,7 +1889,7 @@ def recommend(
     # Versione algoritmo nella chiave: ogni cambio del motore consigli la fa
     # cambiare → le voci vecchie diventano irraggiungibili (niente liste stale).
     # Bump questa stringa a ogni revisione dell'algoritmo (es. "v3", "v4"...).
-    _ALGO_VERSION = "movie-tmdb-v6"
+    _ALGO_VERSION = "movie-tmdb-v7"
     _cache_key = _hl.md5(
         ("|".join(sorted(t.lower() for t in seed_titles)) + content_type + _ALGO_VERSION).encode()
     ).hexdigest()

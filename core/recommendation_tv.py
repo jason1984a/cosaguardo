@@ -768,7 +768,10 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
     seed_titles_clean_lower = {(t or "").lower().strip() for t in seed_titles_clean}
     # NB: i generi del SEED sono NOMI (es. "Animation" — vedi find_tv_by_title),
     # mentre i generi dei CANDIDATI sono ID (16). Confrontiamo quindi sui nomi.
-    _excluded_genre_names = {TV_GENRE_NAMES.get(g, "") for g in EXCLUDED_GENRE_IDS}
+    # Includiamo anche "Kids" (10762): TMDb etichetta molte serie per bambini
+    # come Kids e NON come Animation (es. Peppa Pig) → senza questo, cercando
+    # Peppa l'esclusione restava attiva e i cartoni sparivano.
+    _excluded_genre_names = {TV_GENRE_NAMES.get(g, "") for g in EXCLUDED_GENRE_IDS} | {"Kids"}
     seed_has_excluded = any(
         g in _excluded_genre_names
         for s in resolved_seeds for g in (s.get("genres") or [])
