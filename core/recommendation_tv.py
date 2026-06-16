@@ -766,11 +766,11 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
     # 2b — Pre-filtro deterministico (no I/O) per identificare i candidati validi
     # e raccogliere i tv_id unici per cui dobbiamo recuperare le keywords
     seed_titles_clean_lower = {(t or "").lower().strip() for t in seed_titles_clean}
-    # Se un seed è Animazione/Family (es. cerco Peppa Pig, o due serie animate
-    # per adulti come Rick and Morty + BoJack), NON escludiamo quei generi dai
-    # candidati: l'utente li vuole. Altrimenti li escludiamo come prima.
+    # NB: i generi del SEED sono NOMI (es. "Animation" — vedi find_tv_by_title),
+    # mentre i generi dei CANDIDATI sono ID (16). Confrontiamo quindi sui nomi.
+    _excluded_genre_names = {TV_GENRE_NAMES.get(g, "") for g in EXCLUDED_GENRE_IDS}
     seed_has_excluded = any(
-        g in EXCLUDED_GENRE_IDS
+        g in _excluded_genre_names
         for s in resolved_seeds for g in (s.get("genres") or [])
     )
     candidates_to_process = []   # (tv_show, sim) coppie che superano i filtri base
@@ -1235,19 +1235,16 @@ def search_tv_series(query: str, limit: int = 8):
         elif q_lower in it_name or q_lower in orig_name:
             s += 500
 
-        # Tie-breaker popolarità (log scale, no domina su match qualità)
-        pop = float(item.get("popularity") or 0)
-        if pop > 0:
-            import math
-            s += math.log10(pop + 1) * 100
-
-        # Boost soft per serie con molti voti
+        # Tie-breaker FAMA: vote_count (voti totali storici) è il segnale di
+        # notorietà più affidabile della popularity TMDb (metrica volatile:
+        # una serie famosa ma finita può avere popularity bassa). Pesa forte,
+        # ma resta SOTTO i salti di match-tier (max ~1500 < gap di 2500+),
+        # quindi rompe i pari-merito senza scavalcare un match migliore.
+        import math
         vc = int(item.get("vote_count") or 0)
-        if vc >= 500:
-            s += 50
-        elif vc >= 50:
-            s += 20
-
+        s += math.log10(vc + 1) * 300
+        pop = float(item.get("popularity") or 0)
+        s += math.log10(pop + 1) * 50
         return s
 
     raw_sorted = sorted(raw, key=score, reverse=True)
