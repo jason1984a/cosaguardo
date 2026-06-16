@@ -1187,13 +1187,28 @@ def search_tv_series(query: str, limit: int = 8):
     # ── Ranking custom: match qualità + popolarità ──
     # TMDb ordina già per rilevanza, ma "House" può tirare prima un docu-reality
     # del 2010 piuttosto che "House M.D.". Risolviamo con scoring esplicito.
+    # Articoli iniziali da ignorare nel match prefisso: senza questo
+    # "The Walking Dead" non scatta lo startsWith su "walk" (inizia per "the")
+    # e viene scavalcato da titoli oscuri tipo "Walking with Monsters".
+    _ARTICLES = ("the ", "a ", "an ", "la ", "le ", "lo ", "il ", "l'",
+                 "i ", "gli ", "un ", "una ", "uno ")
+
+    def _strip_article(s: str) -> str:
+        for art in _ARTICLES:
+            if s.startswith(art):
+                return s[len(art):]
+        return s
+
     def score(item):
         it_name   = (item.get("name") or "").lower()
         orig_name = (item.get("original_name") or "").lower()
+        it_na     = _strip_article(it_name)
+        orig_na   = _strip_article(orig_name)
         s = 0
-        if it_name == q_lower or orig_name == q_lower:
+        if q_lower in (it_name, orig_name, it_na, orig_na):
             s += 10000
-        elif it_name.startswith(q_lower) or orig_name.startswith(q_lower):
+        elif (it_name.startswith(q_lower) or orig_name.startswith(q_lower)
+              or it_na.startswith(q_lower) or orig_na.startswith(q_lower)):
             s += 5000
         elif any(w.startswith(q_lower) for w in it_name.split()) or \
              any(w.startswith(q_lower) for w in orig_name.split()):
