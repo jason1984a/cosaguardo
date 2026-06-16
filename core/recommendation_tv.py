@@ -695,6 +695,21 @@ def build_tv_explanation(rec, index=0):
 
     return rec.get("explanation") or "Consigliata per affinità con le serie che hai inserito."
 
+def _is_readable_title(title: str) -> bool:
+    """True se il titolo è prevalentemente in alfabeto latino (leggibile per il
+    pubblico italiano). Scarta i titoli in script non latini — giapponese,
+    coreano, cinese, arabo, cirillico, ecc. — che in lista appaiono illeggibili
+    (es. 悪霊病棟). Sostituisce il vecchio filtro rigido en/it: così le serie
+    estere con titolo latino (Dark, La casa de papel, Lupin, Squid Game)
+    restano disponibili, ma i titoli non latini escono."""
+    import unicodedata
+    letters = [c for c in (title or "") if c.isalpha()]
+    if not letters:
+        return True
+    latin = sum(1 for c in letters if "LATIN" in unicodedata.name(c, ""))
+    return latin / len(letters) >= 0.5
+
+
 def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
     resolved_seeds = []
     missing_titles = []
@@ -781,7 +796,7 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
                 continue
             if has_excluded_genres(sim.get("genres", [])):
                 continue
-            if sim.get("original_language") not in {"en", "it"}:
+            if not _is_readable_title(candidate_title):
                 continue
 
             candidates_to_process.append((tv_show, sim))
@@ -859,7 +874,7 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
 
         if kw_score < 0.01:
             continue
-        if seed_coverage == 1 and kw_score < 0.045:
+        if seed_coverage == 1 and kw_score < 0.02:
             continue
 
         multi_seed_bonus = 0
@@ -868,7 +883,7 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
         elif seed_coverage == 2:
             multi_seed_bonus = 3
         elif seed_coverage == 1:
-            multi_seed_bonus = -3
+            multi_seed_bonus = -1
 
         genre_bonus = 0
         if top_genres and any(g in top_genres for g in item.get("genres", [])):
@@ -896,10 +911,11 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
             final_score *= 1.20
 
         # penalità coverage
+        # penalità coverage (ammorbidite: non azzerano il seed debole)
         if seed_coverage == 1 and kw_score < 0.10:
-            final_score *= 0.70
+            final_score *= 0.85
         if seed_coverage == 1 and kw_score < 0.06:
-            final_score *= 0.55
+            final_score *= 0.72
         if seed_coverage == 2 and kw_score < 0.05:
             final_score *= 0.85
 
@@ -959,7 +975,7 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
         item["matched_keywords"] = translate_keywords(matched_keywords)
         item["explanation"] = generate_explanation(item, resolved_seeds)
 
-        if final_score < 6:
+        if final_score < 4:
             continue
 
         scored_candidates.append(item)
@@ -988,27 +1004,64 @@ def recommend_tv_from_seed_titles(seed_titles: list[str], top_k: int = 10):
         candidate["adjusted_score"] = candidate["avg_score"] * (1 - penalty)
         diversified.append(candidate)
 
-    # riordino finale
-    recommendations = sorted(
-        diversified,
-        key=lambda x: x["adjusted_score"],
-        reverse=True
-    )[:top_k]
+    # riordino finale con BILANCIAMENTO X/Y tra i seed.
+    # Problema risolto: con seed molto diversi (es. Friends+Chernobyl) il seed
+    # "debole" veniva monopolizzato dall'altro. Ora: prima i candidati multi-seed
+    # (coverage>=2, soddisfano entrambi), poi round-robin tra i seed per garantire
+    # rappresentanza a ciascuno, mantenendo l'ordine per punteggio dentro ogni seed.
+    diversified.sort(key=lambda x: x["adjusted_score"], reverse=True)
 
+    if len(resolved_seeds) >= 2:
+        seed_id_order = [s["tv_id"] for s in resolved_seeds]
+        buckets = {sid: [] for sid in seed_id_order}
+        multi = []
+        for c in diversified:
+            matched = c.get("matched_seed_ids", set())
+            if len(matched) >= 2:
+                multi.append(c)
+            else:
+                sid = next(iter(matched), None)
+                if sid in buckets:
+                    buckets[sid].append(c)
+                else:
+                    multi.append(c)
+        picked = list(multi)
+        pos = {sid: 0 for sid in seed_id_order}
+        while len(picked) < top_k:
+            progressed = False
+            for sid in seed_id_order:
+                if len(picked) >= top_k:
+                    break
+                b = buckets[sid]
+                if pos[sid] < len(b):
+                    picked.append(b[pos[sid]])
+                    pos[sid] += 1
+                    progressed = True
+            if not progressed:
+                break
+        recommendations = picked[:top_k]
+    else:
+        recommendations = diversified[:top_k]
+
+    # Etichetta "Simile a X": per i candidati a singolo seed usa IL seed che li
+    # ha prodotti (preciso); per i multi-seed usa l'overlap keyword.
     for rec in recommendations:
-        rec["best_seed_title"] = None
-
-        max_overlap = 0
-
-        for seed in resolved_seeds:
-            seed_keywords = set(seed.get("keywords", []))
-            rec_keywords = set(rec.get("keywords", []))
-
-            overlap = len(seed_keywords & rec_keywords)
-
-            if overlap > max_overlap:
-                max_overlap = overlap
-                rec["best_seed_title"] = seed.get("title")
+        matched_ids = rec.get("matched_seed_ids", set())
+        if len(matched_ids) == 1:
+            sid = next(iter(matched_ids))
+            rec["best_seed_title"] = next(
+                (s.get("title") for s in resolved_seeds if s.get("tv_id") == sid), None
+            )
+        else:
+            rec["best_seed_title"] = None
+            max_overlap = 0
+            for seed in resolved_seeds:
+                overlap = len(set(seed.get("keywords", [])) & set(rec.get("keywords", [])))
+                if overlap > max_overlap:
+                    max_overlap = overlap
+                    rec["best_seed_title"] = seed.get("title")
+            if rec["best_seed_title"] is None and resolved_seeds:
+                rec["best_seed_title"] = resolved_seeds[0].get("title")
 
     recommendations = enrich_with_explanations(recommendations, resolved_seeds)
 
