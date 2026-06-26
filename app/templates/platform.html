@@ -424,7 +424,7 @@
                     <label class="pf-chip">
                         <input type="radio" name="genere" value="{{ g }}"
                             {% if genere == g %}checked{% endif %}
-                            onchange="this.form.submit()">
+                            onclick="pfChipClick(this)">
                         <span>{{ g.capitalize() }}</span>
                     </label>
                     {% endfor %}
@@ -438,7 +438,7 @@
                     <label class="pf-chip">
                         <input type="radio" name="mood" value="{{ m }}"
                             {% if mood == m %}checked{% endif %}
-                            onchange="this.form.submit()">
+                            onclick="pfChipClick(this)">
                         <span>{{ emoji }} {{ m.capitalize() }}</span>
                     </label>
                     {% endfor %}
@@ -452,7 +452,7 @@
                     <label class="pf-chip">
                         <input type="radio" name="anno" value="{{ a }}"
                             {% if anno == a %}checked{% endif %}
-                            onchange="this.form.submit()">
+                            onclick="pfChipClick(this)">
                         <span>{{ label }}</span>
                     </label>
                     {% endfor %}
@@ -465,13 +465,13 @@
                     <label class="pf-chip">
                         <input type="radio" name="voto" value="7"
                             {% if voto == "7" %}checked{% endif %}
-                            onchange="this.form.submit()">
+                            onclick="pfChipClick(this)">
                         <span>⭐ 7+ Buoni</span>
                     </label>
                     <label class="pf-chip">
                         <input type="radio" name="voto" value="8"
                             {% if voto == "8" %}checked{% endif %}
-                            onchange="this.form.submit()">
+                            onclick="pfChipClick(this)">
                         <span>🏆 8+ Eccellenti</span>
                     </label>
                 </div>
@@ -575,8 +575,30 @@ function togglePfFilters() {
     panel.style.display = open ? 'block' : 'none';
     if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
 }
+
+// Chip filtro "toggle": click su un chip GIÀ attivo lo deseleziona (lasciando
+// gli altri filtri), invece di costringere ad "Azzera filtri". I radio nativi
+// non si deselezionano cliccandoli, quindi gestiamo a mano via data-was-checked.
+function pfChipClick(el) {
+    if (el.getAttribute('data-was-checked') === '1') {
+        el.checked = false;                 // rimuove SOLO questo filtro
+    } else {
+        // selezione nuova: azzero il flag sugli altri dello stesso gruppo
+        document.querySelectorAll('input[name="' + el.name + '"]').forEach(function(r) {
+            r.removeAttribute('data-was-checked');
+        });
+        el.setAttribute('data-was-checked', '1');
+    }
+    el.form.submit();
+}
+
 document.addEventListener("DOMContentLoaded", function() {
     if (window.lucide) lucide.createIcons();
+    // Inizializzo data-was-checked sui chip già attivi (resi checked dal server),
+    // così il primo click su uno di essi lo toglie invece di ri-selezionarlo.
+    document.querySelectorAll('#pf-filters-form input[type="radio"]:checked').forEach(function(r) {
+        r.setAttribute('data-was-checked', '1');
+    });
 });
 </script>
 {% endblock %}

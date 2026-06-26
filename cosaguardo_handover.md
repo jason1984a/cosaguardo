@@ -836,6 +836,7 @@ Durante setup, Google Ads ha proposto di configurare conversion tracking sovrasc
 - **Decisione (11/06)**: entrambe scartate per ora. L'API è fuori scala (€1.500/mese fissi su ricavi ~zero, + 50% di commissione ceduta, + i dati streaming li abbiamo già via TMDb); il widget non si incastra con la UI custom del sito. La monetizzazione vera resta sulle **affiliazioni dirette** (Amazon attiva = unica per ora; Sky/Disney/Awin da attivare) → mandare l'utente direttamente sulla piattaforma batte JustWatch (100% commissione, €0 fissi).
 - **Azione in corso**: inviata (11/06) mail di chiarimento per chiedere se esiste un **affiliate solo-link senza il canone API**. In attesa risposta. Se no → si tiene JustWatch solo come fallback gratuito non monetizzato (o si toglie), e si spinge sulle affiliazioni dirette.
 - **Follow-up**: se silenzio per 3 settimane (entro **25/06**), mandare follow-up educato.
+- **❌ CHIUSO 25/06**: inviato sollecito a Maaz Ahmed. Risposta definitiva: **non esiste alcun affiliate solo-link**. Le uniche opzioni restano Widget gratuito non personalizzabile (scartato) o API a pagamento ~€1.500/mese (fuori budget). JustWatch archiviato — nessuna azione ulteriore. Monetizzazione interamente sulle affiliazioni dirette. Eventualmente resta solo come fallback gratuito non monetizzato nei link "Dove vedere".
 
 ---
 
@@ -996,9 +997,9 @@ Per file che NON sono in questo handover, posso essere chiesto di:
 - ⏳ Approvazione programmi Tradedoubler (Sky, Disney+, IBS, TicketOne) — 1-14 giorni
 - ⏳ Follow-up Awin (TIM, NOW) o decisione di abbandono
 - ⏳ Risposta Maria Colamonaco / account manager Tradedoubler
-- ⏳ Risposta JustWatch a mail chiarimento affiliate-only (inviata 11/06). Prima risposta 11/06 = solo API a pagamento ~€1.500/mese o widget gratuito → scartate, vedi sez. 10-quater.
-- ⏳ **PR-3 in digerimento** (4-8 settimane): **verificata attiva 08/06**, ora si aspetta solo il re-crawl di Google. Aspettare prima di altre PR SEO.
-- ⏳ **Dati IG settimana scaling** (verifica fine settimana 12/06)
+- ✅ **JustWatch — CHIUSO 25/06**: confermato che non esiste affiliate solo-link (solo API ~€1.500/mese o widget non personalizzabile). Archiviato, vedi sez. 10-quater e 20.2.
+- ⏳ **PR-3 in digerimento** (4-8 settimane): **verificata attiva 08/06**; **al 25/06 confermato funzionamento** via GSC (~113K pagine "Escluse con noindex"). Ora si aspetta solo il calo di "Indicizzate" (da 54K). Aspettare prima di altre PR SEO.
+- ✅ **Dati IG settimana scaling — OK (25/06)**: a regime €13/g, costo per visita reale ~15 cent (sotto soglia saturazione). Si mantiene così, nessuna modifica.
 
 ### Pronti da fare (dopo verifiche correnti)
 - ✅ **Sistema feedback rating raccomandazioni — FATTO 11/06** ⭐ (idea owner 05/06). Microform "Questi consigli ti convincono?" (scala 1-10, 😞→😍) sotto i risultati dell'algoritmo, con reazione condizionale: 8-10 = grazie + CTA registrazione (solo se anonimo); 6-7 = "Cosa avresti voluto vedere?" + quick-select; 1-5 = "Ci dispiace. Cosa non ha funzionato?" + quick-select. Quick-select: Titoli troppo conosciuti / troppo sconosciuti / Lontani dal mio gusto / Niente di nuovo (già visti tutti) / Manca il titolo che cercavo + campo libero "Altro".
@@ -1319,6 +1320,46 @@ File Excel in `/mnt/user-data/outputs/cosaguardo_report_social.xlsx` per valutar
 **Uso**: a ogni lettura dati (TikTok Studio / IG insights) aggiungere riga in Metriche con ID+piattaforma+numeri+**Data rilevazione** (i numeri crescono: confrontare a parità di giorni dalla pubblicazione). Costruito con openpyxl, ricalcolato con `scripts/recalc.py`, **0 errori formula**. Per modifiche future: rigenerare con build script analogo, sempre recalc + verifica errori.
 
 **Domande a cui risponderà coi dati**: l'apertura a domanda tiene meglio della classica nei primi secondi? Il parlato lungo-con-trama batte il corto-secco? I caroselli meritano spazio fisso accanto ai Reel (salvataggi)? Quale genere/tipo rende di più? → da lì smettere di variare a intuito e puntare sui filoni forti.
+
+---
+
+## 20. Sessione 25/06/2026 — Filtri pagine piattaforma + chiusure JustWatch/TikTok
+
+### 20.1 Filtri su pagine `/piattaforma/{slug}` (NUOVA feature) ⭐
+- **Contesto**: dai dati Clarity, parecchi utenti entrano direttamente nelle sezioni piattaforma (Netflix, Prime, ecc.). Mancava lì la possibilità di filtrare come su `/scopri`.
+- **Cosa fa**: aggiunge alle pagine piattaforma gli **stessi filtri di `/scopri`** — Genere, Mood, Periodo, Voto — **senza il selettore Piattaforma** (già fissa dall'URL). I filtri agiscono *dentro* quella piattaforma.
+- **Riuso, zero duplicazione**: la route `platform_page` chiama `get_scopri_results()` passando il `provider_id` **diretto** (preso da `PLATFORM_SLUGS`), aggiungendo a quella funzione un nuovo parametro opzionale `provider_id` (retrocompatibile — `/scopri` non cambia).
+  - ⚠️ **Perché provider_id diretto e non lo slug**: i due sistemi usavano slug diversi → `PLATFORM_SLUGS` (pagina piattaforma) ha `prime-video`/`disney-plus`/10 piattaforme con ID region-aware (Prime=119); `PLATFORM_MAP` (filtro `/scopri`) ha `prime`/`disney`/solo 6 con ID diversi (Prime=9). Passare lo slug lungo dentro `PLATFORM_MAP` non avrebbe trovato corrispondenza. Bypassato passando l'ID corretto direttamente.
+- **Film e Serie sempre separati con filtri attivi**: niente "Tutti" misto (decisione owner). Se l'utente applica un filtro stando su "Tutti", la pagina si ripiega su Film e il tab "Tutti" sparisce finché ci sono filtri. Su Film/Serie la griglia è pulita e paginata (20/pagina).
+- **Filtri collassabili** (richiesta owner, soprattutto per mobile): pannello **chiuso di default** dietro pulsante "**Filtri**" (stesso pattern di `/scopri`, funzione JS `togglePfFilters()`). Si apre da solo solo se c'è già un filtro attivo, con indicatore "Filtri •" azzurro.
+- **🔒 Guardrail SEO (coerente con PR-1/PR-2/PR-3)**:
+  - `/piattaforma/{slug}` PULITA (tipo=tutti, nessun filtro, pagina 1) → **INDEX**
+  - qualsiasi stato filtrato, `?tipo=film/serie`, o `page>1` → **NOINDEX, follow** + **canonical** verso la versione pulita.
+  - Così non si ricrea l'esplosione di URL indicizzati appena spenta.
+- **Adattamento item**: `get_scopri_results` restituisce `vote_average`/`release_date`; la route li mappa in `rating`/`year` per riusare invariato il markup `pf-card` di `platform.html`.
+- **File modificati**: `core/recommendation_api.py` (param `provider_id`), `app/main.py` (route `platform_page`), `app/templates/platform.html` (controlli + pannello collassabile + griglia filtrata + paginazione + CSS inline + JS toggle).
+- **Validazione**: `ast.parse` OK, compile Jinja2 OK, CSS brace-balanced, test logico tipo/robots/adattamento item tutti verdi.
+
+### 20.2 JustWatch — CHIUSO definitivamente (25/06)
+Vedi dettaglio in §10-quater. In sintesi: sollecitato Maaz Ahmed, confermato che **non esiste affiliate solo-link**; solo Widget non personalizzabile o API ~€1.500/mese. Pista archiviata. Tutta la monetizzazione resta sulle affiliazioni dirette (Amazon attiva; Sky/Disney via Tradedoubler e TIMVision/NOW via Awin come target futuri).
+
+### 20.3 GSC post-PR-3 — verifica al 25/06 (PR-3 FUNZIONA) ⭐
+- Screenshot GSC (ultimo aggiornamento 12/06, ~11gg dopo PR-3 live 01/06):
+  - **Indicizzate: 54.221** — non ancora scese (era ~50,5K il 29/05). Normale: è la coda lenta (Google deve ri-passare sulle già-indicizzate per toglierle).
+  - **Non indicizzate: 163.683**, di cui **~113K "Escluse con noindex"** + **~33K "Escluse per reindirizzamento"**.
+- **Lettura**: i 113K noindex **confermano che Google vede e applica il noindex** sulle pagine junk → PR-3 opera correttamente. Il calo di "Indicizzate" da 54K è solo questione di tempo (prossime 2-4 settimane).
+- I 33K "reindirizzamento" sono benigni (http→https / canonical curati). Nessuna azione.
+- **Standing**: continuare monitoraggio settimanale. Nessun rollback, nessuna nuova PR finché "Indicizzate" non inizia a scendere. Se tra ~2 settimane fosse ancora ferma a 54K, rivalutare.
+
+### 20.4 TikTok — blocco e sblocco (25/06) + accorgimento operativo
+- **Episodio**: account TikTok `@cosaguardoapp` (account personale vecchio mai usato, **rinominato per il brand**, che pubblicava via **Metricool** partendo da zero follower) → bloccato "per ripetute violazioni Linee Guida". Causa probabile: **cambio identità improvviso + pubblicazione automatizzata su account nuovo + CTA verso sito esterno** = pattern che gli anti-spam TikTok leggono come bot/promozione (stessa famiglia di trappole del sistema anti-frode Meta).
+- **Esito**: ricorso ("Chiedi un'altra analisi") accettato, mail "Appeal Update" di ripristino ricevuta. Nota: c'è stato un disallineamento temporaneo (mail di ripristino vs app ancora bloccata per ore) — gestito via ripresentazione ricorso con screenshot della mail di ripristino come prova.
+- **🔁 Accorgimento da rispettare quando si rientra (e in generale)**:
+  - Prime pubblicazioni **a mano dall'app** per qualche giorno, non da Metricool.
+  - **Warm-up** dell'account prima di postare: guardare video, like, follow (comportamento "umano").
+  - Reintrodurre Metricool **gradualmente** quando l'account ha un po' di storia.
+  - **MAI** creare un secondo account brand mentre uno è bloccato (= elusione ban → chiude anche il nuovo).
+- Instagram non coinvolto, prosegue normale.
 
 ---
 
