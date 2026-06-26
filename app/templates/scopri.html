@@ -63,7 +63,7 @@
                         <label class="scopri-chip">
                             <input type="radio" name="genere" value="{{ g }}"
                                 {% if genere == g %}checked{% endif %}
-                                onchange="this.form.submit()">
+                                onclick="scopriChipClick(this)">
                             <span>{{ g.capitalize() }}</span>
                         </label>
                         {% endfor %}
@@ -77,7 +77,7 @@
                         <label class="scopri-chip">
                             <input type="radio" name="mood" value="{{ m }}"
                                 {% if mood == m %}checked{% endif %}
-                                onchange="this.form.submit()">
+                                onclick="scopriChipClick(this)">
                             <span>{{ emoji }} {{ m.capitalize() }}</span>
                         </label>
                         {% endfor %}
@@ -91,7 +91,7 @@
                         <label class="scopri-chip">
                             <input type="radio" name="piattaforma" value="{{ p }}"
                                 {% if piattaforma == p %}checked{% endif %}
-                                onchange="this.form.submit()">
+                                onclick="scopriChipClick(this)">
                             <span>{{ label }}</span>
                         </label>
                         {% endfor %}
@@ -105,7 +105,7 @@
                         <label class="scopri-chip">
                             <input type="radio" name="anno" value="{{ a }}"
                                 {% if anno == a %}checked{% endif %}
-                                onchange="this.form.submit()">
+                                onclick="scopriChipClick(this)">
                             <span>{{ label }}</span>
                         </label>
                         {% endfor %}
@@ -118,13 +118,13 @@
                         <label class="scopri-chip">
                             <input type="radio" name="voto" value="7"
                                 {% if voto == "7" %}checked{% endif %}
-                                onchange="this.form.submit()">
+                                onclick="scopriChipClick(this)">
                             <span>⭐ 7+ Buoni</span>
                         </label>
                         <label class="scopri-chip">
                             <input type="radio" name="voto" value="8"
                                 {% if voto == "8" %}checked{% endif %}
-                                onchange="this.form.submit()">
+                                onclick="scopriChipClick(this)">
                             <span>🏆 8+ Eccellenti</span>
                         </label>
                         {% if voto %}
@@ -567,8 +567,28 @@ function toggleFilters() {
     panel.style.display = open ? 'block' : 'none';
 }
 
+// Chip filtro "toggle": click su un chip GIÀ attivo lo deseleziona (lasciando
+// gli altri filtri attivi), invece di costringere ad "Azzera filtri". I radio
+// nativi non si deselezionano cliccandoli → lo gestiamo via data-was-checked.
+function scopriChipClick(el) {
+    if (el.getAttribute('data-was-checked') === '1') {
+        el.checked = false;                 // rimuove SOLO questo filtro
+    } else {
+        document.querySelectorAll('input[name="' + el.name + '"]').forEach(function(r) {
+            r.removeAttribute('data-was-checked');
+        });
+        el.setAttribute('data-was-checked', '1');
+    }
+    el.form.submit();
+}
+
 // Nav arrows per ogni strip
 document.addEventListener('DOMContentLoaded', function() {
+    // Init data-was-checked sui chip già attivi (resi checked dal server),
+    // così il primo click su uno di essi lo toglie invece di ri-selezionarlo.
+    document.querySelectorAll('#scopri-form input[type="radio"]:checked').forEach(function(r) {
+        r.setAttribute('data-was-checked', '1');
+    });
     document.querySelectorAll('.scopri-nav-left').forEach(btn => {
         btn.addEventListener('click', function() {
             const row = document.getElementById('strip-' + this.dataset.strip);
