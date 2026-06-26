@@ -2342,6 +2342,7 @@ def get_scopri_results(
     voto: str = "",
     page: int = 1,
     limit: int = 20,
+    provider_id: int | None = None,
 ) -> dict:
     """
     Risultati per la pagina /scopri con filtri combinabili.
@@ -2381,7 +2382,14 @@ def get_scopri_results(
             params["with_genres"] = "|".join(str(g) for g in gids[:2])
 
     # Piattaforma
-    if piattaforma:
+    # provider_id (override diretto) ha priorità: lo passano le pagine
+    # /piattaforma/{slug}, che forniscono l'ID TMDb corretto da PLATFORM_SLUGS
+    # bypassando PLATFORM_MAP (mappa parziale a 6 voci con slug diversi,
+    # es. 'prime' vs 'prime-video', e priva di now/raiplay/sky-go/ecc.).
+    if provider_id:
+        params["with_watch_providers"] = provider_id
+        params["with_watch_monetization_types"] = "flatrate"
+    elif piattaforma:
         pid = PLATFORM_MAP.get(piattaforma.lower())
         if pid:
             params["with_watch_providers"] = pid

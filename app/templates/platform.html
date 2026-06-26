@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 
 {% block title %}{{ seo_title }}{% endblock %}
-{# meta_robots: 'noindex, follow' se ?tipo=film/serie (sub-version), index altrimenti.
-   Vedi route /piattaforma/{slug} in main.py. #}
+{# meta_robots: 'noindex, follow' per stati filtrati / ?tipo=film|serie / page>1;
+   'index, follow' solo per la pagina pulita. Vedi route /piattaforma/{slug}. #}
 {% block meta_robots %}{{ meta_robots or "index, follow" }}{% endblock %}
 
 {% block head_extra %}
 <meta name="description" content="{{ seo_desc }}">
 <meta name="cg-content-type" content="platform">
+{% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}
 <meta property="og:title" content="{{ seo_title }}">
 <meta property="og:description" content="{{ seo_desc }}">
 {% if meta.logo_url %}<meta property="og:image" content="{{ meta.logo_url }}">{% endif %}
@@ -258,6 +259,68 @@
             grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
         }
     }
+
+    /* ── BARRA FILTRI (stessi controlli di /scopri, senza Piattaforma) ──── */
+    .pf-filters { margin: 4px 0 18px; }
+    .pf-filter-row {
+        display: flex; flex-wrap: wrap; gap: 14px 22px;
+        padding: 14px 16px;
+        background: rgba(255,255,255,0.025);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 14px;
+    }
+    .pf-filter-group { display: flex; flex-direction: column; gap: 7px; }
+    .pf-filter-label {
+        font-size: 11px; font-weight: 700; letter-spacing: .04em;
+        text-transform: uppercase; color: var(--muted, #8a93a6);
+    }
+    .pf-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .pf-chip { cursor: pointer; }
+    .pf-chip input { display: none; }
+    .pf-chip span {
+        display: inline-block; padding: 5px 11px; border-radius: 999px;
+        font-size: 12.5px; line-height: 1; white-space: nowrap;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.09);
+        color: var(--text, #e8ecf5); transition: .15s ease;
+    }
+    .pf-chip:hover span { background: rgba(255,255,255,0.08); }
+    .pf-chip input:checked + span {
+        background: rgba(110,168,254,0.18);
+        border-color: rgba(110,168,254,0.55);
+        color: #cfe0ff; font-weight: 600;
+    }
+    .pf-reset-all {
+        display: inline-flex; align-items: center; gap: 6px;
+        margin-top: 12px; padding: 6px 13px; border-radius: 999px;
+        font-size: 12.5px; text-decoration: none;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.1); color: var(--text, #e8ecf5);
+    }
+    .pf-reset-all:hover { background: rgba(255,255,255,0.08); }
+
+    /* ── Paginazione (modalità filtrata) ───────────────────────── */
+    .pf-pagination {
+        display: flex; align-items: center; justify-content: center;
+        gap: 14px; margin-top: 26px;
+    }
+    .pf-page-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 8px 16px; border-radius: 10px; font-size: 14px;
+        text-decoration: none; color: var(--text, #e8ecf5);
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1); transition: .15s ease;
+    }
+    .pf-page-btn:hover {
+        background: rgba(110,168,254,0.14);
+        border-color: rgba(110,168,254,0.45);
+    }
+    .pf-page-info { font-size: 13px; color: var(--muted, #8a93a6); }
+
+    @media (max-width: 640px) {
+        .pf-filter-row { gap: 12px 16px; padding: 12px; }
+        .pf-chip span { font-size: 12px; padding: 5px 10px; }
+    }
 </style>
 {% endblock %}
 
@@ -293,14 +356,92 @@
     </div>
     {% endif %}
 
+    {# querystring dei filtri attivi, da preservare quando si cambia tab #}
+    {% set filtri_qs %}{% if genere %}&genere={{ genere }}{% endif %}{% if mood %}&mood={{ mood }}{% endif %}{% if anno %}&anno={{ anno }}{% endif %}{% if voto %}&voto={{ voto }}{% endif %}{% endset %}
+
     <nav class="platform-tabs" aria-label="Filtra per tipo">
+        {% if not has_filters %}
         <a href="/piattaforma/{{ meta.slug }}?tipo=tutti"
            class="platform-tab {% if tipo == 'tutti' %}is-active{% endif %}">Tutti</a>
-        <a href="/piattaforma/{{ meta.slug }}?tipo=film"
+        {% endif %}
+        <a href="/piattaforma/{{ meta.slug }}?tipo=film{{ filtri_qs }}"
            class="platform-tab {% if tipo == 'film' %}is-active{% endif %}">Film</a>
-        <a href="/piattaforma/{{ meta.slug }}?tipo=serie"
+        <a href="/piattaforma/{{ meta.slug }}?tipo=serie{{ filtri_qs }}"
            class="platform-tab {% if tipo == 'serie' %}is-active{% endif %}">Serie TV</a>
     </nav>
+
+    {# ── Barra filtri: stessi controlli di /scopri, MENO Piattaforma (già fissa) ── #}
+    <form method="get" action="/piattaforma/{{ meta.slug }}" id="pf-filters-form" class="pf-filters">
+        <input type="hidden" name="tipo" value="{{ tipo if tipo in ('film','serie') else 'film' }}">
+        <div class="pf-filter-row">
+            <div class="pf-filter-group">
+                <div class="pf-filter-label">Genere</div>
+                <div class="pf-chips">
+                    {% for g in ["azione","thriller","horror","commedia","dramma","fantascienza","romantico","animazione","crimine","documentario","mistero","western"] %}
+                    <label class="pf-chip">
+                        <input type="radio" name="genere" value="{{ g }}"
+                            {% if genere == g %}checked{% endif %}
+                            onchange="this.form.submit()">
+                        <span>{{ g.capitalize() }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="pf-filter-group">
+                <div class="pf-filter-label">Mood</div>
+                <div class="pf-chips">
+                    {% for m, emoji in [("leggero","😄"),("intenso","😤"),("romantico","❤️"),("adrenalinico","⚡"),("riflessivo","🤔"),("spaventoso","👻")] %}
+                    <label class="pf-chip">
+                        <input type="radio" name="mood" value="{{ m }}"
+                            {% if mood == m %}checked{% endif %}
+                            onchange="this.form.submit()">
+                        <span>{{ emoji }} {{ m.capitalize() }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="pf-filter-group">
+                <div class="pf-filter-label">Periodo</div>
+                <div class="pf-chips">
+                    {% for a, label in [("recenti","Ultimi 6 mesi"),("anno","Ultimo anno"),("classici","Classici")] %}
+                    <label class="pf-chip">
+                        <input type="radio" name="anno" value="{{ a }}"
+                            {% if anno == a %}checked{% endif %}
+                            onchange="this.form.submit()">
+                        <span>{{ label }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="pf-filter-group">
+                <div class="pf-filter-label">Voto</div>
+                <div class="pf-chips">
+                    <label class="pf-chip">
+                        <input type="radio" name="voto" value="7"
+                            {% if voto == "7" %}checked{% endif %}
+                            onchange="this.form.submit()">
+                        <span>⭐ 7+ Buoni</span>
+                    </label>
+                    <label class="pf-chip">
+                        <input type="radio" name="voto" value="8"
+                            {% if voto == "8" %}checked{% endif %}
+                            onchange="this.form.submit()">
+                        <span>🏆 8+ Eccellenti</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        {% if has_filters %}
+        <a href="/piattaforma/{{ meta.slug }}" class="pf-reset-all">
+            <i data-lucide="x-circle" style="width:13px;height:13px;stroke:currentColor;stroke-width:2;"></i>
+            Azzera filtri
+        </a>
+        {% endif %}
+    </form>
 
     {% if items %}
     <div class="pf-grid">
@@ -326,11 +467,38 @@
         </a>
         {% endfor %}
     </div>
+
+    {% if has_filters %}
+    <div class="pf-pagination">
+        {% if has_prev %}
+        <a href="/piattaforma/{{ meta.slug }}?tipo={{ tipo }}{{ filtri_qs }}&page={{ page - 1 }}"
+           class="pf-page-btn">
+            <i data-lucide="arrow-left" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
+            Precedente
+        </a>
+        {% endif %}
+        <span class="pf-page-info">Pagina {{ page }}</span>
+        {% if has_next %}
+        <a href="/piattaforma/{{ meta.slug }}?tipo={{ tipo }}{{ filtri_qs }}&page={{ page + 1 }}"
+           class="pf-page-btn">
+            Successiva
+            <i data-lucide="arrow-right" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
     {% else %}
     <div class="platform-empty">
+        {% if has_filters %}
+        <h2>Nessun risultato per questi filtri</h2>
+        <p>Prova a togliere qualche filtro o a cambiare tipo.</p>
+        <a href="/piattaforma/{{ meta.slug }}" class="platform-tab">Azzera filtri</a>
+        {% else %}
         <h2>Nessun contenuto trovato</h2>
         <p>Stiamo arricchendo il catalogo per questa piattaforma.</p>
         <a href="/" class="platform-tab">Torna alla home</a>
+        {% endif %}
     </div>
     {% endif %}
 

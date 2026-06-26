@@ -1,0 +1,2118 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="uYZwMn6jbUHt9NtAmb2Hm-yUNaFxn34INa2PDfpNeIM">
+    <meta name="msvalidate.01" content="116CC066785DEC4F54FDD670B8A9AD91" />
+
+    <!--Tradedoubler site verification 3484363-->
+
+    <!-- Google Analytics 4 — caricato solo dopo consenso cookie -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'analytics_storage': 'denied'
+        });
+
+        function loadGA4() {
+            if (document.getElementById('ga4-script')) return;
+            var s = document.createElement('script');
+            s.id = 'ga4-script';
+            s.async = true;
+            s.src = 'https://www.googletagmanager.com/gtag/js?id=G-HMNFXJ98H1';
+            document.head.appendChild(s);
+            gtag('js', new Date());
+            gtag('config', 'G-HMNFXJ98H1');
+            gtag('consent', 'update', {'analytics_storage': 'granted'});
+        }
+
+        // ── Meta Pixel (Facebook/Instagram) — DISATTIVATO ────────────────
+        // Snippet pronto per attivazione futura. Per riattivarlo:
+        //   1. Crea il dataset/pixel in Events Manager (servirà un account FB
+        //      attivo, eventualmente di una persona di fiducia che possa
+        //      condividerlo)
+        //   2. Sostituisci META_PIXEL_ID con l'ID (15-16 cifre)
+        //   3. Scommenta la chiamata loadMetaPixel() nel blocco "Carica
+        //      analytics se consenso già dato" e nel handler acceptCookies
+        // Per ora la campagna ads parte solo con GA4 + UTM, ottimizzata per
+        // Traffico (non Conversioni). Lo snippet è no-op finché l'ID non è
+        // numerico valido — quindi safe anche se accidentalmente caricato.
+        var META_PIXEL_ID = 'META_PIXEL_ID';  // ← sostituisci con il tuo ID quando avrai accesso
+
+        function loadMetaPixel() {
+            if (!META_PIXEL_ID || !/^\d{10,20}$/.test(META_PIXEL_ID)) return;
+            if (window.fbq) return;
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', META_PIXEL_ID);
+            fbq('track', 'PageView');
+        }
+
+        // ── Microsoft Clarity (session recording, heatmap, scroll depth) ──
+        // Sostituisci CLARITY_PROJECT_ID con il tuo Project ID quando avrai
+        // creato il progetto su clarity.microsoft.com. È un codice alfanumerico
+        // breve (es. "abc1234567"). Finché è il placeholder, loadClarity è no-op.
+        // Costo: GRATIS, illimitato. Vedi: heatmap, registrazioni sessioni
+        // reali, rage click, dead click, scroll depth. Complementare a GA4
+        // (GA4 = "quanti e da dove", Clarity = "cosa fanno e dove si bloccano").
+        var CLARITY_PROJECT_ID = 'wqf6yajpcb';
+
+        function loadClarity() {
+            if (!CLARITY_PROJECT_ID || !/^[a-z0-9]{6,20}$/i.test(CLARITY_PROJECT_ID)) return;
+            if (!window.clarity) {
+                (function(c,l,a,r,i,t,y){
+                    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+                })(window, document, "clarity", "script", CLARITY_PROJECT_ID);
+            }
+            // Segnale di consenso esplicito (Consent v2). NECESSARIO: dal 31/10/2025
+            // Clarity, per il traffico EEA (utenti IT), aspetta un segnale valido
+            // prima di mantenere i cookie di sessione. Caricare lo script NON basta:
+            // senza questo segnale ogni pagina prende un ID nuovo → sessioni
+            // frammentate (1 sessione per pagina). loadClarity() è chiamato solo in
+            // contesto già consentito, quindi qui il consenso è sempre "accepted".
+            //   analytics_Storage: granted → abilita _clck/_clsk = stitching sessioni
+            //   ad_Storage: denied → coerente con privacy policy (no cookie pubblicitari)
+            window.clarity('consentv2', {
+                ad_Storage: "denied",
+                analytics_Storage: "granted"
+            });
+        }
+
+        // ── Helper unificato per tracking conversioni su entrambe le piattaforme ─
+        // Esposto a window per chiamate da altri script (es. trigger registrazione).
+        window.cgTrack = function(eventName, params) {
+            try {
+                // GA4: nome eventi snake_case
+                if (typeof gtag === 'function' &&
+                    localStorage.getItem('cg_cookie_consent') === 'accepted') {
+                    gtag('event', eventName, params || {});
+                }
+                // Meta Pixel: nome eventi PascalCase. Mapping snake_case → standard event.
+                if (typeof fbq === 'function' &&
+                    localStorage.getItem('cg_cookie_consent') === 'accepted') {
+                    var pixelEvent = ({
+                        'sign_up':       'CompleteRegistration',
+                        'login':         'Lead',
+                        'search':        'Search',
+                        'view_content':  'ViewContent',
+                    })[eventName];
+                    if (pixelEvent) {
+                        fbq('track', pixelEvent, params || {});
+                    }
+                }
+            } catch (_) {}
+        };
+
+        // Carica analytics se consenso già dato
+        if (localStorage.getItem('cg_cookie_consent') === 'accepted') {
+            loadGA4();
+            loadMetaPixel();
+            loadClarity();
+        }
+    </script>
+    <title>Migliori film thriller su Netflix | CosaGuardo</title>
+
+    
+    <meta name="description" content="CosaGuardo — Scopri film e serie TV perfetti per te. Consigli personalizzati basati sui tuoi gusti.">
+    <meta name="theme-color" content="#0b1020">
+    
+    <meta name="robots" content="index, follow">
+
+    
+    <meta property="og:site_name" content="CosaGuardo">
+    <meta property="og:title" content="CosaGuardo — Scopri cosa guardare">
+    <meta property="og:description" content="Consigli personalizzati su film e serie TV in base ai tuoi gusti.">
+    <meta property="og:image" content="https://cosaguardo.com/static/og-default.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://cosaguardo.com">
+    <meta property="og:locale" content="it_IT">
+
+    
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="CosaGuardo">
+    <meta name="twitter:description" content="Consigli personalizzati su film e serie TV.">
+    <meta name="twitter:image" content="https://cosaguardo.com/static/og-default.jpg">
+
+    
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <meta name="application-name" content="CosaGuardo">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CosaGuardo">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="msapplication-TileColor" content="#0b1020">
+
+    <link rel="stylesheet" href="https://cosaguardo.com/static/css/components.css?v=1">
+
+    <link rel="stylesheet" href="https://cosaguardo.com/static/css/style.css?v=18">
+    <link rel="icon" type="image/x-icon" href="https://cosaguardo.com/static/favicon.ico">
+    <link rel="icon" type="image/svg+xml" href="https://cosaguardo.com/static/icon.svg">
+    <link rel="apple-touch-icon" href="https://cosaguardo.com/static/apple-touch-icon.png">
+
+    
+    <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
+    <link rel="dns-prefetch" href="https://image.tmdb.org">
+    
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    
+    <link rel="preconnect" href="https://www.youtube.com">
+    <link rel="preconnect" href="https://i.ytimg.com">
+    
+    <style>
+        /* Placeholder per <i data-lucide> prima che lucide.js renderizzi i veri SVG.
+           Riserva lo spazio (no layout shift, Core Web Vital CLS) fino al render.
+           NB: i siti che hanno style="width:Xpx;height:Xpx" inline su <i> vincono
+           sopra questa regola (specificity), quindi non rompo i casi che già
+           dimensionano esplicitamente l'icona. */
+        i[data-lucide]:empty {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            vertical-align: -0.125em;
+        }
+    </style>
+
+    
+<meta name="description" content="I migliori film thriller disponibili su Netflix oggi in Italia. Classifica aggiornata in base alla popolarità e ai voti del pubblico.">
+<meta name="cg-content-type" content="best">
+<meta property="og:title" content="Migliori film thriller su Netflix | CosaGuardo">
+<meta property="og:description" content="I migliori film thriller disponibili su Netflix oggi in Italia. Classifica aggiornata in base alla popolarità e ai voti del pubblico.">
+<meta property="og:image" content="https://image.tmdb.org/t/p/original/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg">
+<style>
+    /* ──────────────────────────────────────────────────────────────────
+       PAGINA "/migliori-..." — autocontenuta
+       ────────────────────────────────────────────────────────────── */
+
+    .best-header {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 0 16px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .best-platform-badge {
+        width: 64px; height: 64px;
+        border-radius: 14px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        flex-shrink: 0;
+    }
+    .best-platform-badge img {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .best-header-text h1 {
+        margin: 0 0 4px;
+        font-size: 26px;
+        line-height: 1.1;
+        background: linear-gradient(90deg, #ffffff, #93c5fd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .best-header-text p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--muted);
+    }
+    .best-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        color: #fff !important;
+        font-weight: 700;
+        font-size: 12px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    /* TOP 5 con descrizione editoriale */
+    .best-section-title {
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #93c5fd;
+        margin: 8px 0 12px;
+    }
+    .best-top5 {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-bottom: 28px;
+    }
+    .best-top5-item {
+        display: grid;
+        grid-template-columns: 100px 1fr;
+        gap: 14px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 12px;
+        text-decoration: none;
+        color: var(--text);
+        transition: 0.18s ease;
+        position: relative;
+    }
+    .best-top5-item:hover {
+        background: rgba(255,255,255,0.06);
+        border-color: rgba(110,168,254,0.25);
+        transform: translateY(-1px);
+    }
+    .best-top5-rank {
+        position: absolute;
+        top: 8px; left: 8px;
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        color: #000;
+        font-weight: 900;
+        font-size: 12px;
+        width: 24px; height: 24px;
+        border-radius: 6px;
+        display: grid; place-items: center;
+        z-index: 2;
+    }
+    .best-top5-poster {
+        position: relative;
+        aspect-ratio: 2/3;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #0d1224;
+    }
+    .best-top5-poster img {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .best-top5-content { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+    .best-top5-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 0 0 4px;
+        line-height: 1.15;
+    }
+    .best-top5-meta {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+    }
+    .best-top5-rating {
+        color: #fcd34d;
+        font-weight: 700;
+    }
+    .best-top5-overview {
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--muted);
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+    }
+
+    /* GRIGLIA "altri" — riusa pattern .pf-grid */
+    .best-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 14px;
+    }
+    .bg-card {
+        position: relative;
+        aspect-ratio: 2/3;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #0d1224;
+        text-decoration: none;
+        display: block;
+        transition: 0.18s ease;
+    }
+    .bg-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.4);
+    }
+    .bg-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .bg-card-overlay {
+        position: absolute;
+        inset: auto 0 0 0;
+        padding: 22px 8px 8px;
+        background: linear-gradient(to top, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0) 100%);
+        pointer-events: none;
+    }
+    .bg-card-rating {
+        font-size: 9px;
+        font-weight: 700;
+        color: #fcd34d;
+        margin-bottom: 3px;
+    }
+    .bg-card-title {
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    /* LINKING INTERNO */
+    .best-related {
+        margin-top: 36px;
+        padding-top: 24px;
+        border-top: 1px solid rgba(255,255,255,0.07);
+    }
+    .best-related-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin: 0 0 10px;
+        color: var(--text);
+    }
+    .best-related-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 18px;
+    }
+    .best-chip {
+        display: inline-block;
+        padding: 7px 14px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 999px;
+        color: var(--text);
+        font-size: 0.85rem;
+        text-decoration: none;
+        transition: 0.15s ease;
+    }
+    .best-chip:hover {
+        background: rgba(110,168,254,0.12);
+        border-color: rgba(110,168,254,0.4);
+        color: #cfe2ff;
+    }
+
+    .best-empty {
+        text-align: center;
+        padding: 48px 20px;
+        color: var(--muted);
+    }
+    .best-empty h2 { font-size: 18px; margin: 0 0 6px; color: var(--text); }
+    .best-empty p { font-size: 13px; margin: 0 0 12px; }
+
+    /* MOBILE */
+    @media (max-width: 760px) {
+        .best-header {
+            grid-template-columns: auto 1fr;
+            grid-template-rows: auto auto;
+            gap: 8px 12px;
+            padding: 12px 0;
+        }
+        .best-platform-badge {
+            width: 48px; height: 48px;
+            border-radius: 11px;
+        }
+        .best-header-text h1 { font-size: 18px; line-height: 1.1; }
+        .best-header-text p { font-size: 11px; }
+        .best-cta {
+            grid-column: 1 / -1;
+            justify-content: center;
+            padding: 8px 14px;
+            font-size: 11px;
+        }
+        .best-top5-item {
+            grid-template-columns: 80px 1fr;
+            gap: 10px;
+            padding: 10px;
+        }
+        .best-top5-title { font-size: 14px; }
+        .best-top5-overview {
+            font-size: 12px;
+            -webkit-line-clamp: 2;
+        }
+        .best-top5-meta { font-size: 11px; gap: 8px; }
+        .best-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+    }
+</style>
+
+</head>
+<body>
+    
+    <div id="cg-nav-progress" aria-hidden="true"></div>
+    <style>
+        #cg-nav-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            width: 0%;
+            background: linear-gradient(90deg, #6ea8fe 0%, #a78bfa 100%);
+            box-shadow: 0 0 8px rgba(167, 139, 250, 0.6);
+            z-index: 99999;
+            opacity: 0;
+            transition: width 0.25s ease-out, opacity 0.2s ease-out;
+            pointer-events: none;
+            border-radius: 0 2px 2px 0;
+        }
+        #cg-nav-progress.cg-progress-active {
+            opacity: 1;
+        }
+        /* Riduci motion se l'utente preferisce (a11y) */
+        @media (prefers-reduced-motion: reduce) {
+            #cg-nav-progress { transition: opacity 0.15s linear; }
+        }
+    </style>
+    <script>
+        // CG_NavProgress: feedback "stai navigando" al click.
+        // Funziona così:
+        //  1. Al click su <a href="..."> interno (no target=_blank, no hash, no js:),
+        //     parte la bar che va al 25% subito, poi cresce graduale fino a 90%.
+        //  2. Su 'pageshow' (= la nuova pagina si è caricata) o 'beforeunload',
+        //     la bar va al 100% e fade out.
+        //  3. Su navigazione browser (back/forward via popstate) idem, anche se
+        //     il caso d'uso principale è il click.
+        // Edge case: se il click non porta a navigazione (es. preventDefault da
+        // altro listener), la bar comunque si autoresetta dopo 4s di timeout.
+        (function() {
+            var bar = document.getElementById('cg-nav-progress');
+            if (!bar) return;
+            var progressInterval = null;
+            var resetTimeout = null;
+            var currentWidth = 0;
+
+            function start() {
+                if (progressInterval) return;  // già in corso
+                clearTimeout(resetTimeout);
+                currentWidth = 0;
+                bar.classList.add('cg-progress-active');
+                bar.style.transition = 'width 0.25s ease-out, opacity 0.2s ease-out';
+                // Salto rapido al 45% per feedback istantaneo al click.
+                // Era 25%: troppo conservativo, su pagine veloci (<1s) la bar
+                // non arrivava neanche a metà prima del fade-out. YouTube/GitHub
+                // partono molto più aggressivi: l'utente deve vedere movimento.
+                requestAnimationFrame(function() {
+                    currentWidth = 45;
+                    bar.style.width = '45%';
+                });
+                // Poi cresce graduale verso 95% (mai 100% finché non arriva la nuova pagina).
+                // Aggiungiamo il 25% della distanza restante ogni 180ms (era 10% ogni 250ms),
+                // così la bar riempie velocemente nei primi 500-800ms e poi rallenta verso il 95%.
+                progressInterval = setInterval(function() {
+                    if (currentWidth < 95) {
+                        currentWidth += (95 - currentWidth) * 0.25;
+                        bar.style.width = currentWidth + '%';
+                    }
+                }, 180);
+                // Safety: se la nav non avviene entro 4s, resetta
+                resetTimeout = setTimeout(reset, 4000);
+            }
+
+            function finish() {
+                if (!progressInterval) return;
+                clearInterval(progressInterval);
+                clearTimeout(resetTimeout);
+                progressInterval = null;
+                bar.style.width = '100%';
+                setTimeout(function() {
+                    bar.classList.remove('cg-progress-active');
+                    setTimeout(function() {
+                        bar.style.transition = 'none';
+                        bar.style.width = '0%';
+                    }, 220);
+                }, 150);
+            }
+
+            function reset() {
+                if (progressInterval) {
+                    clearInterval(progressInterval);
+                    progressInterval = null;
+                }
+                clearTimeout(resetTimeout);
+                bar.classList.remove('cg-progress-active');
+                bar.style.transition = 'none';
+                bar.style.width = '0%';
+            }
+
+            // Click handler delegato sul document (cattura anche link aggiunti dinamicamente)
+            document.addEventListener('click', function(e) {
+                // Trova l'<a> più vicino salendo
+                var el = e.target;
+                while (el && el !== document.body) {
+                    if (el.tagName === 'A') break;
+                    el = el.parentElement;
+                }
+                if (!el || el.tagName !== 'A') return;
+                var href = el.getAttribute('href');
+                if (!href) return;
+                // Skip: external (target=_blank), mailto/tel, anchor puro, javascript:
+                if (el.getAttribute('target') === '_blank') return;
+                if (href.indexOf('mailto:') === 0) return;
+                if (href.indexOf('tel:') === 0) return;
+                if (href.indexOf('javascript:') === 0) return;
+                if (href.indexOf('#') === 0) return;
+                // Skip se modificatore tastiera (ctrl/cmd/shift = nuova tab)
+                if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+                // Skip se dominio esterno
+                if (/^https?:\/\//.test(href)) {
+                    try {
+                        var url = new URL(href);
+                        if (url.host !== location.host) return;
+                    } catch (_) { return; }
+                }
+                start();
+            }, true);
+
+            // Form submit: anche i form possono causare navigazione
+            document.addEventListener('submit', function(e) {
+                var form = e.target;
+                if (form && form.tagName === 'FORM' && form.method.toLowerCase() !== 'get') {
+                    // POST → ci sarà sicuramente una nav
+                    start();
+                }
+            }, true);
+
+            // Cleanup quando la pagina viene davvero scaricata.
+            //
+            // BUG FIX: precedente codice usava 'beforeunload' che scatta QUANDO il
+            // browser INIZIA la navigazione (decine di ms dopo il click), NON quando
+            // la nuova pagina arriva. Su mobile con pagine 2-5s la bar sembrava
+            // scomparire prematuramente. Usiamo:
+            //   - 'pagehide': scatta più tardi, quando la pagina viene davvero
+            //     distaccata dal DOM (= la nuova è quasi visibile). Standard moderno.
+            //   - 'pageshow' con persisted: per back/forward da bfcache (caso edge).
+            // Niente 'beforeunload' qui: era la causa del fade-out prematuro.
+            window.addEventListener('pagehide', finish);
+            window.addEventListener('pageshow', function(e) {
+                // pageshow scatta su back/forward dalla bfcache: completa la bar
+                // se stava ancora correndo (= utente è tornato indietro mentre la
+                // bar era attiva)
+                if (e.persisted && progressInterval) finish();
+            });
+            // Safety: se per qualsiasi motivo la bar resta attiva dopo onload, reset
+            window.addEventListener('load', function() {
+                setTimeout(reset, 100);
+            });
+        })();
+    </script>
+    
+
+    <div class="site-wrapper">
+        <header class="site-header">
+            <div class="container header-inner">
+                <div class="header-left">
+                <a href="/" class="brand">
+                    <svg viewBox="0 0 104 112" xmlns="http://www.w3.org/2000/svg" class="brand-icon" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="navGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#6ea8fe"/>
+                                <stop offset="100%" style="stop-color:#a78bfa"/>
+                            </linearGradient>
+                            <linearGradient id="navBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#1a3060"/>
+                                <stop offset="100%" style="stop-color:#28185a"/>
+                            </linearGradient>
+                        </defs>
+                        <rect x="4" y="8" width="96" height="96" rx="26" fill="url(#navBg)"/>
+                        <rect x="4" y="8" width="96" height="96" rx="26" fill="none" stroke="url(#navGrad)" stroke-width="1.5" opacity="0.45"/>
+                        <path d="M 66 24 A 30 30 0 1 0 66 88" fill="none" stroke="url(#navGrad)" stroke-width="13" stroke-linecap="round"/>
+                        <polygon points="65,38 65,74 86,56" fill="url(#navGrad)"/>
+                    </svg>
+                    <span class="brand-text">CosaGuardo</span>
+                </a>
+
+                
+                <button type="button" class="cg-menu-trigger" id="cg-menu-trigger"
+                        aria-label="Apri menu di navigazione" aria-expanded="false"
+                        aria-controls="cg-drawer">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    <span class="cg-menu-trigger-label">Menu</span>
+                </button>
+                </div>
+
+                <nav class="nav">
+                    <div class="nav-links">
+                        <button type="button" class="qs-trigger" id="qs-trigger" aria-label="Cerca film o serie TV">
+                            
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            <span class="qs-trigger-label">Cerca</span>
+                        </button>
+                        <a href="/" class="nav-link-item" aria-label="Home">
+                            <span class="nav-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                            </span>
+                            <span class="nav-text">Home</span>
+                        </a>
+
+                        <a href="/scopri" class="nav-link-item" aria-label="Scopri">
+                            <span class="nav-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+                            </span>
+                            <span class="nav-text">Scopri</span>
+                        </a>
+
+                        
+                        <a href="/la-mia-raccolta" class="nav-link-item" aria-label="La mia raccolta">
+                            <span class="nav-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+                            </span>
+                            <span class="nav-text">La mia raccolta</span>
+                        </a>
+                        
+                        <a href="/login" class="nav-link-item nav-link-cta" aria-label="Accedi">
+                            <span class="nav-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                            </span>
+                            <span class="nav-text">Accedi</span>
+                        </a>
+                        
+                    </div>
+                </nav>
+            </div>
+        </header>
+
+        
+        <div class="cg-drawer-backdrop" id="cg-drawer-backdrop" hidden></div>
+        <aside class="cg-drawer" id="cg-drawer" role="dialog" aria-modal="true"
+               aria-label="Menu di navigazione" aria-hidden="true">
+            <div class="cg-drawer-head">
+                <span class="cg-drawer-title">Esplora CosaGuardo</span>
+                <button type="button" class="cg-drawer-close" id="cg-drawer-close" aria-label="Chiudi menu">×</button>
+            </div>
+
+            <nav class="cg-drawer-nav" aria-label="Sezioni del sito">
+                <a href="/" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Home</strong><small>Trova consigli su misura</small></span>
+                </a>
+                <a href="/scopri" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Scopri</strong><small>Sfoglia per genere e umore</small></span>
+                </a>
+                <a href="/dove-vedere" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="13" rx="2"/><polyline points="8 3 12 7 16 3"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Dove vedere</strong><small>Su quale piattaforma è disponibile</small></span>
+                </a>
+                <a href="/migliori" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>I migliori</strong><small>Le classifiche per genere e piattaforma</small></span>
+                </a>
+                <a href="/cosa-serve" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Cosa serve per guardare</strong><small>TV, dispositivi e accessori consigliati</small></span>
+                </a>
+                <a href="/la-mia-raccolta" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>La mia raccolta</strong><small>Titoli salvati e serie tracciate</small></span>
+                </a>
+                <a href="/come-funziona" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Come funziona</strong><small>Cos'è CosaGuardo in 3 passi</small></span>
+                </a>
+
+                <div class="cg-drawer-sep"></div>
+
+                
+                <a href="/login" class="cg-drawer-link cg-drawer-link--cta">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Accedi o registrati</strong><small>Gratis, sblocca salvataggi e avvisi</small></span>
+                </a>
+                
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="container">
+                
+<div class="page page-best">
+
+    <header class="best-header">
+        
+        <div class="best-platform-badge">
+            <img src="https://image.tmdb.org/t/p/original/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg" alt="Logo Netflix" width="64" height="64">
+        </div>
+        
+        <div class="best-header-text">
+            <h1>I migliori film thriller su Netflix</h1>
+            <p>Classifica aggiornata in base a popolarità e voti del pubblico.</p>
+        </div>
+        
+        <a href="https://www.netflix.com/it/"
+           class="best-cta"
+           target="_blank"
+           rel="nofollow noopener noreferrer">
+            <i data-lucide="external-link" style="width:13px;height:13px;stroke:currentColor;stroke-width:2;"></i>
+            Vai a Netflix
+        </a>
+        
+    </header>
+
+    
+
+    <!-- TOP 5 con descrizione -->
+    
+    <h2 class="best-section-title">⭐ Top 5</h2>
+    <div class="best-top5">
+        
+        <a href="/film/1318447"
+           class="best-top5-item">
+            <div class="best-top5-rank">1</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/qvdg7McYoHmCyw1B35px9fWU1ZF.jpg" alt="Apex" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">Apex</h3>
+                <div class="best-top5-meta">
+                    <span>2026</span>
+                    
+                    <span class="best-top5-rating">★ 6.8</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Durante un&#39;avventura solitaria nella natura selvaggia australiana, una donna in lutto si ritrova coinvolta in un gioco perverso e diventa la preda di un assassino astuto.</p>
+                
+            </div>
+        </a>
+        
+        <a href="/film/1291608"
+           class="best-top5-item">
+            <div class="best-top5-rank">2</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/8FHOtUpNIk5ZPEay2N2EY5lrxkv.jpg" alt="Dhurandhar" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">Dhurandhar</h3>
+                <div class="best-top5-meta">
+                    <span>2025</span>
+                    
+                    <span class="best-top5-rating">★ 7.2</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Un misterioso viaggiatore scivola nel cuore del sottobosco criminale di Karachi e scala i ranghi con letale precisione, col solo scopo di fare a pezzi dall&#39;interno il famigerato connubio tra l&#39;ISI e gli inferi della malavita.</p>
+                
+            </div>
+        </a>
+        
+        <a href="/film/1265609"
+           class="best-top5-item">
+            <div class="best-top5-rank">3</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/30t19PpvZ3GVw9nRsn7TjZh5qEr.jpg" alt="War Machine" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">War Machine</h3>
+                <div class="best-top5-meta">
+                    <span>2026</span>
+                    
+                    <span class="best-top5-rating">★ 7.4</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Durante un&#39;ultima ed estenuante missione dell&#39;addestramento dei Ranger, un geniere deve guidare la sua unità contro una gigantesca macchina assassina proveniente da un altro mondo.</p>
+                
+            </div>
+        </a>
+        
+        <a href="/film/680"
+           class="best-top5-item">
+            <div class="best-top5-rank">4</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/hOpN58hkQGZph5LHhyRrryy1hzF.jpg" alt="Pulp Fiction" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">Pulp Fiction</h3>
+                <div class="best-top5-meta">
+                    <span>1994</span>
+                    
+                    <span class="best-top5-rating">★ 8.5</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Le vite di due gangster, di un pugile e della moglie di un potente boss della malavita finiscono per intrecciarsi in una paradossale storia di violenza, vendetta e redenzione.</p>
+                
+            </div>
+        </a>
+        
+        <a href="/film/1306368"
+           class="best-top5-item">
+            <div class="best-top5-rank">5</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/oY5JK04G4MzyhlXOQQyXaflEdB6.jpg" alt="The Rip - Soldi sporchi" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">The Rip - Soldi sporchi</h3>
+                <div class="best-top5-meta">
+                    <span>2026</span>
+                    
+                    <span class="best-top5-rating">★ 7.1</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Una squadra di poliziotti di Miami scopre milioni di dollari in contanti in un nascondiglio fatiscente: la fiducia vacilla e tutti e tutto sono messi in discussione.</p>
+                
+            </div>
+        </a>
+        
+    </div>
+    
+
+    <!-- GRIGLIA "altri" -->
+    
+    <h2 class="best-section-title">🎬 Altri titoli consigliati</h2>
+    <div class="best-grid">
+        
+        <a href="/film/550"
+           class="bg-card"
+           title="Fight Club">
+            <img src="https://image.tmdb.org/t/p/w342/rtNLQ8HbPElzEfrHjrzSr07prKT.jpg" alt="Fight Club" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 8.4</div>
+                
+                <div class="bg-card-title">Fight Club</div>
+            </div>
+        </a>
+        
+        <a href="/film/603692"
+           class="bg-card"
+           title="John Wick 4">
+            <img src="https://image.tmdb.org/t/p/w342/uD6w5fB04cgYye6G8qJ7gPtDZFb.jpg" alt="John Wick 4" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.7</div>
+                
+                <div class="bg-card-title">John Wick 4</div>
+            </div>
+        </a>
+        
+        <a href="/film/138843"
+           class="bg-card"
+           title="L&#39;evocazione - The Conjuring">
+            <img src="https://image.tmdb.org/t/p/w342/inBZ5Lm0tUNSgMGZZ7f9vfHNKI2.jpg" alt="L&#39;evocazione - The Conjuring" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.5</div>
+                
+                <div class="bg-card-title">L&#39;evocazione - The Conjuring</div>
+            </div>
+        </a>
+        
+        <a href="/film/156022"
+           class="bg-card"
+           title="The Equalizer - Il vendicatore">
+            <img src="https://image.tmdb.org/t/p/w342/jowKJEQpeFnK1ihP3uYUD8TuESn.jpg" alt="The Equalizer - Il vendicatore" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.3</div>
+                
+                <div class="bg-card-title">The Equalizer - Il vendicatore</div>
+            </div>
+        </a>
+        
+        <a href="/film/1100782"
+           class="bg-card"
+           title="Smile 2">
+            <img src="https://image.tmdb.org/t/p/w342/z4H7lTRezsXaEjuzWmT1ztuEsb4.jpg" alt="Smile 2" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.6</div>
+                
+                <div class="bg-card-title">Smile 2</div>
+            </div>
+        </a>
+        
+        <a href="/film/1290417"
+           class="bg-card"
+           title="Thrash – Furia dall&#39;oceano">
+            <img src="https://image.tmdb.org/t/p/w342/eDb6dYwPCkqR2sk3KYJIhbqc5hq.jpg" alt="Thrash – Furia dall&#39;oceano" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.1</div>
+                
+                <div class="bg-card-title">Thrash – Furia dall&#39;oceano</div>
+            </div>
+        </a>
+        
+        <a href="/film/1268127"
+           class="bg-card"
+           title="Humint">
+            <img src="https://image.tmdb.org/t/p/w342/f7sCSLEPRfV2fWQ0RYOtHhnHXuG.jpg" alt="Humint" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.4</div>
+                
+                <div class="bg-card-title">Humint</div>
+            </div>
+        </a>
+        
+        <a href="/film/812583"
+           class="bg-card"
+           title="Wake Up Dead Man - Knives Out">
+            <img src="https://image.tmdb.org/t/p/w342/db8j0xU82lzWKX0SXrPY5tFrzwA.jpg" alt="Wake Up Dead Man - Knives Out" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.2</div>
+                
+                <div class="bg-card-title">Wake Up Dead Man - Knives Out</div>
+            </div>
+        </a>
+        
+        <a href="/film/16869"
+           class="bg-card"
+           title="Bastardi senza gloria">
+            <img src="https://image.tmdb.org/t/p/w342/aa1jLbxTTuA6o5ucHoZh2khwNSo.jpg" alt="Bastardi senza gloria" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 8.2</div>
+                
+                <div class="bg-card-title">Bastardi senza gloria</div>
+            </div>
+        </a>
+        
+        <a href="/film/245891"
+           class="bg-card"
+           title="John Wick">
+            <img src="https://image.tmdb.org/t/p/w342/m68CfvthxBis1EP4qkcrx8tVumU.jpg" alt="John Wick" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.5</div>
+                
+                <div class="bg-card-title">John Wick</div>
+            </div>
+        </a>
+        
+        <a href="/film/762441"
+           class="bg-card"
+           title="A Quiet Place - Giorno 1">
+            <img src="https://image.tmdb.org/t/p/w342/2VxStGPKuixAEdF2imhW2zcu0hD.jpg" alt="A Quiet Place - Giorno 1" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.6</div>
+                
+                <div class="bg-card-title">A Quiet Place - Giorno 1</div>
+            </div>
+        </a>
+        
+        <a href="/film/324552"
+           class="bg-card"
+           title="John Wick - Capitolo 2">
+            <img src="https://image.tmdb.org/t/p/w342/v7VwbTCq6z3r5V0mtFruUz5Pts9.jpg" alt="John Wick - Capitolo 2" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.3</div>
+                
+                <div class="bg-card-title">John Wick - Capitolo 2</div>
+            </div>
+        </a>
+        
+        <a href="/film/135397"
+           class="bg-card"
+           title="Jurassic World">
+            <img src="https://image.tmdb.org/t/p/w342/rd7Baw7ne9zFOnyD0XZvc5fkC9A.jpg" alt="Jurassic World" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.7</div>
+                
+                <div class="bg-card-title">Jurassic World</div>
+            </div>
+        </a>
+        
+        <a href="/film/1359"
+           class="bg-card"
+           title="American Psycho">
+            <img src="https://image.tmdb.org/t/p/w342/lSW7y5wPud83gwjx5Upsyb8Zq5u.jpg" alt="American Psycho" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.4</div>
+                
+                <div class="bg-card-title">American Psycho</div>
+            </div>
+        </a>
+        
+        <a href="/film/161"
+           class="bg-card"
+           title="Ocean&#39;s Eleven - Fate il vostro gioco">
+            <img src="https://image.tmdb.org/t/p/w342/9245MBG1BvwnVkt5F5MSXyQrbYT.jpg" alt="Ocean&#39;s Eleven - Fate il vostro gioco" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.5</div>
+                
+                <div class="bg-card-title">Ocean&#39;s Eleven - Fate il vostro gioco</div>
+            </div>
+        </a>
+        
+        <a href="/film/2501"
+           class="bg-card"
+           title="The Bourne Identity">
+            <img src="https://image.tmdb.org/t/p/w342/gj3RcvhQR1JrWOFBKFhojFrO7UG.jpg" alt="The Bourne Identity" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.5</div>
+                
+                <div class="bg-card-title">The Bourne Identity</div>
+            </div>
+        </a>
+        
+        <a href="/film/604"
+           class="bg-card"
+           title="Matrix Reloaded">
+            <img src="https://image.tmdb.org/t/p/w342/uWkkhMhJKBsjPkbPcRm4nlYUZxH.jpg" alt="Matrix Reloaded" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.1</div>
+                
+                <div class="bg-card-title">Matrix Reloaded</div>
+            </div>
+        </a>
+        
+        <a href="/film/458156"
+           class="bg-card"
+           title="John Wick 3 - Parabellum">
+            <img src="https://image.tmdb.org/t/p/w342/bqiVhCJPxOZSRysyE2QoV48Euaf.jpg" alt="John Wick 3 - Parabellum" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.4</div>
+                
+                <div class="bg-card-title">John Wick 3 - Parabellum</div>
+            </div>
+        </a>
+        
+        <a href="/film/6479"
+           class="bg-card"
+           title="Io sono leggenda">
+            <img src="https://image.tmdb.org/t/p/w342/lrHsksAln0IxYFfZVgW6iRTaUsi.jpg" alt="Io sono leggenda" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.2</div>
+                
+                <div class="bg-card-title">Io sono leggenda</div>
+            </div>
+        </a>
+        
+        <a href="/film/346364"
+           class="bg-card"
+           title="It - Capitolo uno">
+            <img src="https://image.tmdb.org/t/p/w342/ru0gDnxKzBjzrPxfRyZIuse9hfu.jpg" alt="It - Capitolo uno" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.2</div>
+                
+                <div class="bg-card-title">It - Capitolo uno</div>
+            </div>
+        </a>
+        
+        <a href="/film/474350"
+           class="bg-card"
+           title="It - Capitolo due">
+            <img src="https://image.tmdb.org/t/p/w342/g9ucHd1TgS2k3x0n9EVIaivzueN.jpg" alt="It - Capitolo due" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.8</div>
+                
+                <div class="bg-card-title">It - Capitolo due</div>
+            </div>
+        </a>
+        
+        <a href="/film/7485"
+           class="bg-card"
+           title="Shooter">
+            <img src="https://image.tmdb.org/t/p/w342/lDNVT4v9LoFvhE1A62gfgj6x6E0.jpg" alt="Shooter" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.1</div>
+                
+                <div class="bg-card-title">Shooter</div>
+            </div>
+        </a>
+        
+        <a href="/film/351286"
+           class="bg-card"
+           title="Jurassic World – Il regno distrutto">
+            <img src="https://image.tmdb.org/t/p/w342/4iGHioQuva4Q3KkeYNgohMP9kaR.jpg" alt="Jurassic World – Il regno distrutto" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.5</div>
+                
+                <div class="bg-card-title">Jurassic World – Il regno distrutto</div>
+            </div>
+        </a>
+        
+        <a href="/film/291805"
+           class="bg-card"
+           title="Now You See Me 2">
+            <img src="https://image.tmdb.org/t/p/w342/j1rBqVglO6wfYzPgQlUFVg25XSP.jpg" alt="Now You See Me 2" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.8</div>
+                
+                <div class="bg-card-title">Now You See Me 2</div>
+            </div>
+        </a>
+        
+        <a href="/film/274855"
+           class="bg-card"
+           title="Geostorm">
+            <img src="https://image.tmdb.org/t/p/w342/ws3z8UpKkZpfEuAo5QE1mtP1EPL.jpg" alt="Geostorm" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.1</div>
+                
+                <div class="bg-card-title">Geostorm</div>
+            </div>
+        </a>
+        
+    </div>
+    
+
+    
+
+    <!-- LINKING INTERNO -->
+    <section class="best-related">
+        
+        <h3 class="best-related-title">Esplora altri generi su Netflix</h3>
+        <div class="best-related-row">
+            
+            <a href="/migliori-film-comedy-su-netflix" class="best-chip">
+                Film commedia
+            </a>
+            
+            <a href="/migliori-film-drammatici-su-netflix" class="best-chip">
+                Film drammatici
+            </a>
+            
+            <a href="/migliori-film-azione-su-netflix" class="best-chip">
+                Film d&#39;azione
+            </a>
+            
+            <a href="/migliori-film-fantasy-su-netflix" class="best-chip">
+                Film fantasy
+            </a>
+            
+            <a href="/migliori-film-horror-su-netflix" class="best-chip">
+                Film horror
+            </a>
+            
+        </div>
+        
+
+        
+        <h3 class="best-related-title">
+            I migliori film thriller
+            su altre piattaforme
+        </h3>
+        <div class="best-related-row">
+            
+            <a href="/migliori-film-thriller-su-prime-video" class="best-chip">Prime Video</a>
+            
+            <a href="/migliori-film-thriller-su-disney-plus" class="best-chip">Disney+</a>
+            
+            <a href="/migliori-film-thriller-su-apple-tv-plus" class="best-chip">Apple TV+</a>
+            
+            <a href="/migliori-film-thriller-su-paramount-plus" class="best-chip">Paramount+</a>
+            
+        </div>
+        
+
+        <h3 class="best-related-title">Vedi anche</h3>
+        <div class="best-related-row">
+            <a href="/piattaforma/netflix" class="best-chip">
+                Cosa vedere su Netflix
+            </a>
+            <a href="/migliori" class="best-chip">Tutte le classifiche</a>
+        </div>
+    </section>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    if (window.lucide) lucide.createIcons();
+});
+</script>
+
+            </div>
+        </main>
+
+        <footer class="site-footer">
+            <div class="container footer-inner">
+                <div>
+                    © 2026 CosaGuardo — Scopri cosa guardare in base ai tuoi gusti.
+                </div>
+                <div class="footer-links">
+                    <a href="/">Homepage</a>
+                    <a href="/come-funziona">Come funziona</a>
+                    <a href="/installa">Installa app</a>
+                    <a href="/privacy">Privacy Policy</a>
+                    <a href="/termini">Termini di servizio</a>
+                    <button onclick="resetCookieConsent()" class="footer-cookie-btn">Cookie</button>
+                </div>
+            </div>
+        </footer>
+
+        
+
+        <!-- INSTALL PWA BANNER -->
+        <div id="install-banner" role="dialog" aria-label="Installa l'app">
+            <div class="install-banner-inner">
+                <div class="install-banner-icon" aria-hidden="true"></div>
+                <div class="install-banner-text">
+                    <strong>📲 Installa CosaGuardo come app</strong>
+                    <span>per ricevere subito consigli</span>
+                </div>
+                <div class="install-banner-actions">
+                    <button id="install-btn-action" class="install-btn install-btn--primary">Installa</button>
+                    <button id="install-btn-close" class="install-btn--close" aria-label="Chiudi">×</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- iOS INSTALL GUIDE (overlay con istruzioni passo-passo) -->
+        <div id="ios-install-guide" role="dialog" aria-label="Come installare su iPhone">
+            <div class="ios-guide-inner">
+                <button class="ios-guide-close" id="ios-guide-close" aria-label="Chiudi">×</button>
+                <h3 class="ios-guide-title">Installa CosaGuardo sul tuo iPhone</h3>
+                <div class="ios-guide-step">
+                    <div class="ios-guide-step-num">1</div>
+                    <div>Tocca il bottone <span class="ios-guide-share">⬆</span> <strong>Condividi</strong> (il quadrato con la freccia in alto, in fondo alla schermata)</div>
+                </div>
+                <div class="ios-guide-step">
+                    <div class="ios-guide-step-num">2</div>
+                    <div>Nel menu che si apre, scorri verso il basso e tocca <strong>"Aggiungi a Home"</strong></div>
+                </div>
+                <div class="ios-guide-step">
+                    <div class="ios-guide-step-num">3</div>
+                    <div>Tocca <strong>"Aggiungi"</strong> in alto a destra per confermare</div>
+                </div>
+                <div class="ios-guide-arrow">⬇️</div>
+            </div>
+        </div>
+    </div>
+
+    
+    <script>
+        // Lucide caricato LAZY via requestIdleCallback per non competere
+        // con le immagini sul critical path. Trade-off accettato:
+        // le icone appaiono ~500ms dopo FCP, ma e' il prezzo per fixare NO_LCP.
+        (function() {
+            function loadLucide() {
+                if (window.__lucideLoaded) return;
+                window.__lucideLoaded = true;
+                var s = document.createElement('script');
+                s.src = 'https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js';
+                s.onload = function() {
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                };
+                document.head.appendChild(s);
+            }
+            // Aspetta idle CPU oppure 1.5s di timeout per stare fuori dalla
+            // finestra di misurazione LCP di Lighthouse (~2s su mobile slow).
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(loadLucide, { timeout: 2000 });
+            } else {
+                setTimeout(loadLucide, 1500);
+            }
+            // Espongo loader globale: utile se in futuro si aggiungono icone
+            // dinamiche dopo il primo paint.
+            window.__loadLucide = loadLucide;
+        })();
+    </script>
+
+    <!-- Cookie banner logic — iniezione DOM lazy per non bloccare LCP -->
+    <script>
+        (function() {
+            // HTML del banner come stringa: iniettato solo quando serve, mai presente
+            // nel DOM iniziale. Questo evita che il banner diventi LCP candidate
+            // (è position:fixed bottom:0 max-width:780px → enorme rispetto ai poster mobile).
+            var BANNER_HTML =
+                '<div id="cookie-banner" role="dialog" aria-label="Consenso cookie">' +
+                  '<div class="cookie-banner-inner">' +
+                    '<div class="cookie-banner-text">' +
+                      '<strong>Rispettiamo la tua privacy</strong>' +
+                      '<p>Usiamo cookie analitici (Google Analytics) per capire come viene usato il sito e migliorarlo. Non vendiamo dati a terze parti.</p>' +
+                      '<a href="/privacy" class="cookie-banner-link">Leggi la Privacy Policy</a>' +
+                    '</div>' +
+                    '<div class="cookie-banner-actions">' +
+                      '<button onclick="acceptCookies()" class="cookie-btn cookie-btn--accept">Accetta</button>' +
+                      '<button onclick="declineCookies()" class="cookie-btn cookie-btn--decline">Solo necessari</button>' +
+                    '</div>' +
+                  '</div>' +
+                '</div>';
+
+            function injectBanner() {
+                if (document.getElementById('cookie-banner')) return;
+                var wrap = document.createElement('div');
+                wrap.innerHTML = BANNER_HTML;
+                document.body.appendChild(wrap.firstChild);
+            }
+
+            function removeBanner() {
+                var b = document.getElementById('cookie-banner');
+                if (b && b.parentNode) b.parentNode.removeChild(b);
+            }
+
+            // Espongo le funzioni globali (chiamate da onclick inline e da footer "Cookie")
+            window.acceptCookies = function() {
+                localStorage.setItem('cg_cookie_consent', 'accepted');
+                removeBanner();
+                if (typeof loadGA4 === 'function') loadGA4();
+                if (typeof loadMetaPixel === 'function') loadMetaPixel();
+                if (typeof loadClarity === 'function') loadClarity();
+            };
+
+            window.declineCookies = function() {
+                localStorage.setItem('cg_cookie_consent', 'declined');
+                removeBanner();
+            };
+
+            window.resetCookieConsent = function() {
+                localStorage.removeItem('cg_cookie_consent');
+                injectBanner();
+            };
+
+            // Iniezione iniziale: solo se non c'è consenso registrato.
+            // Aspetta idle/timeout per stare COMPLETAMENTE fuori dalla finestra LCP.
+            var consent = localStorage.getItem('cg_cookie_consent');
+            if (!consent) {
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(injectBanner, { timeout: 2500 });
+                } else {
+                    setTimeout(injectBanner, 1800);
+                }
+            }
+        })();
+    </script>
+
+    
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', function() {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .then(function(reg) {
+                        // Quando viene trovata una nuova versione del SW,
+                        // notifichiamo all'utente che c'è un aggiornamento.
+                        // Il SW si attiva subito grazie a skipWaiting() interno.
+                        reg.addEventListener('updatefound', function() {
+                            var newSW = reg.installing;
+                            if (!newSW) return;
+                            newSW.addEventListener('statechange', function() {
+                                if (newSW.state === 'activated' && navigator.serviceWorker.controller) {
+                                    // SW nuovo attivo + esiste già un SW controller
+                                    // = stiamo aggiornando, ricarica per vedere nuova versione
+                                    // (commentato di default per non infastidire — abilita se serve)
+                                    // window.location.reload();
+                                }
+                            });
+                        });
+                    })
+                    .catch(function(err) {
+                        console.warn('SW registration failed:', err);
+                    });
+            });
+        }
+    </script>
+
+    
+    <script>
+    (function() {
+        'use strict';
+
+        // ─── Configurazione ─────────────────────────────────────────────
+        // Sistema "user-earned": il banner appare SOLO se l'utente ha
+        // mostrato segnali di interesse. Tre trigger indipendenti, basta
+        // che UNO sia attivo per mostrare il banner (più 30s sulla pagina).
+        //
+        //   T1 — Visite multiple in giorni diversi (≥2 giorni distinti)
+        //   T2 — Sessione lunga (≥3 pageview + ≥2min sul sito)
+        //   T3 — Utente loggato (ha già investito = già engaged)
+        //
+        // Pagine escluse (mai banner): /register, /login, /admin/*, /recommend
+        // Desktop: mai mostrato (raramente installato da banner web).
+        // Dismiss: permanente (localStorage), una volta chiuso non torna.
+
+        var STORAGE_KEY      = 'cg_install_state_v1';
+        var ENGAGEMENT_KEY   = 'cg_engagement';
+        var VISIT_DAYS_KEY   = 'cg_visit_days_v1';   // lista giorni distinti
+        var MIN_DELAY_SEC    = 30;     // 30s minimi sulla pagina prima del banner
+        var MIN_TIME_SEC     = 120;    // T2: 2 min totali su sito (sessione)
+        var MIN_PAGEVIEWS    = 3;      // T2: 3 pageview minime (sessione)
+        var MIN_VISIT_DAYS   = 2;      // T1: 2+ giorni distinti di visita
+        var INITIAL_DELAY_MS = 5000;   // primo check ritardato di 5s (LCP safe)
+        var EXCLUDED_PATHS   = ['/register', '/login', '/recommend'];
+
+        // Flag utente loggato (da Jinja, valutato server-side a render time)
+        var IS_LOGGED_IN = false;
+
+        // ─── Detection device/browser ───────────────────────────────────
+        function isStandalone() {
+            return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                || window.navigator.standalone === true;
+        }
+        function isIOS() {
+            // Include iPad moderni che fingono di essere Mac (iPadOS 13+)
+            return /iPad|iPhone|iPod/.test(navigator.userAgent)
+                || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        }
+        function isSafari() {
+            var ua = navigator.userAgent;
+            return /Safari/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS/.test(ua);
+        }
+        function isChromeIOS() {
+            return /CriOS/.test(navigator.userAgent);
+        }
+        function isAndroid() {
+            return /Android/.test(navigator.userAgent);
+        }
+        function isMobile() {
+            // Pointer coarse = touch device. Width sotto 1024 = mobile/tablet.
+            // Più affidabile dell'UA sniffing (futureproof + iPad iOS13+).
+            try {
+                return window.matchMedia('(pointer: coarse)').matches
+                    && window.matchMedia('(max-width: 1024px)').matches;
+            } catch (e) {
+                // Fallback su UA se matchMedia non disponibile
+                return isIOS() || isAndroid();
+            }
+        }
+        function isExcludedPath() {
+            var p = window.location.pathname || '/';
+            // Match esatto su /register, /login, /recommend
+            if (EXCLUDED_PATHS.indexOf(p) !== -1) return true;
+            // Match prefisso /admin/*
+            if (p.indexOf('/admin') === 0) return true;
+            return false;
+        }
+
+        // ─── State management ───────────────────────────────────────────
+        function getState() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            } catch (e) { return {}; }
+        }
+        function setState(s) {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); }
+            catch (e) {}
+        }
+
+        // ─── T1: tracking giorni distinti di visita ─────────────────────
+        // Salva il giorno corrente (YYYY-MM-DD) in localStorage come array.
+        // Trigger attivo se ≥MIN_VISIT_DAYS giorni distinti.
+        function todayKey() {
+            var d = new Date();
+            var y = d.getFullYear();
+            var m = String(d.getMonth() + 1).padStart(2, '0');
+            var day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+        function recordVisitDay() {
+            try {
+                var raw = localStorage.getItem(VISIT_DAYS_KEY) || '[]';
+                var days = JSON.parse(raw);
+                if (!Array.isArray(days)) days = [];
+                var t = todayKey();
+                if (days.indexOf(t) === -1) {
+                    days.push(t);
+                    // Mantiene solo gli ultimi 60 giorni per non gonfiare localStorage
+                    if (days.length > 60) days = days.slice(-60);
+                    localStorage.setItem(VISIT_DAYS_KEY, JSON.stringify(days));
+                }
+            } catch (_) {}
+        }
+        function getDistinctVisitDays() {
+            try {
+                var raw = localStorage.getItem(VISIT_DAYS_KEY) || '[]';
+                var days = JSON.parse(raw);
+                return Array.isArray(days) ? days.length : 0;
+            } catch (_) { return 0; }
+        }
+
+        // ─── T2: engagement (sessione lunga) ────────────────────────────
+        function getEngagement() {
+            try {
+                var raw = sessionStorage.getItem(ENGAGEMENT_KEY) || '{}';
+                var e = JSON.parse(raw);
+                return { timeSec: e.timeSec || 0, pageviews: e.pageviews || 0 };
+            } catch (err) { return { timeSec: 0, pageviews: 0 }; }
+        }
+        function bumpPageview() {
+            var e = getEngagement();
+            e.pageviews = (e.pageviews || 0) + 1;
+            try { sessionStorage.setItem(ENGAGEMENT_KEY, JSON.stringify(e)); } catch (_) {}
+        }
+        function tickTime() {
+            // Conta solo se la tab è attiva
+            if (document.visibilityState !== 'visible') return;
+            var e = getEngagement();
+            e.timeSec = (e.timeSec || 0) + 1;
+            try { sessionStorage.setItem(ENGAGEMENT_KEY, JSON.stringify(e)); } catch (_) {}
+
+            // Trigger check ogni 10 secondi (non spam)
+            if (e.timeSec % 10 === 0) maybeShowBanner();
+        }
+
+        // ─── Valutazione: deve mostrare il banner? ──────────────────────
+        function shouldShow() {
+            // Esclusioni "hard" (mai mostrare in nessun caso)
+            if (isStandalone()) return false;
+            if (!isMobile()) return false;           // solo mobile
+            if (isExcludedPath()) return false;      // pagine escluse
+            if (isIOS() && isChromeIOS()) return false; // Chrome iOS non può installare
+
+            var s = getState();
+            if (s.installed) return false;
+            if (s.dismissed) return false;           // dismiss permanente
+
+            // Tempo minimo SU QUESTA pagina (30s) — sempre richiesto
+            var eng = getEngagement();
+            if (eng.timeSec < MIN_DELAY_SEC) return false;
+
+            // ── Trigger: basta UNO dei 3 ─────────────────────────────────
+            // T3: loggato
+            if (IS_LOGGED_IN) return true;
+
+            // T1: ≥2 giorni distinti
+            if (getDistinctVisitDays() >= MIN_VISIT_DAYS) return true;
+
+            // T2: sessione lunga (≥3 pageview + ≥2 min)
+            if (eng.pageviews >= MIN_PAGEVIEWS && eng.timeSec >= MIN_TIME_SEC) return true;
+
+            return false;
+        }
+
+        // ─── GA4 tracking (solo se consenso accettato) ──────────────────
+        function track(eventName, params) {
+            try {
+                if (typeof gtag === 'function' &&
+                    localStorage.getItem('cg_cookie_consent') === 'accepted') {
+                    gtag('event', eventName, Object.assign({
+                        event_category: 'pwa_install'
+                    }, params || {}));
+                }
+            } catch (_) {}
+        }
+
+        // ─── beforeinstallprompt (Android Chrome / Desktop Chrome/Edge) ─
+        var deferredPrompt = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+            // Blocca il prompt nativo automatico — lo gestiamo noi
+            e.preventDefault();
+            deferredPrompt = e;
+            track('install_prompt_available', { platform: 'native' });
+        });
+
+        // Quando l'app viene effettivamente installata
+        window.addEventListener('appinstalled', function() {
+            var s = getState();
+            s.installed = true;
+            setState(s);
+            hideBanner();
+            track('app_installed', {});
+            deferredPrompt = null;
+        });
+
+        // ─── Dismiss permanente ─────────────────────────────────────────
+        function dismissBanner(reason) {
+            var s = getState();
+            s.dismissed = true;
+            s.dismissedAt = Date.now();
+            s.dismissReason = reason || 'manual';
+            setState(s);
+            hideBanner();
+            hideIosGuide();
+            track('install_banner_dismissed', { reason: reason });
+        }
+
+        // ─── UI: show/hide ──────────────────────────────────────────────
+        var bannerShown = false;
+        function showBanner() {
+            if (bannerShown) return;
+            // Non sovrapporsi al cookie banner (ora iniettato dinamicamente:
+            // se l'elemento esiste nel DOM, è perché sta venendo mostrato).
+            if (document.getElementById('cookie-banner')) {
+                return;
+            }
+            var b = document.getElementById('install-banner');
+            if (!b) return;
+            b.classList.add('show');
+            bannerShown = true;
+
+            // Quale trigger ha attivato la mostra?
+            var trigger = 'unknown';
+            var eng = getEngagement();
+            if (IS_LOGGED_IN) trigger = 'logged_in';
+            else if (getDistinctVisitDays() >= MIN_VISIT_DAYS) trigger = 'multi_day_visit';
+            else if (eng.pageviews >= MIN_PAGEVIEWS && eng.timeSec >= MIN_TIME_SEC) trigger = 'long_session';
+
+            track('install_banner_shown', {
+                platform: isIOS() ? 'ios' : (isAndroid() ? 'android' : 'desktop'),
+                trigger: trigger,
+                visit_days: getDistinctVisitDays(),
+                pageviews: eng.pageviews,
+                time_sec: eng.timeSec
+            });
+        }
+        function hideBanner() {
+            var b = document.getElementById('install-banner');
+            if (b) b.classList.remove('show');
+            bannerShown = false;
+        }
+        function showIosGuide() {
+            var g = document.getElementById('ios-install-guide');
+            if (g) g.classList.add('show');
+            track('ios_guide_shown', {});
+        }
+        function hideIosGuide() {
+            var g = document.getElementById('ios-install-guide');
+            if (g) g.classList.remove('show');
+        }
+
+        function maybeShowBanner() {
+            if (bannerShown) return;
+            if (!shouldShow()) return;
+            showBanner();
+        }
+
+        // ─── Click handlers ─────────────────────────────────────────────
+        document.addEventListener('DOMContentLoaded', function() {
+            // ── Trigger conversioni post-registrazione ─────────────────────
+            // Il server redirecta su /profilo?registered=1 dopo registrazione.
+            // Spariamo l'evento UNA SOLA VOLTA su GA4 + Meta Pixel, poi
+            // puliamo la URL così reload non ritrigghera.
+            try {
+                var urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('registered') === '1') {
+                    if (typeof window.cgTrack === 'function') {
+                        // cgTrack mappa sign_up → CompleteRegistration su Pixel
+                        window.cgTrack('sign_up', { method: 'email' });
+                    }
+                    // Rimuovi il flag dalla URL senza ricaricare
+                    urlParams.delete('registered');
+                    var newUrl = window.location.pathname +
+                        (urlParams.toString() ? '?' + urlParams.toString() : '') +
+                        window.location.hash;
+                    history.replaceState(null, '', newUrl);
+                }
+            } catch (_) {}
+
+            var btnInstall = document.getElementById('install-btn-action');
+            var btnClose   = document.getElementById('install-btn-close');
+            var btnIosX    = document.getElementById('ios-guide-close');
+
+            if (btnInstall) {
+                btnInstall.addEventListener('click', function() {
+                    track('install_banner_clicked', {});
+
+                    // iOS Safari → mostra guida overlay
+                    if (isIOS() && isSafari()) {
+                        hideBanner();
+                        showIosGuide();
+                        return;
+                    }
+
+                    // Android/Desktop con prompt nativo disponibile (caso ideale)
+                    if (deferredPrompt) {
+                        deferredPrompt.prompt();
+                        deferredPrompt.userChoice.then(function(choice) {
+                            track('install_prompt_outcome', { outcome: choice.outcome });
+                            if (choice.outcome === 'accepted') {
+                                // L'evento appinstalled aggiornerà lo state
+                                hideBanner();
+                            } else {
+                                // Rifiutato → tratta come dismiss
+                                dismissBanner('rejected');
+                            }
+                            deferredPrompt = null;
+                        });
+                        return;
+                    }
+
+                    // Niente prompt disponibile su Chromium-based browser:
+                    // di solito significa modalità incognito o requisiti non soddisfatti.
+                    // Dirigliamolo alla pagina /installa con istruzioni manuali.
+                    if (isAndroid()) {
+                        // Android Chrome senza prompt → istruzione menu 3 puntini
+                        showFallbackHint('android');
+                    } else {
+                        // Desktop senza prompt → suggerisci icona barra indirizzi o /installa
+                        showFallbackHint('desktop');
+                    }
+                });
+            }
+
+            if (btnClose) {
+                btnClose.addEventListener('click', function() {
+                    dismissBanner('manual_close');
+                });
+            }
+
+            if (btnIosX) {
+                btnIosX.addEventListener('click', function() {
+                    hideIosGuide();
+                    dismissBanner('ios_guide_close');
+                });
+            }
+
+            // ─── Inizia tracking engagement ─────────────────────────────
+            bumpPageview();
+            recordVisitDay();    // T1: registra il giorno corrente per multi-day visit trigger
+            // setInterval(tickTime) ritardato di 5s: durante quei 5s la pagina
+            // resta CPU-idle, permettendo a Lighthouse di chiudere la finestra
+            // di misurazione LCP. Senza questo ritardo, il tick ogni 1s
+            // impediva i 5s consecutivi di idle che Lighthouse esige.
+            setTimeout(function() {
+                setInterval(tickTime, 1000);
+            }, 5000);
+
+            // Primo check dopo INITIAL_DELAY_MS, ma minimo 5s per stessa ragione
+            setTimeout(maybeShowBanner, Math.max(INITIAL_DELAY_MS, 5000));
+        });
+
+        // ─── Hint quando manca deferredPrompt (es. incognito) ───────────
+        function showFallbackHint(platform) {
+            hideBanner();
+            // Riusa l'overlay iOS riadattando il contenuto al volo
+            var guide = document.getElementById('ios-install-guide');
+            if (!guide) return;
+            var inner = guide.querySelector('.ios-guide-inner');
+            if (!inner) return;
+
+            var title = 'Per installare CosaGuardo';
+            var stepsHtml = '';
+
+            if (platform === 'android') {
+                stepsHtml =
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">1</div>' +
+                    '<div>Tocca i <strong>3 puntini</strong> in alto a destra di Chrome</div></div>' +
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">2</div>' +
+                    '<div>Tocca <strong>"Installa app"</strong> o <strong>"Aggiungi alla schermata Home"</strong></div></div>' +
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">3</div>' +
+                    '<div>Conferma con <strong>"Installa"</strong></div></div>' +
+                    '<p style="font-size:0.78rem;color:var(--muted);margin-top:14px;text-align:center;">' +
+                    'Suggerimento: in modalità incognito l\'installazione è disabilitata da Chrome.</p>';
+            } else {
+                stepsHtml =
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">1</div>' +
+                    '<div>Cerca l\'icona <strong>☐⬇</strong> nella barra degli indirizzi (a destra dell\'URL)</div></div>' +
+                    '<div class="ios-guide-step"><div class="ios-guide-step-num">2</div>' +
+                    '<div>Click sull\'icona, poi <strong>"Installa"</strong></div></div>' +
+                    '<p style="font-size:0.78rem;color:var(--muted);margin-top:14px;text-align:center;">' +
+                    'Se non vedi l\'icona, prova a chiudere la modalità incognito o usa Chrome/Edge in modalità normale.</p>';
+            }
+
+            inner.innerHTML =
+                '<button class="ios-guide-close" id="ios-guide-close" aria-label="Chiudi">×</button>' +
+                '<h3 class="ios-guide-title">' + title + '</h3>' +
+                stepsHtml;
+
+            // Riattacca il listener al nuovo bottone close
+            var newClose = inner.querySelector('#ios-guide-close');
+            if (newClose) {
+                newClose.addEventListener('click', function() {
+                    hideIosGuide();
+                    dismissBanner('fallback_hint_close');
+                });
+            }
+            guide.classList.add('show');
+            track('install_fallback_shown', { platform: platform });
+        }
+
+        // Esponi una funzione globale per forzare il banner da pagina /installa
+        window.cgShowInstallPrompt = function() {
+            if (isStandalone()) {
+                alert('CosaGuardo è già installata!');
+                return;
+            }
+            if (isIOS() && isSafari()) {
+                showIosGuide();
+                return;
+            }
+            if (isIOS() && isChromeIOS()) {
+                alert('Per installare CosaGuardo su iPhone devi usare Safari (non Chrome). Apri questo sito su Safari e riprova.');
+                return;
+            }
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then(function(choice) {
+                    track('install_prompt_outcome', { outcome: choice.outcome, source: 'install_page' });
+                    deferredPrompt = null;
+                });
+                return;
+            }
+            // Nessun prompt disponibile → guida fallback
+            if (isAndroid()) {
+                showFallbackHint('android');
+            } else {
+                showFallbackHint('desktop');
+            }
+        };
+    })();
+    </script>
+
+    <!-- ═══ QUICK SEARCH OVERLAY ═══════════════════════════════════════════
+         Lente nell'header → cerca film/serie e naviga diretto a /film/{id} o /serie/{id} -->
+    <div class="qs-overlay" id="qs-overlay" role="dialog" aria-label="Ricerca rapida" aria-hidden="true">
+        <div class="qs-panel">
+            <div class="qs-input-wrap">
+                <span class="qs-input-icon">
+                    <i data-lucide="search" style="width:20px;height:20px;stroke:currentColor;stroke-width:2;"></i>
+                </span>
+                <input type="text" id="qs-input" class="qs-input"
+                       placeholder="Cerca un film o una serie TV…"
+                       autocomplete="off" autocapitalize="off" spellcheck="false">
+                <button type="button" class="qs-input-close" id="qs-close" aria-label="Chiudi ricerca">
+                    <i data-lucide="x" style="width:18px;height:18px;stroke:currentColor;stroke-width:2;"></i>
+                </button>
+            </div>
+            <div class="qs-tabs" role="tablist">
+                <button type="button" class="qs-tab is-active" data-qs-tab="all"   role="tab">Tutti</button>
+                <button type="button" class="qs-tab"            data-qs-tab="movie" role="tab">Film</button>
+                <button type="button" class="qs-tab"            data-qs-tab="tv"    role="tab">Serie TV</button>
+            </div>
+            <div class="qs-results" id="qs-results" role="listbox"></div>
+        </div>
+    </div>
+
+    <script>
+    (function() {
+        var trigger = document.getElementById('qs-trigger');
+        var overlay = document.getElementById('qs-overlay');
+        var input   = document.getElementById('qs-input');
+        var closeBtn= document.getElementById('qs-close');
+        var results = document.getElementById('qs-results');
+        var tabs    = document.querySelectorAll('.qs-tab');
+        if (!trigger || !overlay || !input) return;
+
+        var currentTab = 'all';
+        var debounceTimer = null;
+        var lastQuery = '';
+        var lastReqId = 0;
+
+        function openOverlay() {
+            overlay.classList.add('is-open');
+            overlay.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            setTimeout(function() { input.focus(); }, 30);
+        }
+        function closeOverlay() {
+            overlay.classList.remove('is-open');
+            overlay.setAttribute('aria-hidden', 'true');
+            document.body.style.overflow = '';
+            input.value = '';
+            results.innerHTML = '';
+            lastQuery = '';
+        }
+
+        trigger.addEventListener('click', openOverlay);
+        closeBtn.addEventListener('click', closeOverlay);
+        // Click sul backdrop (overlay esterno al panel) chiude
+        overlay.addEventListener('click', function(e) {
+            if (e.target === overlay) closeOverlay();
+        });
+        // ESC chiude
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && overlay.classList.contains('is-open')) closeOverlay();
+        });
+
+        // Tabs
+        tabs.forEach(function(t) {
+            t.addEventListener('click', function() {
+                tabs.forEach(function(x) { x.classList.remove('is-active'); });
+                t.classList.add('is-active');
+                currentTab = t.getAttribute('data-qs-tab');
+                if (input.value.trim().length >= 2) doSearch(input.value.trim());
+            });
+        });
+
+        input.addEventListener('input', function() {
+            clearTimeout(debounceTimer);
+            var q = input.value.trim();
+            if (q.length < 2) {
+                results.innerHTML = '';
+                lastQuery = '';
+                return;
+            }
+            if (q === lastQuery) return;
+            debounceTimer = setTimeout(function() { doSearch(q); }, 180);
+        });
+
+        function doSearch(q) {
+            lastQuery = q;
+            var reqId = ++lastReqId;
+            results.innerHTML = '<div class="qs-loading">Cerco…</div>';
+
+            var fetches = [];
+            if (currentTab === 'all' || currentTab === 'movie') {
+                fetches.push(
+                    fetch('/search-fast?q=' + encodeURIComponent(q) + '&content_type=movie')
+                        .then(function(r) { return r.ok ? r.json() : []; })
+                        .then(function(arr) { return arr.map(function(x) { x._kind = 'movie'; return x; }); })
+                        .catch(function() { return []; })
+                );
+            }
+            if (currentTab === 'all' || currentTab === 'tv') {
+                fetches.push(
+                    fetch('/search-fast?q=' + encodeURIComponent(q) + '&content_type=tv')
+                        .then(function(r) { return r.ok ? r.json() : []; })
+                        .then(function(arr) { return arr.map(function(x) { x._kind = 'tv'; return x; }); })
+                        .catch(function() { return []; })
+                );
+            }
+
+            Promise.all(fetches).then(function(arrs) {
+                if (reqId !== lastReqId) return;  // risposta vecchia, ignora
+                var merged = [].concat.apply([], arrs);
+                // Riordina per _score discendente: film e serie si mescolano
+                // in base a popolarità+match (no più "tutti film, poi tutte serie").
+                merged.sort(function(a, b) {
+                    return (b._score || 0) - (a._score || 0);
+                });
+                merged = merged.slice(0, 12);
+                renderResults(merged, q);
+            });
+        }
+
+        function escHtml(s) {
+            return String(s || '').replace(/[&<>"']/g, function(c) {
+                return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+            });
+        }
+
+        function renderResults(items, query) {
+            if (!items || !items.length) {
+                results.innerHTML = '<div class="qs-empty">Nessun risultato per "' + escHtml(query) + '"</div>';
+                return;
+            }
+            var html = items.map(function(it) {
+                var displayTitle = it.display_title || it.title || '';
+                var rawTitle     = it.title || '';
+                var kind = it._kind === 'tv' ? 'tv' : 'movie';
+                var label = kind === 'tv' ? 'SERIE TV' : 'FILM';
+                // TV: campo "id" è tmdb. Movie: campo "tmdb_id" (potrebbe essere null se solo DB locale).
+                var directId = (kind === 'tv') ? (it.id || it.tv_id || '')
+                                               : (it.tmdb_id || '');
+                return '<a class="qs-result" ' +
+                       'data-kind="' + kind + '" ' +
+                       'data-title="' + escHtml(rawTitle) + '" ' +
+                       'data-direct-id="' + directId + '">' +
+                       '<span class="qs-result-type ' + kind + '">' + label + '</span>' +
+                       '<span class="qs-result-title">' + escHtml(displayTitle) + '</span>' +
+                       '</a>';
+            }).join('');
+            results.innerHTML = html;
+            results.querySelectorAll('.qs-result').forEach(function(el) {
+                el.addEventListener('click', onResultClick);
+            });
+        }
+
+        function onResultClick(e) {
+            e.preventDefault();
+            var el = e.currentTarget;
+            var kind = el.getAttribute('data-kind');
+            var directId = el.getAttribute('data-direct-id');
+            var title = el.getAttribute('data-title');
+            // Feedback visivo
+            el.style.opacity = '0.5';
+            el.style.pointerEvents = 'none';
+
+            // Se abbiamo gia il tmdb_id, naviga direttamente (no round-trip extra)
+            if (directId) {
+                var path = (kind === 'tv') ? '/serie/' : '/film/';
+                window.location.href = path + encodeURIComponent(directId);
+                return;
+            }
+            // Fallback: tmdb_id non disponibile (titolo da DB locale MovieLens senza match TMDb).
+            // Risolvi via endpoint server.
+            fetch('/tmdb-id?title=' + encodeURIComponent(title) + '&content_type=' + kind)
+                .then(function(r) { return r.ok ? r.json() : { tmdb_id: null }; })
+                .then(function(data) {
+                    if (data && data.tmdb_id) {
+                        var path = (kind === 'tv') ? '/serie/' : '/film/';
+                        window.location.href = path + encodeURIComponent(data.tmdb_id);
+                    } else {
+                        el.style.opacity = '1';
+                        el.style.pointerEvents = '';
+                        el.querySelector('.qs-result-title').textContent =
+                            'Impossibile aprire la scheda. Riprova.';
+                    }
+                })
+                .catch(function() {
+                    el.style.opacity = '1';
+                    el.style.pointerEvents = '';
+                });
+        }
+    })();
+    </script>
+
+    
+    <script>
+    (function () {
+        var trigger  = document.getElementById('cg-menu-trigger');
+        var drawer   = document.getElementById('cg-drawer');
+        var backdrop = document.getElementById('cg-drawer-backdrop');
+        var closeBtn = document.getElementById('cg-drawer-close');
+        if (!trigger || !drawer || !backdrop) return;
+
+        var lastFocus = null;
+
+        function openDrawer() {
+            lastFocus = document.activeElement;
+            backdrop.hidden = false;
+            // forza reflow così la transizione di opacità parte
+            void backdrop.offsetWidth;
+            drawer.classList.add('cg-open');
+            backdrop.classList.add('cg-open');
+            drawer.setAttribute('aria-hidden', 'false');
+            trigger.setAttribute('aria-expanded', 'true');
+            document.body.style.overflow = 'hidden';
+            if (closeBtn) closeBtn.focus();
+            document.addEventListener('keydown', onKeydown);
+        }
+
+        function closeDrawer() {
+            drawer.classList.remove('cg-open');
+            backdrop.classList.remove('cg-open');
+            drawer.setAttribute('aria-hidden', 'true');
+            trigger.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+            document.removeEventListener('keydown', onKeydown);
+            // nascondi il backdrop a fine transizione (evita click-blocking invisibile)
+            setTimeout(function () {
+                if (!drawer.classList.contains('cg-open')) backdrop.hidden = true;
+            }, 260);
+            if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+        }
+
+        function onKeydown(e) {
+            if (e.key === 'Escape' || e.key === 'Esc') closeDrawer();
+        }
+
+        trigger.addEventListener('click', openDrawer);
+        backdrop.addEventListener('click', closeDrawer);
+        if (closeBtn) closeBtn.addEventListener('click', closeDrawer);
+
+        // Click su un link: chiudi subito (la navigazione parte comunque).
+        drawer.querySelectorAll('a.cg-drawer-link').forEach(function (a) {
+            a.addEventListener('click', function () { closeDrawer(); });
+        });
+    })();
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google-site-verification" content="uYZwMn6jbUHt9NtAmb2Hm-yUNaFxn34INa2PDfpNeIM">
+    <meta name="msvalidate.01" content="116CC066785DEC4F54FDD670B8A9AD91" />
+
+    <!--Tradedoubler site verification 3484363-->
+
+    <!-- Google Analytics 4 — caricato solo dopo consenso cookie -->
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('consent', 'default', {
+            'analytics_storage': 'denied'
+        });
+
+        function loadGA4() {
+            if (document.getElementById('ga4-script')) return;
+            var s = document.createElement('script');
+            s.id = 'ga4-script';
+            s.async = true;
+            s.src = 'https://www.googletagmanager.com/gtag/js?id=G-HMNFXJ98H1';
+            document.head.appendChild(s);
+            gtag('js', new Date());
+            gtag('config', 'G-HMNFXJ98H1');
+            gtag('consent', 'update', {'analytics_storage': 'granted'});
+        }
+
+        // ── Meta Pixel (Facebook/Instagram) — DISATTIVATO ────────────────
+        // Snippet pronto per attivazione futura. Per riattivarlo:
+        //   1. Crea il dataset/pixel in Events Manager (servirà un account FB
+        //      attivo, eventualmente di una persona di fiducia che possa
+        //      condividerlo)
+        //   2. Sostituisci META_PIXEL_ID con l'ID (15-16 cifre)
+        //   3. Scommenta la chiamata loadMetaPixel() nel blocco "Carica
+        //      analytics se consenso già dato" e nel handler acceptCookies
+        // Per ora la campagna ads parte solo con GA4 + UTM, ottimizzata per
+        // Traffico (non Conversioni). Lo snippet è no-op finché l'ID non è
+        // numerico valido — quindi safe anche se accidentalmente caricato.
+        var META_PIXEL_ID = 'META_PIXEL_ID';  // ← sostituisci con il tuo ID quando avrai accesso
+
+        function loadMetaPixel() {
+            if (!META_PIXEL_ID || !/^\d{10,20}$/.test(META_PIXEL_ID)) return;
+            if (window.fbq) return;
+            !function(f,b,e,v,n,t,s)
+            {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+            if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+            n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t,s)}(window, document,'script',
+            'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('init', META_PIXEL_ID);
+            fbq('track', 'PageView');
+        }
+
+        // ── Microsoft Clarity (session recording, heatmap, scroll depth) ──
+        // Sostituisci CLARITY_PROJECT_ID con il tuo Project ID quando avrai
+        // creato il progetto su clarity.microsoft.com. È un codice alfanumerico
+        // breve (es. "abc1234567"). Finché è il placeholder, loadClarity è no-op.
+        // Costo: GRATIS, illimitato. Vedi: heatmap, registrazioni sessioni
+        // reali, rage click, dead click, scroll depth. Complementare a GA4
+        // (GA4 = "quanti e da dove", Clarity = "cosa fanno e dove si bloccano").
+        var CLARITY_PROJECT_ID = 'wqf6yajpcb';
+
+        function loadClarity() {
+            if (!CLARITY_PROJECT_ID || !/^[a-z0-9]{6,20}$/i.test(CLARITY_PROJECT_ID)) return;
+            if (!window.clarity) {
+                (function(c,l,a,r,i,t,y){
+                    c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+                    t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+                    y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+                })(window, document, "clarity", "script", CLARITY_PROJECT_ID);
+            }
+            // Segnale di consenso esplicito (Consent v2). NECESSARIO: dal 31/10/2025
+            // Clarity, per il traffico EEA (utenti IT), aspetta un segnale valido
+            // prima di mantenere i cookie di sessione. Caricare lo script NON basta:
+            // senza questo segnale ogni pagina prende un ID nuovo → sessioni
+            // frammentate (1 sessione per pagina). loadClarity() è chiamato solo in
+            // contesto già consentito, quindi qui il consenso è sempre "accepted".
+            //   analytics_Storage: granted → abilita _clck/_clsk = stitching sessioni
+            //   ad_Storage: denied → coerente con privacy policy (no cookie pubblicitari)
+            window.clarity('consentv2', {
+                ad_Storage: "denied",
+                analytics_Storage: "granted"
+            });
+        }
+
+        // ── Helper unificato per tracking conversioni su entrambe le piattaforme ─
+        // Esposto a window per chiamate da altri script (es. trigger registrazione).
+        window.cgTrack = function(eventName, params) {
+            try {
+                // GA4: nome eventi snake_case
+                if (typeof gtag === 'function' &&
+                    localStorage.getItem('cg_cookie_consent') === 'accepted') {
+                    gtag('event', eventName, params || {});
+                }
+                // Meta Pixel: nome eventi PascalCase. Mapping snake_case → standard event.
+                if (typeof fbq === 'function' &&
+                    localStorage.getItem('cg_cookie_consent') === 'accepted') {
+                    var pixelEvent = ({
+                        'sign_up':       'CompleteRegistration',
+                        'login':         'Lead',
+                        'search':        'Search',
+                        'view_content':  'ViewContent',
+                    })[eventName];
+                    if (pixelEvent) {
+                        fbq('track', pixelEvent, params || {});
+                    }
+                }
+            } catch (_) {}
+        };
+
+        // Carica analytics se consenso già dato
+        if (localStorage.getItem('cg_cookie_consent') === 'accepted') {
+            loadGA4();
+            loadMetaPixel();
+            loadClarity();
+        }
+    </script>
+    <title>Migliori film thriller su Netflix | CosaGuardo</title>
+
+    
+    <meta name="description" content="CosaGuardo — Scopri film e serie TV perfetti per te. Consigli personalizzati basati sui tuoi gusti.">
+    <meta name="theme-color" content="#0b1020">
+    
+    <meta name="robots" content="index, follow">
+
+    
+    <meta property="og:site_name" content="CosaGuardo">
+    <meta property="og:title" content="CosaGuardo — Scopri cosa guardare">
+    <meta property="og:description" content="Consigli personalizzati su film e serie TV in base ai tuoi gusti.">
+    <meta property="og:image" content="https://cosaguardo.com/static/og-default.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://cosaguardo.com">
+    <meta property="og:locale" content="it_IT">
+
+    
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="CosaGuardo">
+    <meta name="twitter:description" content="Consigli personalizzati su film e serie TV.">
+    <meta name="twitter:image" content="https://cosaguardo.com/static/og-default.jpg">
+
+    
+    <link rel="manifest" href="/static/manifest.webmanifest">
+    <meta name="application-name" content="CosaGuardo">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CosaGuardo">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="msapplication-TileColor" content="#0b1020">
+
+    <link rel="stylesheet" href="https://cosaguardo.com/static/css/components.css?v=1">
+
+    <link rel="stylesheet" href="https://cosaguardo.com/static/css/style.css?v=18">
+    <link rel="icon" type="image/x-icon" href="https://cosaguardo.com/static/favicon.ico">
+    <link rel="icon" type="image/svg+xml" href="https://cosaguardo.com/static/icon.svg">
+    <link rel="apple-touch-icon" href="https://cosaguardo.com/static/apple-touch-icon.png">
+
+    
+    <link rel="preconnect" href="https://image.tmdb.org" crossorigin>
+    <link rel="dns-prefetch" href="https://image.tmdb.org">
+    
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    
+    <link rel="preconnect" href="https://www.youtube.com">
+    <link rel="preconnect" href="https://i.ytimg.com">
+    
+    <style>
+        /* Placeholder per <i data-lucide> prima che lucide.js renderizzi i veri SVG.
+           Riserva lo spazio (no layout shift, Core Web Vital CLS) fino al render.
+           NB: i siti che hanno style="width:Xpx;height:Xpx" inline su <i> vincono
+           sopra questa regola (specificity), quindi non rompo i casi che già
+           dimensionano esplicitamente l'icona. */
+        i[data-lucide]:empty {
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            vertical-align: -0.125em;
+        }
+    </style>
+
+    
+<meta name="description" content="I migliori film thriller disponibili su Netflix oggi in Italia. Classifica aggiornata in base alla popolarità e ai voti del pubblico.">
+<meta name="cg-content-type" content="best">
+<meta property="og:title" content="Migliori film thriller su Netflix | CosaGuardo">
+<meta property="og:description" content="I migliori film thriller disponibili su Netflix oggi in Italia. Classifica aggiornata in base alla popolarità e ai voti del pubblico.">
+<meta property="og:image" content="https://image.tmdb.org/t/p/original/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg">
+<style>
+    /* ──────────────────────────────────────────────────────────────────
+       PAGINA "/migliori-..." — autocontenuta
+       ────────────────────────────────────────────────────────────── */
+
+    .best-header {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 16px;
+        padding: 18px 0 16px;
+        margin-bottom: 16px;
+        border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .best-platform-badge {
+        width: 64px; height: 64px;
+        border-radius: 14px;
+        overflow: hidden;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        flex-shrink: 0;
+    }
+    .best-platform-badge img {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .best-header-text h1 {
+        margin: 0 0 4px;
+        font-size: 26px;
+        line-height: 1.1;
+        background: linear-gradient(90deg, #ffffff, #93c5fd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    .best-header-text p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--muted);
+    }
+    .best-cta {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, #2563eb, #7c3aed);
+        color: #fff !important;
+        font-weight: 700;
+        font-size: 12px;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    /* TOP 5 con descrizione editoriale */
+    .best-section-title {
+        font-size: 13px;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: #93c5fd;
+        margin: 8px 0 12px;
+    }
+    .best-top5 {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 14px;
+        margin-bottom: 28px;
+    }
+    .best-top5-item {
+        display: grid;
+        grid-template-columns: 100px 1fr;
+        gap: 14px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid rgba(255,255,255,0.06);
+        border-radius: 12px;
+        padding: 12px;
+        text-decoration: none;
+        color: var(--text);
+        transition: 0.18s ease;
+        position: relative;
+    }
+    .best-top5-item:hover {
+        background: rgba(255,255,255,0.06);
+        border-color: rgba(110,168,254,0.25);
+        transform: translateY(-1px);
+    }
+    .best-top5-rank {
+        position: absolute;
+        top: 8px; left: 8px;
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        color: #000;
+        font-weight: 900;
+        font-size: 12px;
+        width: 24px; height: 24px;
+        border-radius: 6px;
+        display: grid; place-items: center;
+        z-index: 2;
+    }
+    .best-top5-poster {
+        position: relative;
+        aspect-ratio: 2/3;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #0d1224;
+    }
+    .best-top5-poster img {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+    }
+    .best-top5-content { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+    .best-top5-title {
+        font-size: 16px;
+        font-weight: 700;
+        margin: 0 0 4px;
+        line-height: 1.15;
+    }
+    .best-top5-meta {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+    }
+    .best-top5-rating {
+        color: #fcd34d;
+        font-weight: 700;
+    }
+    .best-top5-overview {
+        font-size: 13px;
+        line-height: 1.45;
+        color: var(--muted);
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+    }
+
+    /* GRIGLIA "altri" — riusa pattern .pf-grid */
+    .best-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 14px;
+    }
+    .bg-card {
+        position: relative;
+        aspect-ratio: 2/3;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #0d1224;
+        text-decoration: none;
+        display: block;
+        transition: 0.18s ease;
+    }
+    .bg-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.4);
+    }
+    .bg-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .bg-card-overlay {
+        position: absolute;
+        inset: auto 0 0 0;
+        padding: 22px 8px 8px;
+        background: linear-gradient(to top, rgba(0,0,0,0.94) 0%, rgba(0,0,0,0) 100%);
+        pointer-events: none;
+    }
+    .bg-card-rating {
+        font-size: 9px;
+        font-weight: 700;
+        color: #fcd34d;
+        margin-bottom: 3px;
+    }
+    .bg-card-title {
+        color: #fff;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.2;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+
+    /* LINKING INTERNO */
+    .best-related {
+        margin-top: 36px;
+        padding-top: 24px;
+        border-top: 1px solid rgba(255,255,255,0.07);
+    }
+    .best-related-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin: 0 0 10px;
+        color: var(--text);
+    }
+    .best-related-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 18px;
+    }
+    .best-chip {
+        display: inline-block;
+        padding: 7px 14px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.08);
+        border-radius: 999px;
+        color: var(--text);
+        font-size: 0.85rem;
+        text-decoration: none;
+        transition: 0.15s ease;
+    }
+    .best-chip:hover {
+        background: rgba(110,168,254,0.12);
+        border-color: rgba(110,168,254,0.4);
+        color: #cfe2ff;
+    }
+
+    .best-empty {
+        text-align: center;
+        padding: 48px 20px;
+        color: var(--muted);
+    }
+    .best-empty h2 { font-size: 18px; margin: 0 0 6px; color: var(--text); }
+    .best-empty p { font-size: 13px; margin: 0 0 12px; }
+
+    /* MOBILE */
+    @media (max-width: 760px) {
+        .best-header {
+            grid-template-columns: auto 1fr;
+            grid-template-rows: auto auto;
+            gap: 8px 12px;
+            padding: 12px 0;
+        }
+        .best-platform-badge {
+            width: 48px; height: 48px;
+            border-radius: 11px;
+        }
+        .best-header-text h1 { font-size: 18px; line-height: 1.1; }
+        .best-header-text p { font-size: 11px; }
+        .best-cta {
+            grid-column: 1 / -1;
+            justify-content: center;
+            padding: 8px 14px;
+            font-size: 11px;
+        }
+        .best-top5-item {
+            grid-template-columns: 80px 1fr;
+            gap: 10px;
+            padding: 10px;
+        }
+        .best-top5-title { font-size: 14px; }
+        .best-top5-overview {
+            font-size: 12px;
+            -webkit-line-clamp: 2;
+        }
+        .best-top5-meta { font-size: 11px; gap: 8px; }
+        .best-grid {
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+    }
+</style>
+
+</head>
+<body>
+    
+    <div id="cg-nav-progress" aria-hidden="true"></div>
+    <style>
+        #cg-nav-progress {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            width: 0%;
+            background: linear-gradient(90deg, #6ea8fe 0%, #a78bfa 100%);
+            box-shadow: 0 0 8px rgba(167, 139, 250, 0.6);
+            z-index: 99999;
+            opacity: 0;
+            transition: width 0.25s ease-out, opacity 0.2s ease-out;
+            pointer-events: none;
+            border-radius: 0 2px 2px 0;
+        }
+        #cg-nav-progress.cg-progress-active {
+            opacity: 1;
+        }
+        /* Riduci motion se l'utente preferisce (a11y) */
+        @media (prefers-reduced-motion: reduce) {
+            #cg-nav-progress { transition: opacity 0.15s linear; }
+        }
+    </style>
+    <script>window.__CG_LOGGED_IN = false;</script>
+    <script src="https://cosaguardo.com/static/js/base.js?v=1" defer></script>
+    
+
+    <div class="site-wrapper">
+        <header class="site-header">
+            <div class="container header-inner">
+                <div class="header-left">
+                <a href="/" class="brand">
+                    <svg viewBox="0 0 104 112" xmlns="http://www.w3.org/2000/svg" class="brand-icon" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="navGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#6ea8fe"/>
+                                <stop offset="100%" style="stop-color:#a78bfa"/>
+                            </linearGradient>
+                            <linearGradient id="navBg" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#1a3060"/>
+                                <stop offset="100%" style="stop-color:#28185a"/>
+                            </linearGradient>
+                        </defs>
+                        <rect x="4" y="8" width="96" height="96" rx="26" fill="url(#navBg)"/>
+                        <rect x="4" y="8" width="96" height="96" rx="26" fill="none" stroke="url(#navGrad)" stroke-width="1.5" opacity="0.45"/>
+                        <path d="M 66 24 A 30 30 0 1 0 66 88" fill="none" stroke="url(#navGrad)" stroke-width="13" stroke-linecap="round"/>
+                        <polygon points="65,38 65,74 86,56" fill="url(#navGrad)"/>
+                    </svg>
+                    <span class="brand-text">CosaGuardo</span>
+                </a>
+
+                
+                <button type="button" class="cg-menu-trigger" id="cg-menu-trigger"
+                        aria-label="Apri menu di navigazione" aria-expanded="false"
+                        aria-controls="cg-drawer">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    <span class="cg-menu-trigger-label">Menu</span>
+                </button>
+                </div>
+
+                <nav class="nav">
+                    <div class="nav-links">
+                        <button type="button" class="qs-trigger" id="qs-trigger" aria-label="Cerca film o serie TV">
+                            
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            <span class="qs-trigger-label">Cerca</span>
+                        </button>
+                        <a href="/" class="nav-link-item" aria-label="Home">
+                            <span class="nav-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                            </span>
+                            <span class="nav-text">Home</span>
+                        </a>
+
+                        <a href="/scopri" class="nav-link-item" aria-label="Scopri">
+                            <span class="nav-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+                            </span>
+                            <span class="nav-text">Scopri</span>
+                        </a>
+
+                        
+                        <a href="/la-mia-raccolta" class="nav-link-item" aria-label="La mia raccolta">
+                            <span class="nav-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+                            </span>
+                            <span class="nav-text">La mia raccolta</span>
+                        </a>
+                        
+                        <a href="/login" class="nav-link-item nav-link-cta" aria-label="Accedi">
+                            <span class="nav-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                            </span>
+                            <span class="nav-text">Accedi</span>
+                        </a>
+                        
+                    </div>
+                </nav>
+            </div>
+        </header>
+
+        
+        <div class="cg-drawer-backdrop" id="cg-drawer-backdrop" hidden></div>
+        <aside class="cg-drawer" id="cg-drawer" role="dialog" aria-modal="true"
+               aria-label="Menu di navigazione" aria-hidden="true">
+            <div class="cg-drawer-head">
+                <span class="cg-drawer-title">Esplora CosaGuardo</span>
+                <button type="button" class="cg-drawer-close" id="cg-drawer-close" aria-label="Chiudi menu">×</button>
+            </div>
+
+            <nav class="cg-drawer-nav" aria-label="Sezioni del sito">
+                <a href="/" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Home</strong><small>Trova consigli su misura</small></span>
+                </a>
+                <a href="/scopri" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Scopri</strong><small>Sfoglia per genere e umore</small></span>
+                </a>
+                <a href="/dove-vedere" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="13" rx="2"/><polyline points="8 3 12 7 16 3"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Dove vedere</strong><small>Su quale piattaforma è disponibile</small></span>
+                </a>
+                <a href="/migliori" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>I migliori</strong><small>Le classifiche per genere e piattaforma</small></span>
+                </a>
+                <a href="/cosa-serve" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Cosa serve per guardare</strong><small>TV, dispositivi e accessori consigliati</small></span>
+                </a>
+                <a href="/la-mia-raccolta" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>La mia raccolta</strong><small>Titoli salvati e serie tracciate</small></span>
+                </a>
+                <a href="/come-funziona" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Come funziona</strong><small>Cos'è CosaGuardo in 3 passi</small></span>
+                </a>
+
+                <div class="cg-drawer-sep"></div>
+
+                
+                <a href="/login" class="cg-drawer-link cg-drawer-link--cta">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Accedi o registrati</strong><small>Gratis, sblocca salvataggi e avvisi</small></span>
+                </a>
+                
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <div class="container">
+                
+<div class="page page-best">
+
+    <header class="best-header">
+        
+        <div class="best-platform-badge">
+            <img src="https://image.tmdb.org/t/p/original/pbpMk2JmcoNnQwx5JGpXngfoWtp.jpg" alt="Logo Netflix" width="64" height="64">
+        </div>
+        
+        <div class="best-header-text">
+            <h1>I migliori film thriller su Netflix</h1>
+            <p>Classifica aggiornata in base a popolarità e voti del pubblico.</p>
+        </div>
+        
+        <a href="https://www.netflix.com/it/"
+           class="best-cta"
+           target="_blank"
+           rel="nofollow noopener noreferrer">
+            <i data-lucide="external-link" style="width:13px;height:13px;stroke:currentColor;stroke-width:2;"></i>
+            Vai a Netflix
+        </a>
+        
+    </header>
+
+    
+
+    <!-- TOP 5 con descrizione -->
+    
+    <h2 class="best-section-title">⭐ Top 5</h2>
+    <div class="best-top5">
+        
+        <a href="/film/1318447"
+           class="best-top5-item">
+            <div class="best-top5-rank">1</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/qvdg7McYoHmCyw1B35px9fWU1ZF.jpg" alt="Apex" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">Apex</h3>
+                <div class="best-top5-meta">
+                    <span>2026</span>
+                    
+                    <span class="best-top5-rating">★ 6.8</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Durante un&#39;avventura solitaria nella natura selvaggia australiana, una donna in lutto si ritrova coinvolta in un gioco perverso e diventa la preda di un assassino astuto.</p>
+                
+            </div>
+        </a>
+        
+        <a href="/film/1291608"
+           class="best-top5-item">
+            <div class="best-top5-rank">2</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/8FHOtUpNIk5ZPEay2N2EY5lrxkv.jpg" alt="Dhurandhar" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">Dhurandhar</h3>
+                <div class="best-top5-meta">
+                    <span>2025</span>
+                    
+                    <span class="best-top5-rating">★ 7.2</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Un misterioso viaggiatore scivola nel cuore del sottobosco criminale di Karachi e scala i ranghi con letale precisione, col solo scopo di fare a pezzi dall&#39;interno il famigerato connubio tra l&#39;ISI e gli inferi della malavita.</p>
+                
+            </div>
+        </a>
+        
+        <a href="/film/1265609"
+           class="best-top5-item">
+            <div class="best-top5-rank">3</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/30t19PpvZ3GVw9nRsn7TjZh5qEr.jpg" alt="War Machine" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">War Machine</h3>
+                <div class="best-top5-meta">
+                    <span>2026</span>
+                    
+                    <span class="best-top5-rating">★ 7.4</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Durante un&#39;ultima ed estenuante missione dell&#39;addestramento dei Ranger, un geniere deve guidare la sua unità contro una gigantesca macchina assassina proveniente da un altro mondo.</p>
+                
+            </div>
+        </a>
+        
+        <a href="/film/680"
+           class="best-top5-item">
+            <div class="best-top5-rank">4</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/hOpN58hkQGZph5LHhyRrryy1hzF.jpg" alt="Pulp Fiction" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">Pulp Fiction</h3>
+                <div class="best-top5-meta">
+                    <span>1994</span>
+                    
+                    <span class="best-top5-rating">★ 8.5</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Le vite di due gangster, di un pugile e della moglie di un potente boss della malavita finiscono per intrecciarsi in una paradossale storia di violenza, vendetta e redenzione.</p>
+                
+            </div>
+        </a>
+        
+        <a href="/film/1306368"
+           class="best-top5-item">
+            <div class="best-top5-rank">5</div>
+            <div class="best-top5-poster">
+                <img src="https://image.tmdb.org/t/p/w342/oY5JK04G4MzyhlXOQQyXaflEdB6.jpg" alt="The Rip - Soldi sporchi" loading="lazy">
+            </div>
+            <div class="best-top5-content">
+                <h3 class="best-top5-title">The Rip - Soldi sporchi</h3>
+                <div class="best-top5-meta">
+                    <span>2026</span>
+                    
+                    <span class="best-top5-rating">★ 7.1</span>
+                    
+                </div>
+                
+                <p class="best-top5-overview">Una squadra di poliziotti di Miami scopre milioni di dollari in contanti in un nascondiglio fatiscente: la fiducia vacilla e tutti e tutto sono messi in discussione.</p>
+                
+            </div>
+        </a>
+        
+    </div>
+    
+
+    <!-- GRIGLIA "altri" -->
+    
+    <h2 class="best-section-title">🎬 Altri titoli consigliati</h2>
+    <div class="best-grid">
+        
+        <a href="/film/550"
+           class="bg-card"
+           title="Fight Club">
+            <img src="https://image.tmdb.org/t/p/w342/rtNLQ8HbPElzEfrHjrzSr07prKT.jpg" alt="Fight Club" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 8.4</div>
+                
+                <div class="bg-card-title">Fight Club</div>
+            </div>
+        </a>
+        
+        <a href="/film/603692"
+           class="bg-card"
+           title="John Wick 4">
+            <img src="https://image.tmdb.org/t/p/w342/uD6w5fB04cgYye6G8qJ7gPtDZFb.jpg" alt="John Wick 4" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.7</div>
+                
+                <div class="bg-card-title">John Wick 4</div>
+            </div>
+        </a>
+        
+        <a href="/film/138843"
+           class="bg-card"
+           title="L&#39;evocazione - The Conjuring">
+            <img src="https://image.tmdb.org/t/p/w342/inBZ5Lm0tUNSgMGZZ7f9vfHNKI2.jpg" alt="L&#39;evocazione - The Conjuring" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.5</div>
+                
+                <div class="bg-card-title">L&#39;evocazione - The Conjuring</div>
+            </div>
+        </a>
+        
+        <a href="/film/156022"
+           class="bg-card"
+           title="The Equalizer - Il vendicatore">
+            <img src="https://image.tmdb.org/t/p/w342/jowKJEQpeFnK1ihP3uYUD8TuESn.jpg" alt="The Equalizer - Il vendicatore" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.3</div>
+                
+                <div class="bg-card-title">The Equalizer - Il vendicatore</div>
+            </div>
+        </a>
+        
+        <a href="/film/1100782"
+           class="bg-card"
+           title="Smile 2">
+            <img src="https://image.tmdb.org/t/p/w342/z4H7lTRezsXaEjuzWmT1ztuEsb4.jpg" alt="Smile 2" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.6</div>
+                
+                <div class="bg-card-title">Smile 2</div>
+            </div>
+        </a>
+        
+        <a href="/film/1290417"
+           class="bg-card"
+           title="Thrash – Furia dall&#39;oceano">
+            <img src="https://image.tmdb.org/t/p/w342/eDb6dYwPCkqR2sk3KYJIhbqc5hq.jpg" alt="Thrash – Furia dall&#39;oceano" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.1</div>
+                
+                <div class="bg-card-title">Thrash – Furia dall&#39;oceano</div>
+            </div>
+        </a>
+        
+        <a href="/film/1268127"
+           class="bg-card"
+           title="Humint">
+            <img src="https://image.tmdb.org/t/p/w342/f7sCSLEPRfV2fWQ0RYOtHhnHXuG.jpg" alt="Humint" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.4</div>
+                
+                <div class="bg-card-title">Humint</div>
+            </div>
+        </a>
+        
+        <a href="/film/812583"
+           class="bg-card"
+           title="Wake Up Dead Man - Knives Out">
+            <img src="https://image.tmdb.org/t/p/w342/db8j0xU82lzWKX0SXrPY5tFrzwA.jpg" alt="Wake Up Dead Man - Knives Out" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.2</div>
+                
+                <div class="bg-card-title">Wake Up Dead Man - Knives Out</div>
+            </div>
+        </a>
+        
+        <a href="/film/16869"
+           class="bg-card"
+           title="Bastardi senza gloria">
+            <img src="https://image.tmdb.org/t/p/w342/aa1jLbxTTuA6o5ucHoZh2khwNSo.jpg" alt="Bastardi senza gloria" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 8.2</div>
+                
+                <div class="bg-card-title">Bastardi senza gloria</div>
+            </div>
+        </a>
+        
+        <a href="/film/245891"
+           class="bg-card"
+           title="John Wick">
+            <img src="https://image.tmdb.org/t/p/w342/m68CfvthxBis1EP4qkcrx8tVumU.jpg" alt="John Wick" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.5</div>
+                
+                <div class="bg-card-title">John Wick</div>
+            </div>
+        </a>
+        
+        <a href="/film/762441"
+           class="bg-card"
+           title="A Quiet Place - Giorno 1">
+            <img src="https://image.tmdb.org/t/p/w342/2VxStGPKuixAEdF2imhW2zcu0hD.jpg" alt="A Quiet Place - Giorno 1" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.6</div>
+                
+                <div class="bg-card-title">A Quiet Place - Giorno 1</div>
+            </div>
+        </a>
+        
+        <a href="/film/324552"
+           class="bg-card"
+           title="John Wick - Capitolo 2">
+            <img src="https://image.tmdb.org/t/p/w342/v7VwbTCq6z3r5V0mtFruUz5Pts9.jpg" alt="John Wick - Capitolo 2" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.3</div>
+                
+                <div class="bg-card-title">John Wick - Capitolo 2</div>
+            </div>
+        </a>
+        
+        <a href="/film/135397"
+           class="bg-card"
+           title="Jurassic World">
+            <img src="https://image.tmdb.org/t/p/w342/rd7Baw7ne9zFOnyD0XZvc5fkC9A.jpg" alt="Jurassic World" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.7</div>
+                
+                <div class="bg-card-title">Jurassic World</div>
+            </div>
+        </a>
+        
+        <a href="/film/1359"
+           class="bg-card"
+           title="American Psycho">
+            <img src="https://image.tmdb.org/t/p/w342/lSW7y5wPud83gwjx5Upsyb8Zq5u.jpg" alt="American Psycho" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.4</div>
+                
+                <div class="bg-card-title">American Psycho</div>
+            </div>
+        </a>
+        
+        <a href="/film/161"
+           class="bg-card"
+           title="Ocean&#39;s Eleven - Fate il vostro gioco">
+            <img src="https://image.tmdb.org/t/p/w342/9245MBG1BvwnVkt5F5MSXyQrbYT.jpg" alt="Ocean&#39;s Eleven - Fate il vostro gioco" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.5</div>
+                
+                <div class="bg-card-title">Ocean&#39;s Eleven - Fate il vostro gioco</div>
+            </div>
+        </a>
+        
+        <a href="/film/2501"
+           class="bg-card"
+           title="The Bourne Identity">
+            <img src="https://image.tmdb.org/t/p/w342/gj3RcvhQR1JrWOFBKFhojFrO7UG.jpg" alt="The Bourne Identity" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.5</div>
+                
+                <div class="bg-card-title">The Bourne Identity</div>
+            </div>
+        </a>
+        
+        <a href="/film/604"
+           class="bg-card"
+           title="Matrix Reloaded">
+            <img src="https://image.tmdb.org/t/p/w342/uWkkhMhJKBsjPkbPcRm4nlYUZxH.jpg" alt="Matrix Reloaded" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.1</div>
+                
+                <div class="bg-card-title">Matrix Reloaded</div>
+            </div>
+        </a>
+        
+        <a href="/film/458156"
+           class="bg-card"
+           title="John Wick 3 - Parabellum">
+            <img src="https://image.tmdb.org/t/p/w342/bqiVhCJPxOZSRysyE2QoV48Euaf.jpg" alt="John Wick 3 - Parabellum" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.4</div>
+                
+                <div class="bg-card-title">John Wick 3 - Parabellum</div>
+            </div>
+        </a>
+        
+        <a href="/film/6479"
+           class="bg-card"
+           title="Io sono leggenda">
+            <img src="https://image.tmdb.org/t/p/w342/lrHsksAln0IxYFfZVgW6iRTaUsi.jpg" alt="Io sono leggenda" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.2</div>
+                
+                <div class="bg-card-title">Io sono leggenda</div>
+            </div>
+        </a>
+        
+        <a href="/film/346364"
+           class="bg-card"
+           title="It - Capitolo uno">
+            <img src="https://image.tmdb.org/t/p/w342/ru0gDnxKzBjzrPxfRyZIuse9hfu.jpg" alt="It - Capitolo uno" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.2</div>
+                
+                <div class="bg-card-title">It - Capitolo uno</div>
+            </div>
+        </a>
+        
+        <a href="/film/474350"
+           class="bg-card"
+           title="It - Capitolo due">
+            <img src="https://image.tmdb.org/t/p/w342/g9ucHd1TgS2k3x0n9EVIaivzueN.jpg" alt="It - Capitolo due" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.8</div>
+                
+                <div class="bg-card-title">It - Capitolo due</div>
+            </div>
+        </a>
+        
+        <a href="/film/7485"
+           class="bg-card"
+           title="Shooter">
+            <img src="https://image.tmdb.org/t/p/w342/lDNVT4v9LoFvhE1A62gfgj6x6E0.jpg" alt="Shooter" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 7.1</div>
+                
+                <div class="bg-card-title">Shooter</div>
+            </div>
+        </a>
+        
+        <a href="/film/351286"
+           class="bg-card"
+           title="Jurassic World – Il regno distrutto">
+            <img src="https://image.tmdb.org/t/p/w342/4iGHioQuva4Q3KkeYNgohMP9kaR.jpg" alt="Jurassic World – Il regno distrutto" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.5</div>
+                
+                <div class="bg-card-title">Jurassic World – Il regno distrutto</div>
+            </div>
+        </a>
+        
+        <a href="/film/291805"
+           class="bg-card"
+           title="Now You See Me 2">
+            <img src="https://image.tmdb.org/t/p/w342/j1rBqVglO6wfYzPgQlUFVg25XSP.jpg" alt="Now You See Me 2" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.8</div>
+                
+                <div class="bg-card-title">Now You See Me 2</div>
+            </div>
+        </a>
+        
+        <a href="/film/274855"
+           class="bg-card"
+           title="Geostorm">
+            <img src="https://image.tmdb.org/t/p/w342/ws3z8UpKkZpfEuAo5QE1mtP1EPL.jpg" alt="Geostorm" loading="lazy">
+            <div class="bg-card-overlay">
+                
+                <div class="bg-card-rating">★ 6.1</div>
+                
+                <div class="bg-card-title">Geostorm</div>
+            </div>
+        </a>
+        
+    </div>
+    
+
+    
+
+    <!-- LINKING INTERNO -->
+    <section class="best-related">
+        
+        <h3 class="best-related-title">Esplora altri generi su Netflix</h3>
+        <div class="best-related-row">
+            
+            <a href="/migliori-film-comedy-su-netflix" class="best-chip">
+                Film commedia
+            </a>
+            
+            <a href="/migliori-film-drammatici-su-netflix" class="best-chip">
+                Film drammatici
+            </a>
+            
+            <a href="/migliori-film-azione-su-netflix" class="best-chip">
+                Film d&#39;azione
+            </a>
+            
+            <a href="/migliori-film-fantasy-su-netflix" class="best-chip">
+                Film fantasy
+            </a>
+            
+            <a href="/migliori-film-horror-su-netflix" class="best-chip">
+                Film horror
+            </a>
+            
+        </div>
+        
+
+        
+        <h3 class="best-related-title">
+            I migliori film thriller
+            su altre piattaforme
+        </h3>
+        <div class="best-related-row">
+            
+            <a href="/migliori-film-thriller-su-prime-video" class="best-chip">Prime Video</a>
+            
+            <a href="/migliori-film-thriller-su-disney-plus" class="best-chip">Disney+</a>
+            
+            <a href="/migliori-film-thriller-su-apple-tv-plus" class="best-chip">Apple TV+</a>
+            
+            <a href="/migliori-film-thriller-su-paramount-plus" class="best-chip">Paramount+</a>
+            
+        </div>
+        
+
+        <h3 class="best-related-title">Vedi anche</h3>
+        <div class="best-related-row">
+            <a href="/piattaforma/netflix" class="best-chip">
+                Cosa vedere su Netflix
+            </a>
+            <a href="/migliori" class="best-chip">Tutte le classifiche</a>
+        </div>
+    </section>
+
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    if (window.lucide) lucide.createIcons();
+});
+</script>
+
+            </div>
+        </main>
+
+        <footer class="site-footer">
+            <div class="container footer-inner">
+                <div>
+                    © 2026 CosaGuardo — Scopri cosa guardare in base ai tuoi gusti.
+                </div>
+                <div class="footer-links">
+                    <a href="/">Homepage</a>
+                    <a href="/come-funziona">Come funziona</a>
+                    <a href="/installa">Installa app</a>
+                    <a href="/privacy">Privacy Policy</a>
+                    <a href="/termini">Termini di servizio</a>
+                    <button onclick="resetCookieConsent()" class="footer-cookie-btn">Cookie</button>
+                </div>
+            </div>
+        </footer>
+
+        
+
+        <!-- INSTALL PWA BANNER -->
+        <div id="install-banner" role="dialog" aria-label="Installa l'app">
+            <div class="install-banner-inner">
+                <div class="install-banner-icon" aria-hidden="true"></div>
+                <div class="install-banner-text">
+                    <strong>📲 Installa CosaGuardo come app</strong>
+                    <span>per ricevere subito consigli</span>
+                </div>
+                <div class="install-banner-actions">
+                    <button id="install-btn-action" class="install-btn install-btn--primary">Installa</button>
+                    <button id="install-btn-close" class="install-btn--close" aria-label="Chiudi">×</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- iOS INSTALL GUIDE (overlay con istruzioni passo-passo) -->
+        <div id="ios-install-guide" role="dialog" aria-label="Come installare su iPhone">
+            <div class="ios-guide-inner">
+                <button class="ios-guide-close" id="ios-guide-close" aria-label="Chiudi">×</button>
+                <h3 class="ios-guide-title">Installa CosaGuardo sul tuo iPhone</h3>
+                <div class="ios-guide-step">
+                    <div class="ios-guide-step-num">1</div>
+                    <div>Tocca il bottone <span class="ios-guide-share">⬆</span> <strong>Condividi</strong> (il quadrato con la freccia in alto, in fondo alla schermata)</div>
+                </div>
+                <div class="ios-guide-step">
+                    <div class="ios-guide-step-num">2</div>
+                    <div>Nel menu che si apre, scorri verso il basso e tocca <strong>"Aggiungi a Home"</strong></div>
+                </div>
+                <div class="ios-guide-step">
+                    <div class="ios-guide-step-num">3</div>
+                    <div>Tocca <strong>"Aggiungi"</strong> in alto a destra per confermare</div>
+                </div>
+                <div class="ios-guide-arrow">⬇️</div>
+            </div>
+        </div>
+    </div>
+
+    
+
+
+    <!-- Cookie banner logic — iniezione DOM lazy per non bloccare LCP -->
+
+
+    
+
+
+    
+
+
+    <!-- ═══ QUICK SEARCH OVERLAY ═══════════════════════════════════════════
+         Lente nell'header → cerca film/serie e naviga diretto a /film/{id} o /serie/{id} -->
+    <div class="qs-overlay" id="qs-overlay" role="dialog" aria-label="Ricerca rapida" aria-hidden="true">
+        <div class="qs-panel">
+            <div class="qs-input-wrap">
+                <span class="qs-input-icon">
+                    <i data-lucide="search" style="width:20px;height:20px;stroke:currentColor;stroke-width:2;"></i>
+                </span>
+                <input type="text" id="qs-input" class="qs-input"
+                       placeholder="Cerca un film o una serie TV…"
+                       autocomplete="off" autocapitalize="off" spellcheck="false">
+                <button type="button" class="qs-input-close" id="qs-close" aria-label="Chiudi ricerca">
+                    <i data-lucide="x" style="width:18px;height:18px;stroke:currentColor;stroke-width:2;"></i>
+                </button>
+            </div>
+            <div class="qs-tabs" role="tablist">
+                <button type="button" class="qs-tab is-active" data-qs-tab="all"   role="tab">Tutti</button>
+                <button type="button" class="qs-tab"            data-qs-tab="movie" role="tab">Film</button>
+                <button type="button" class="qs-tab"            data-qs-tab="tv"    role="tab">Serie TV</button>
+            </div>
+            <div class="qs-results" id="qs-results" role="listbox"></div>
+        </div>
+    </div>
+
+
+
+    
+
+
+</body>
+</html>

@@ -3882,7 +3882,16 @@ def best_page(request: Request, slug: str):
 
 
 @app.get("/piattaforma/{slug}", response_class=HTMLResponse)
-def platform_page(request: Request, slug: str, tipo: str = "tutti"):
+def platform_page(
+    request: Request,
+    slug: str,
+    tipo: str = "tutti",
+    genere: str = "",
+    mood: str = "",
+    anno: str = "",
+    voto: str = "",
+    page: int = 1,
+):
     """
     Pagina filtro per piattaforma streaming.
     URL pattern: /piattaforma/{slug} (es. /piattaforma/netflix)
@@ -3892,6 +3901,7 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
     """
     from core.recommendation_api import (
         PLATFORM_SLUGS, get_platform_meta, get_platform_content,
+        get_scopri_results,
     )
 
     # 404 se slug sconosciuto
@@ -3899,32 +3909,59 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
         raise HTTPException(status_code=404, detail="Piattaforma non trovata")
 
     meta = get_platform_meta(slug)
+    provider_id = PLATFORM_SLUGS[slug][0]
 
-    # Carica contenuti in base al tab attivo. get_platform_content restituisce
-    # una tupla (items, is_fallback). Se TMDb ha pochi dati per quella piattaforma,
-    # is_fallback=True e gli items sono "popolari in Italia" come ripiego.
+    # Filtri opzionali: gli stessi di /scopri, MENO "piattaforma" (già fissa
+    # dall'URL). Con un filtro attivo Film e Serie restano sempre separati:
+    # niente "Tutti" misto. Se l'utente filtra stando su "Tutti", si ripiega su Film.
+    has_filters = any([genere, mood, anno, voto])
+    if has_filters:
+        eff_tipo = "serie" if tipo == "serie" else "film"
+    else:
+        eff_tipo = tipo if tipo in ("tutti", "film", "serie") else "tutti"
+
     items = []
     is_fallback = False
-    if tipo in ("tutti", "film"):
-        m_items, m_fb = get_platform_content(slug, content_type="movie", limit=60)
-        items.extend(m_items)
-        is_fallback = is_fallback or m_fb
-    if tipo in ("tutti", "serie"):
-        s_items, s_fb = get_platform_content(slug, content_type="tv", limit=60)
-        items.extend(s_items)
-        is_fallback = is_fallback or s_fb
+    has_next = has_prev = False
 
-    # Se "tutti": ordina per popolarità approx (i risultati TMDb sono già pop-sorted
-    # internamente per tipo, ma vanno mescolati). Usiamo rating come proxy.
-    if tipo == "tutti":
-        # Interleaving alternato (1 movie, 1 tv, 1 movie...) per varietà visiva
-        movies = [i for i in items if i.get("content_type") == "movie"]
-        series = [i for i in items if i.get("content_type") == "tv"]
-        merged = []
-        for i in range(max(len(movies), len(series))):
-            if i < len(movies): merged.append(movies[i])
-            if i < len(series): merged.append(series[i])
-        items = merged[:60]
+    if has_filters:
+        # ── Modalità filtrata ──
+        # Riuso il motore di /scopri passando provider_id diretto (slug corretto
+        # da PLATFORM_SLUGS). Adatto poi la forma item allo schema di platform.html.
+        data = get_scopri_results(
+            tipo=eff_tipo, genere=genere, mood=mood,
+            anno=anno, voto=voto, page=page, provider_id=provider_id,
+        )
+        items = [
+            {**it,
+             "rating": it.get("vote_average", 0),
+             "year":   (it.get("release_date", "") or "")[:4]}
+            for it in data["results"]
+        ]
+        has_next = (page * 20) < data["total"]
+        has_prev = page > 1
+    else:
+        # ── Modalità default (nessun filtro): top popolari per tipo, con fallback ──
+        # get_platform_content restituisce (items, is_fallback). Se TMDb ha pochi
+        # dati per la piattaforma, is_fallback=True e gli items sono "popolari in IT".
+        if eff_tipo in ("tutti", "film"):
+            m_items, m_fb = get_platform_content(slug, content_type="movie", limit=60)
+            items.extend(m_items)
+            is_fallback = is_fallback or m_fb
+        if eff_tipo in ("tutti", "serie"):
+            s_items, s_fb = get_platform_content(slug, content_type="tv", limit=60)
+            items.extend(s_items)
+            is_fallback = is_fallback or s_fb
+
+        # "tutti": interleaving alternato (1 film, 1 serie...) per varietà visiva
+        if eff_tipo == "tutti":
+            movies = [i for i in items if i.get("content_type") == "movie"]
+            series = [i for i in items if i.get("content_type") == "tv"]
+            merged = []
+            for i in range(max(len(movies), len(series))):
+                if i < len(movies): merged.append(movies[i])
+                if i < len(series): merged.append(series[i])
+            items = merged[:60]
 
     # SEO meta
     seo_title = f"Cosa vedere su {meta['name']} | CosaGuardo"
@@ -3958,12 +3995,15 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
         # related_best resta vuoto, la pagina funziona comunque.
         log.warning("platform_page: related_best fallback per slug=%s: %s", slug, e)
 
-    # SEO meta_robots:
-    # - /piattaforma/{slug} default (tipo='tutti') = INDEX
-    # - /piattaforma/{slug}?tipo=film o ?tipo=serie = NOINDEX
-    #   Ragione: le sub-versioni sono filtri di UNA singola pagina canonical
-    #   (/piattaforma/{slug}), non pagine indipendenti da indicizzare.
-    meta_robots = "noindex, follow" if tipo in ("film", "serie") else "index, follow"
+    # SEO:
+    # - /piattaforma/{slug} PULITA (tipo='tutti', nessun filtro, pagina 1) = INDEX
+    # - qualsiasi stato filtrato, ?tipo=film/serie, o page>1 = NOINDEX, follow
+    #   + canonical verso la versione pulita.
+    #   Sono filtri/sub-versioni di UNA pagina canonical, non pagine indipendenti:
+    #   indicizzarle drenerebbe crawl budget (coerente con PR-1/PR-2).
+    is_clean = (eff_tipo == "tutti") and (not has_filters) and (page == 1)
+    meta_robots = "index, follow" if is_clean else "noindex, follow"
+    canonical_url = f"https://cosaguardo.com/piattaforma/{slug}"
 
     return templates.TemplateResponse(
         request=request,
@@ -3972,12 +4012,21 @@ def platform_page(request: Request, slug: str, tipo: str = "tutti"):
             "request":      request,
             "meta":         meta,
             "items":        items,
-            "tipo":         tipo if tipo in ("tutti","film","serie") else "tutti",
+            "tipo":         eff_tipo,
+            "has_filters":  has_filters,
+            "genere":       genere,
+            "mood":         mood,
+            "anno":         anno,
+            "voto":         voto,
+            "page":         page,
+            "has_next":     has_next,
+            "has_prev":     has_prev,
             "is_fallback":  is_fallback,
             "related_best": related_best,
             "seo_title":    seo_title,
             "seo_desc":     seo_desc,
             "meta_robots":  meta_robots,
+            "canonical_url": canonical_url,
         },
     )
 
