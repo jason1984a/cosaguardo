@@ -87,11 +87,41 @@
     }
     .platform-fallback-notice strong { color: #fde68a; }
 
+    .platform-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin: 0 0 16px;
+    }
     .platform-tabs {
         display: flex;
         gap: 8px;
-        margin: 0 0 18px;
+        margin: 0;
         flex-wrap: wrap;
+    }
+    /* Pulsante toggle "Filtri" (stesso pattern di /scopri) */
+    .pf-filter-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 14px;
+        border-radius: 12px;
+        background: rgba(255,255,255,0.06);
+        border: 1px solid rgba(255,255,255,0.1);
+        color: var(--text);
+        font-size: 0.82rem;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.18s ease;
+        font-family: inherit;
+    }
+    .pf-filter-toggle:hover { background: rgba(255,255,255,0.12); }
+    .pf-filter-toggle.has-filters {
+        background: rgba(110,168,254,0.15);
+        border-color: rgba(110,168,254,0.4);
+        color: #93c5fd;
     }
     .platform-tab {
         padding: 8px 16px;
@@ -261,7 +291,8 @@
     }
 
     /* ── BARRA FILTRI (stessi controlli di /scopri, senza Piattaforma) ──── */
-    .pf-filters { margin: 4px 0 18px; }
+    .pf-filters-panel { margin: 4px 0 18px; }
+    .pf-filters { margin: 0; }
     .pf-filter-row {
         display: flex; flex-wrap: wrap; gap: 14px 22px;
         padding: 14px 16px;
@@ -359,17 +390,29 @@
     {# querystring dei filtri attivi, da preservare quando si cambia tab #}
     {% set filtri_qs %}{% if genere %}&genere={{ genere }}{% endif %}{% if mood %}&mood={{ mood }}{% endif %}{% if anno %}&anno={{ anno }}{% endif %}{% if voto %}&voto={{ voto }}{% endif %}{% endset %}
 
-    <nav class="platform-tabs" aria-label="Filtra per tipo">
-        {% if not has_filters %}
-        <a href="/piattaforma/{{ meta.slug }}?tipo=tutti"
-           class="platform-tab {% if tipo == 'tutti' %}is-active{% endif %}">Tutti</a>
-        {% endif %}
-        <a href="/piattaforma/{{ meta.slug }}?tipo=film{{ filtri_qs }}"
-           class="platform-tab {% if tipo == 'film' %}is-active{% endif %}">Film</a>
-        <a href="/piattaforma/{{ meta.slug }}?tipo=serie{{ filtri_qs }}"
-           class="platform-tab {% if tipo == 'serie' %}is-active{% endif %}">Serie TV</a>
-    </nav>
+    <div class="platform-controls">
+        <nav class="platform-tabs" aria-label="Filtra per tipo">
+            {% if not has_filters %}
+            <a href="/piattaforma/{{ meta.slug }}?tipo=tutti"
+               class="platform-tab {% if tipo == 'tutti' %}is-active{% endif %}">Tutti</a>
+            {% endif %}
+            <a href="/piattaforma/{{ meta.slug }}?tipo=film{{ filtri_qs }}"
+               class="platform-tab {% if tipo == 'film' %}is-active{% endif %}">Film</a>
+            <a href="/piattaforma/{{ meta.slug }}?tipo=serie{{ filtri_qs }}"
+               class="platform-tab {% if tipo == 'serie' %}is-active{% endif %}">Serie TV</a>
+        </nav>
 
+        <button type="button"
+                class="pf-filter-toggle {% if has_filters %}has-filters{% endif %}"
+                onclick="togglePfFilters()" id="pf-filter-toggle-btn"
+                aria-expanded="{{ 'true' if has_filters else 'false' }}">
+            <i data-lucide="sliders-horizontal" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
+            Filtri{% if has_filters %} •{% endif %}
+        </button>
+    </div>
+
+    {# ── Pannello filtri collassabile: chiuso di default, aperto se filtri attivi ── #}
+    <div class="pf-filters-panel" id="pf-filters-panel" style="{% if not has_filters %}display:none;{% endif %}">
     {# ── Barra filtri: stessi controlli di /scopri, MENO Piattaforma (già fissa) ── #}
     <form method="get" action="/piattaforma/{{ meta.slug }}" id="pf-filters-form" class="pf-filters">
         <input type="hidden" name="tipo" value="{{ tipo if tipo in ('film','serie') else 'film' }}">
@@ -442,6 +485,7 @@
         </a>
         {% endif %}
     </form>
+    </div>
 
     {% if items %}
     <div class="pf-grid">
@@ -524,6 +568,13 @@
 </div>
 
 <script>
+function togglePfFilters() {
+    var panel = document.getElementById('pf-filters-panel');
+    var btn   = document.getElementById('pf-filter-toggle-btn');
+    var open  = panel.style.display === 'none' || panel.style.display === '';
+    panel.style.display = open ? 'block' : 'none';
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
 document.addEventListener("DOMContentLoaded", function() {
     if (window.lucide) lucide.createIcons();
 });
