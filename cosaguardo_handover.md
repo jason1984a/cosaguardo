@@ -1363,4 +1363,55 @@ Vedi dettaglio in §10-quater. In sintesi: sollecitato Maaz Ahmed, confermato ch
 
 ---
 
+## 21. Sessione 25/06/2026 (parte 2) — Analytics: conversioni, opt-out, filtro interno + chip toggle
+
+### 21.1 Diagnosi GA4 (ultimi 30gg, 27 mag–25 giu) ⭐
+Esportati 6 PDF GA4 e analizzati. Quadro:
+- **436 utenti attivi, 427 nuovi, 49 di ritorno.** Volume ancora basso (SEO in fase noindex, traffico quasi tutto paid).
+- **Tempo medio coinvolgimento: 1m 52s** → OTTIMO (benchmark ~44s). Chi atterra **si coinvolge**: la qualità del traffico NON è il problema.
+- **Qualità per canale molto diversa**: Paid Social (IG, 53%) = 1m09s, 0,87 sess/utente, 5,2% → superficiale ma normale per traffico freddo. **Direct (25%) = 4m01s, 1,51 sess/utente, 15,4%** → utenti "oro" che tornano. Organic Search ancora piccolo (58 utenti).
+- **82% mobile, 93% Italia** → targeting perfetto, mobile dominante.
+- **⚠️ PROBLEMA MACRO: conversioni = 0.** Non per scarso traffico ma perché **non c'era tracciamento conversioni** (vedi 21.2). Volavamo alla cieca sulla metrica-ricavo.
+- Igiene dati: pagine admin/profilo tra le top viste (traffico interno non escluso); demografia vuota (Signals off).
+- Benchmark di riferimento salvati: engagement rate mediano ~56% (range reale 40-90%, paid social più basso); tempo medio ~44s; GA4 ha un **benchmarking integrato** (Home → clic su nome metrica → Benchmarking).
+
+### 21.2 Tracciamento conversioni — implementato ⭐
+**Scoperta chiave**: l'helper `cgTrack()` in `base.html` (GA4 + Meta Pixel, gated da consenso cookie) **esisteva ma non veniva mai chiamato** = codice morto. L'unico evento custom attivo era `trailer_play`. I **link provider/affiliato erano `<a>` senza alcun tracking** → il clic-ricavo era invisibile. Ecco perché "lead = 0".
+
+Eventi cablati (chiamano `cgTrack`, rispettano consenso, inviano anche al Pixel):
+- **`select_provider`** ⭐ — clic su link provider/affiliato. Via **event delegation** in `base.html` (listener capture) + `data-cg-track/-provider/-title/-group` sui link in `detail.html` (provider-item, streaming+noleggio) e `dove_vedere.html` (dv-provider, streaming+noleggio). Manda provider, titolo, gruppo.
+- **`sign_up`** — usa il flag `registered=1` già presente sul redirect `/profilo`. base.html legge il flag, spara l'evento una volta, pulisce l'URL.
+- **`login`** — aggiunto flag `logged_in=1` al redirect login in `main.py`; stessa logica di firing+cleanup.
+- **`pwa_install`** — DEFERITO: il flusso install (`install_prompt_available`) sta in un JS esterno/SW non in mano; fast-follow.
+- **File**: `app/templates/base.html`, `app/templates/detail.html`, `app/templates/dove_vedere.html`, `app/main.py`. Validati (AST, Jinja2, node --check).
+
+### 21.3 GA4 — Eventi chiave (config UI)
+- Gli eventi `select_provider`/`sign_up`/`login` vengono **dal codice** → NON vanno creati con "Crea evento" (quello li genera da trigger tipo page_view = sbagliato).
+- Si marcano come conversione mettendo la **stella** accanto al nome in **Amministrazione → Eventi → (scheda "Eventi recenti")**. In questa versione GA4 NON c'è una voce di menù "Eventi chiave" separata: è dentro "Eventi".
+- L'evento compare solo dopo essere partito almeno una volta (+ ritardo elaborazione). `sign_up` già visto attivo. `select_provider`/`login` in attesa di prima occorrenza al momento dello screenshot.
+- Dati NON retroattivi: partono da ora.
+
+### 21.4 Esclusione traffico interno — DOPPIA protezione ✅
+- **A) Opt-out via codice (cross-device)** — in `base.html`: visitando `cosaguardo.com/?optout=1` si setta `localStorage.cg_optout='1'` e GA4/Clarity/cgTrack non partono più su quel device (a prescindere dall'IP). `?optout=0` riattiva. Guard messo **dentro** `loadGA4`/`loadMetaPixel`/`loadClarity`/`cgTrack`, così copre ogni call site (incluso il pulsante Accetta). Va rifatto su nuovo browser/incognito/cancellazione dati. **Da fare su PC + iPhone dopo deploy.**
+- **B) Filtro IP in GA4 (rete di casa)** — IP definito in *Stream di dati → Configura impostazioni tag → Mostra tutto → Definisci traffico interno* (regola "Casa", `traffic_type=internal`, IP uguale a casa); poi filtro **"Internal Traffic"** in *Impostazioni dati → Filtri dati* portato da Test → **Attivo**. Non retroattivo; da aggiornare se cambia l'IP.
+- Nota architetturale GA4: l'IP si mette nello *Stream*, non nel filtro (il filtro esclude solo ciò che è già marcato `internal`).
+
+### 21.5 Google Signals (demografia) — opzionale, con caveat
+- Percorso: *Amministrazione → Raccolta e modifica dei dati → Raccolta dei dati → Google Signals → attiva*.
+- Sblocca età/genere/interessi, MA: non retroattivo, 24-48h per i dati, e **col volume attuale (~436/mese) i dati restano scarsi/"unknown"** finché il traffico non cresce.
+- ⚠️ Compliance EU: attivarlo aggiunge **cookie pubblicitari** (DoubleClick); la `privacy.html` cita solo i cookie analitici → andrebbe aggiunta una riga. La modifica Google del 15/06/2026 ha solo scollegato Signals dal flusso verso Google Ads; per la demografia dentro GA4 resta il modo per averla.
+- Stato: lasciato alla decisione di Marco (priorità più bassa vista la scarsità di dati a basso volume).
+
+### 21.6 Chip filtro deselezionabili (toggle-off) — scopri + piattaforma
+Su richiesta: cliccando un chip filtro già attivo ora lo si **deseleziona** lasciando gli altri (prima costringeva ad "Azzera filtri"). I radio nativi non si deselezionano → gestito via `data-was-checked` + handler `onclick` (`pfChipClick`/`scopriChipClick`) che inizializza lo stato sui chip resi `checked` dal server. Applicato a `platform.html` e `scopri.html`.
+
+### 21.7 TODO analytics aperti
+- [ ] Deploy `base.html` (opt-out) + fare `?optout=1` su PC e iPhone.
+- [ ] Mettere la stella su `select_provider` e `login` quando compaiono in "Eventi recenti".
+- [ ] (opz.) Attivare Google Signals + aggiungere riga cookie pubblicitari alla privacy.
+- [ ] Fast-follow: evento `pwa_install`.
+- [ ] Rileggere il report "Generazione lead" tra 2-4 settimane con i dati di conversione veri (capire se le IG ads convertono o solo portano traffico).
+
+---
+
 **Fine documento.** In nuova chat, carica questo file come primo upload e ripartiamo da qui.
