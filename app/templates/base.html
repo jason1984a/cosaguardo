@@ -16,7 +16,23 @@
             'analytics_storage': 'denied'
         });
 
+        // ── OPT-OUT PERSONALE (escludere il proprio traffico, cross-device) ──
+        // Visita cosaguardo.com/?optout=1 su un device (PC o telefono) per
+        // disattivare OGNI analytics su quel device, a prescindere dall'IP.
+        // Visita ?optout=0 per riattivare. Il flag resta in localStorage.
+        (function () {
+            try {
+                var p = new URLSearchParams(window.location.search);
+                if (p.get('optout') === '1')      { localStorage.setItem('cg_optout', '1'); }
+                else if (p.get('optout') === '0') { localStorage.removeItem('cg_optout'); }
+            } catch (_) {}
+        })();
+        function cgIsOptedOut() {
+            try { return localStorage.getItem('cg_optout') === '1'; } catch (_) { return false; }
+        }
+
         function loadGA4() {
+            if (cgIsOptedOut()) return;
             if (document.getElementById('ga4-script')) return;
             var s = document.createElement('script');
             s.id = 'ga4-script';
@@ -42,6 +58,7 @@
         var META_PIXEL_ID = 'META_PIXEL_ID';  // ← sostituisci con il tuo ID quando avrai accesso
 
         function loadMetaPixel() {
+            if (cgIsOptedOut()) return;
             if (!META_PIXEL_ID || !/^\d{10,20}$/.test(META_PIXEL_ID)) return;
             if (window.fbq) return;
             !function(f,b,e,v,n,t,s)
@@ -66,6 +83,7 @@
         var CLARITY_PROJECT_ID = 'wqf6yajpcb';
 
         function loadClarity() {
+            if (cgIsOptedOut()) return;
             if (!CLARITY_PROJECT_ID || !/^[a-z0-9]{6,20}$/i.test(CLARITY_PROJECT_ID)) return;
             if (!window.clarity) {
                 (function(c,l,a,r,i,t,y){
@@ -92,6 +110,7 @@
         // Esposto a window per chiamate da altri script (es. trigger registrazione).
         window.cgTrack = function(eventName, params) {
             try {
+                if (cgIsOptedOut()) return;
                 // GA4: nome eventi snake_case
                 if (typeof gtag === 'function' &&
                     localStorage.getItem('cg_cookie_consent') === 'accepted') {
