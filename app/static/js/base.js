@@ -433,6 +433,7 @@
         // ─── GA4 tracking (solo se consenso accettato) ──────────────────
         function track(eventName, params) {
             try {
+                if (localStorage.getItem('cg_optout') === '1') return;
                 if (typeof gtag === 'function' &&
                     localStorage.getItem('cg_cookie_consent') === 'accepted') {
                     gtag('event', eventName, Object.assign({
@@ -573,19 +574,30 @@
 
         // ─── Click handlers ─────────────────────────────────────────────
         document.addEventListener('DOMContentLoaded', function() {
-            // ── Trigger conversioni post-registrazione ─────────────────────
-            // Il server redirecta su /profilo?registered=1 dopo registrazione.
-            // Spariamo l'evento UNA SOLA VOLTA su GA4 + Meta Pixel, poi
-            // puliamo la URL così reload non ritrigghera.
+            // ── Trigger conversioni post-redirect ──────────────────────────
+            // Il server redirecta su /profilo?registered=1 (registrazione) o
+            // ?logged_in=1 (login). Spariamo l'evento UNA SOLA VOLTA su
+            // GA4 + Meta Pixel, poi puliamo la URL così il reload non ritrigghera.
             try {
                 var urlParams = new URLSearchParams(window.location.search);
+                var convFired = false;
                 if (urlParams.get('registered') === '1') {
                     if (typeof window.cgTrack === 'function') {
                         // cgTrack mappa sign_up → CompleteRegistration su Pixel
                         window.cgTrack('sign_up', { method: 'email' });
                     }
-                    // Rimuovi il flag dalla URL senza ricaricare
                     urlParams.delete('registered');
+                    convFired = true;
+                }
+                if (urlParams.get('logged_in') === '1') {
+                    if (typeof window.cgTrack === 'function') {
+                        // cgTrack mappa login → Lead su Pixel
+                        window.cgTrack('login', { method: 'email' });
+                    }
+                    urlParams.delete('logged_in');
+                    convFired = true;
+                }
+                if (convFired) {
                     var newUrl = window.location.pathname +
                         (urlParams.toString() ? '?' + urlParams.toString() : '') +
                         window.location.hash;

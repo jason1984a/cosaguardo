@@ -140,8 +140,9 @@
         }
 
         // ── CONVERSIONI ───────────────────────────────────────────────
-        // 1) Clic su provider/affiliato: listener delegato in fase di capture,
-        //    così l'evento parte prima della navigazione (i link aprono _blank).
+        // Clic su provider/affiliato: listener delegato in fase di capture,
+        // così l'evento parte prima della navigazione (i link aprono _blank).
+        // (sign_up / login post-redirect sono gestiti in base.js)
         document.addEventListener('click', function (e) {
             var a = e.target.closest('[data-cg-track="select_provider"]');
             if (!a) return;
@@ -151,21 +152,6 @@
                 group:    a.getAttribute('data-cg-group')    || ''
             });
         }, true);
-
-        // 2) sign_up / login: l'auth è server-side e fa redirect a /profilo con
-        //    un flag in querystring. Leggo il flag, sparo l'evento UNA volta e
-        //    pulisco l'URL (niente doppio conteggio su refresh/condivisione).
-        document.addEventListener('DOMContentLoaded', function () {
-            try {
-                var p = new URLSearchParams(window.location.search), fired = false;
-                if (p.get('registered') === '1') { if (window.cgTrack) cgTrack('sign_up', { method: 'email' }); fired = true; p.delete('registered'); }
-                if (p.get('logged_in')  === '1') { if (window.cgTrack) cgTrack('login',   { method: 'email' }); fired = true; p.delete('logged_in'); }
-                if (fired) {
-                    var qs = p.toString();
-                    history.replaceState(null, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
-                }
-            } catch (_) {}
-        });
     </script>
     <title>{% block title %}CosaGuardo{% endblock %}</title>
 
