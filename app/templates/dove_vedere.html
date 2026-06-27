@@ -332,7 +332,8 @@
             <h3 style="font-size:15px;color:var(--muted);margin:0 0 10px;font-weight:700;">Incluso in abbonamento</h3>
             <div class="dv-providers" style="margin-bottom:18px;">
                 {% for p in detail.providers.flatrate %}
-                <a href="{{ p.link or detail.providers.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="dv-provider">
+                <a href="{{ p.link or detail.providers.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="dv-provider"
+                   data-cg-track="select_provider" data-cg-provider="{{ p.name }}" data-cg-title="{{ detail.title }}" data-cg-group="streaming">
                     {% if p.logo_url %}<img src="{{ p.logo_url }}" alt="{{ p.name }}">{% endif %}
                     <div class="dv-provider-info">
                         <div class="dv-provider-name">{{ p.name }}</div>
@@ -347,7 +348,8 @@
             <h3 style="font-size:15px;color:var(--muted);margin:0 0 10px;font-weight:700;">Noleggio o acquisto</h3>
             <div class="dv-providers">
                 {% for p in detail.providers.rent[:6] %}
-                <a href="{{ p.link or detail.providers.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="dv-provider">
+                <a href="{{ p.link or detail.providers.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="dv-provider"
+                   data-cg-track="select_provider" data-cg-provider="{{ p.name }}" data-cg-title="{{ detail.title }}" data-cg-group="noleggio">
                     {% if p.logo_url %}<img src="{{ p.logo_url }}" alt="{{ p.name }}">{% endif %}
                     <div class="dv-provider-info">
                         <div class="dv-provider-name">{{ p.name }}</div>

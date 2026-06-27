@@ -1865,7 +1865,7 @@ def login_submit(
     except Exception as e:
         log.debug("login: prefetch daily_recs fallita uid=%s: %s", user["id"], e)
 
-    return RedirectResponse(url="/profilo", status_code=303)
+    return RedirectResponse(url="/profilo?logged_in=1", status_code=303)
 
 @app.post("/recommend")
 def recommend(

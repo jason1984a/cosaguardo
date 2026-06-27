@@ -2059,7 +2059,8 @@ a.detail-genre-tag--link:focus-visible {
             <div class="providers-group-label">Incluso in abbonamento</div>
             <div class="providers-list">
                 {% for p in prov.flatrate %}
-                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="provider-item">
+                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="provider-item"
+                   data-cg-track="select_provider" data-cg-provider="{{ p.name }}" data-cg-title="{{ detail.title }}" data-cg-group="streaming">
                     {% if p.logo_url %}
                     <img src="{{ p.logo_url }}" alt="{{ p.name }}" class="provider-logo">
                     {% endif %}
@@ -2074,7 +2075,8 @@ a.detail-genre-tag--link:focus-visible {
             <div class="providers-group-label">Noleggio</div>
             <div class="providers-list">
                 {% for p in prov.rent[:3] %}
-                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="provider-item">
+                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="provider-item"
+                   data-cg-track="select_provider" data-cg-provider="{{ p.name }}" data-cg-title="{{ detail.title }}" data-cg-group="noleggio">
                     {% if p.logo_url %}
                     <img src="{{ p.logo_url }}" alt="{{ p.name }}" class="provider-logo">
                     {% endif %}
