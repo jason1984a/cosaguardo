@@ -1412,6 +1412,55 @@ Su richiesta: cliccando un chip filtro già attivo ora lo si **deseleziona** las
 - [ ] Fast-follow: evento `pwa_install`.
 - [ ] Rileggere il report "Generazione lead" tra 2-4 settimane con i dati di conversione veri (capire se le IG ads convertono o solo portano traffico).
 
+### 21.8 Eventi PWA install + fix base.js (sessione 25/06 parte 3)
+- **Scoperta**: il flusso PWA in `app/static/js/base.js` era già strumentato con una funzione locale `track()` → eventi già esistenti: `install_prompt_available` (eligibilità, i 512 visti), `install_banner_shown`, `install_banner_clicked` (clic tasto = intenzione), `install_prompt_outcome` (accetta/annulla nel popup nativo), **`app_installed`** (su `appinstalled` = installazione REALE completata), `install_fallback_shown`. Nessun codice nuovo necessario.
+- **Eventi chiave GA4 marcati**: `app_installed` (install reale) + `install_banner_clicked` (clic) → per leggere il tasso clic→install.
+- ⚠️ **Limite iOS**: Safari non supporta `beforeinstallprompt`/`appinstalled` → `app_installed` cattura solo **Android/desktop**. Da iPhone ("Aggiungi a Home") l'install NON è rilevabile via JS. Con ~82% mobile e forte quota iOS, le install reali da iPhone restano invisibili: nel rapporto clic/install segmentare per OS ed escludere iOS per un dato pulito.
+- **2 bug sistemati in `base.js`**:
+  1. **Doppione `sign_up`**: `base.js` aveva già `registered=1 → cgTrack('sign_up')`, identico a quello che era stato messo in `base.html`. Consolidato tutto in `base.js` (sign_up **e** login lì, con cleanup URL unico) e rimosso il doppione da `base.html`. `base.html` ora gestisce solo il listener `select_provider`.
+  2. **`track()` ignorava l'opt-out**: gli eventi PWA partivano anche con `?optout=1`. Aggiunto guard `if (localStorage.getItem('cg_optout')==='1') return;` in `track()`. Ora l'opt-out interno copre anche gli eventi PWA.
+- **Architettura conversioni (stato finale)**: `base.html` → opt-out helper + guard in loadGA4/Pixel/Clarity/cgTrack + listener `select_provider`. `base.js` → sign_up/login post-redirect (via cgTrack) + tutti gli eventi PWA (via track()). I link provider in `detail.html`/`dove_vedere.html` hanno i `data-cg-*`.
+- **File**: `app/static/js/base.js`, `app/templates/base.html`.
+
+### 21.9 BACKLOG — Edge bypass per utenti loggati + pagina "estero" (feature futura)
+**Contesto**: il middleware `block_direct_origin` (main.py, ~riga 437) blocca con 403 le pagine profonde `/film//serie//persona/` quando il traffico è (a) da IP datacenter noti o (b) da paese non in `EDGE_ALLOWED_COUNTRIES` (default `IT,SM,VA`, override via env). Protegge da scraper/botnet residenziali estere e da Render bandwidth overage. Le pagine sono noindex → non costa SEO; `/dove-vedere` (SEO) NON è toccata. Emerso il 27/06: Marco in vacanza in Grecia (cf-ipcountry=GR) prendeva 403 sulle pagine profonde — comportamento corretto, non bug.
+
+**Valutazione**: il collaterale su umani veri è BASSO (pubblico 93% IT; traffico estero sulle pagine profonde ~100% scraper). Nessuna emergenza. Fix immediato personale disponibile: env `EDGE_ALLOWED_COUNTRIES=IT,SM,VA,GR` su Render (temporaneo), o VPN.
+
+**Feature futura (2 parti), da fare QUANDO le registrazioni iniziano a contare** (ora valore basso: pochi loggati, ~49 di ritorno):
+1. **Edge bypass per utenti loggati** — nel middleware `block_direct_origin`, se esiste una **sessione loggata valida** (cookie di sessione già firmato con SECRET_KEY, non falsificabile), lasciar passare a prescindere da paese/datacenter. Così expat/viaggiatori italiani con account navigano ovunque. ⚠️ Il coupling DEVE essere sull'**utente loggato**, NON su "N pagine di navigazione anonima" (aggirabile: gli scraper fanno le stesse N pagine). Se un account viene abusato per scraping → si revoca. Implementazione ~15 min, nessun token custom (riusa la sessione firmata esistente).
+2. **Pagina "estero" ad-hoc** — invece del 403 nudo su paese non consentito, servire una pagina che spiega "contenuto disponibile dall'Italia; **accedi** per navigare da qui" con CTA login/registrazione. Diventa un **punto di conversione** verso il login (sinergico con la parte 1: chi si logga poi passa). Da NON applicare al blocco datacenter (quelli sono bot, 403 secco basta) — solo al ramo geografico.
+
+**Priorità**: bassa finché la base registrati non cresce. Personale: VPN nel frattempo.
+
+### 21.10 GSC (30/06) — PR-3 conferma il calo di "Indicizzate" ✅
+- Ultimo aggiornamento GSC 30/06: **Indicizzate = 42,1K** (era 54,2K il 12/06 → **-12K in ~18gg**). "Non indicizzate" = 179K (era 164K). Il grafico mostra la fascia verde che si assottiglia.
+- **PR-3 sta digerendo come previsto.** Nessuna azione, monitoraggio settimanale. Quando "Indicizzate" si stabilizza (~5-10K stimati, pagine di reale valore) si potrà valutare la PR-3-next (noindex su `/film//serie/{id}` non curati).
+- Traiettoria storica per riferimento: ~50,5K (29/05) → 54,2K (12/06, picco) → 42,1K (30/06, in calo).
+
+### 21.11 ⭐ PRIORITÀ ALTA — Outreach influencer/creator per ads diretta
+**Obiettivo**: contattare creator per reel/post che mandino traffico al sito, misurare quante persone portano davvero (via link tracciati). Fase esplorativa iniziata (Marco in vacanza) mandando DM a piccoli creator per capire i costi.
+- **Messaggi pronti**: versione DM breve + versione email strutturata (nel thread chat 30/06). Riempire sempre nome + **aggancio specifico** al profilo (altrimenti = spam ignorato).
+- **Strategia a 2 secchi** (per livello di intento, non per genere):
+  1. **Nicchia cinema/serie** = alta intenzione, converte meglio, punto di partenza sicuro.
+  2. **Lifestyle/femminile grande pubblico** = reach economica DA TESTARE come esperimento. CosaGuardo è prodotto di massa (streaming = mass-appeal), quindi NON è pubblico sbagliato; ma "costa poco per follower" è spesso trappola (engagement morto/follower gonfiati). Va bene solo se engagement reale + contenuto nativo + misurato.
+- **Metrica di valutazione**: NON follower né prezzo, ma **costo per click reale al sito** (UTM) e poi costo per conversione (`select_provider`/`sign_up`). Baseline di confronto: **IG ads ~15 cent/visita**. Esempio: reel 50€ → 500 click = 10c/click (meglio delle ads, buono); 80 click = 62c/click (scarta).
+- **Prima di dire sì a un creator**: chiedere viste medie storie/reel (non follower) + screenshot metriche recenti; proporre prima una **storia con link** (test economico) prima del reel; usare sempre **link UTM** (es. `?utm_source=nomepagina&utm_medium=influencer`). TODO: preparare i link UTM al primo "sì".
+- **Nota**: template micro/nano-influencer (DM + email) erano già menzionati come in preparazione nei materiali storici; ora formalizzati e in outreach attivo.
+
+### 21.12 Setup conversioni COMPLETATO + primo confronto settimanale (04/07)
+**Setup conversioni chiuso** ✅: `select_provider` verificato in Tempo reale (parte cliccando un provider da device non escluso) e **stellato come evento chiave**. Ora tutti gli eventi chiave attivi: `select_provider`, `sign_up`, `login`, `app_installed`, `install_banner_clicked` (+ `trailer_play`, `episode_click` preesistenti). Tracking conversioni end-to-end operativo. Nota: `select_provider` scatta solo dai clic provider su schede `/film//serie/` → se il conteggio è basso è perché pochi utenti arrivano ancora fin lì (home/scopri/recommend sono le pagine più viste), non perché è rotto.
+
+**Primo confronto settimanale** (27/6–3/7 vs 20–26/6, via selettore date → Confronta → Periodo precedente):
+- **⚠️ ASTERISCO METODOLOGICO**: l'esclusione traffico interno (filtro IP + opt-out) è stata attivata ~25-27/6, quindi cade A METÀ del confronto. La settimana attuale ha Marco escluso, la precedente no → il "-15% utenti" e il "+15% durata" sono **in parte artefatti** (meno visite sue = volume più basso, niente sue navigazioni admin veloci = engagement più alto). Il confronto 30gg vs 30gg pulito arriva **a fine luglio** (esclusione attiva su entrambe le finestre).
+- **Segnali VERI positivi** (indipendenti dal traffico interno): Paid Social durata 1m45s vs 1m13s = **+44%** (le IG ads portano traffico più coinvolto); uso funzioni core in forte crescita — `/scopri` durata +230% e views +126%, `/la-mia-raccolta` +170%, `/profilo` +116% (le persone sfogliano/filtrano/salvano, coerente col lavoro filtri); Direct nuovi utenti +15,6%.
+- **Cali spiegati**: utenti -15% (in gran parte esclusione interna) + Paid Social nuovi -31,5% → **spiegato: le IG ads erano ferme ~2 giorni** (budget a fine data, poi riattivate) da cui anche 14 vs 20 registrati. Nessun problema reale.
+- **Eventi chiave 61 vs 22 (+177%)**: soprattutto effetto tracking appena acceso (login/select_provider prima invisibili), non +177% reale. Il punto è che ORA si misura.
+- Per conteggio registrati REALE usare `/admin/utenti` (DB), non GA4 (sign_up non tracciato nella settimana precedente).
+- Geo/pubblico stabile: ~93% Italia, ~82% mobile, italiano dominante.
+
+**Prossimo appuntamento analytics**: confronto 30gg vs 30gg a fine luglio (lettura pulita). Fino ad allora: lasciar accumulare dati.
+
 ---
 
 **Fine documento.** In nuova chat, carica questo file come primo upload e ripartiamo da qui.

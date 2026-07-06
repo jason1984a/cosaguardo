@@ -37,6 +37,10 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _DEFAULT_DB = os.path.join(_BASE_DIR, "app", "cosaguardo.db")
 SEO_DB_PATH = os.environ.get("DATABASE_PATH") or _DEFAULT_DB
 
+# Guard: la pulizia dei titoli illeggibili (non-latini) gira UNA volta per
+# processo, alla prima chiamata di _ensure_db (cioè al primo accesso dopo deploy).
+_UNREADABLE_CLEANUP_DONE = False
+
 # Cap totali (sotto 1000 per evitare flag "thin content scaling")
 EVERGREEN_PER_TYPE = 350   # 350 movies + 350 tv = 700 evergreen
 NEW_RELEASES_CAP   = 300   # uscite recenti IT (movies+tv mescolati, ranked per release_date desc)
@@ -159,6 +163,30 @@ def _ensure_db():
         """)
 
         conn.commit()
+
+        # ── Pulizia una-tantum titoli illeggibili (non-latini) ──────────────
+        # Titoli in devanagari/cirillico/hangul/ecc. finiti in DB prima del
+        # filtro di leggibilità: li rimuoviamo così spariscono dall'hub
+        # /dove-vedere. Gira una sola volta per processo (guard modulo).
+        global _UNREADABLE_CLEANUP_DONE
+        if not _UNREADABLE_CLEANUP_DONE:
+            try:
+                from core.recommendation_api import _is_latin_readable
+                cur = conn.cursor()
+                cur.execute("SELECT slug, title FROM seo_titles")
+                bad = [row[0] for row in cur.fetchall()
+                       if not _is_latin_readable(row[1])]
+                if bad:
+                    cur.executemany(
+                        "DELETE FROM seo_titles WHERE slug = ?",
+                        [(s,) for s in bad],
+                    )
+                    conn.commit()
+                    log.info("seo_titles: rimossi %d titoli illeggibili (non-latini)", len(bad))
+            except Exception as e:
+                log.warning("cleanup titoli illeggibili fallito: %s", e)
+            finally:
+                _UNREADABLE_CLEANUP_DONE = True
     finally:
         conn.close()
 
@@ -375,7 +403,14 @@ def populate_seo_titles_db(_log_ctx: Optional[dict] = None) -> dict:
         }
 
         def _insert_or_update(item, content_type):
-            title = item.get("title") if content_type == "movie" else item.get("name")
+            # Filtro leggibilità: usa il titolo latino leggibile (localizzato o,
+            # in fallback, original_title). Se nessuno è leggibile — devanagari,
+            # cirillico, hangul, ecc. — salta l'item: niente pagina SEO per titoli
+            # illeggibili da un utente italiano.
+            from core.recommendation_api import pick_readable_title
+            title = pick_readable_title(item, content_type)
+            if not title:
+                return
             date_field = item.get("release_date") if content_type == "movie" else item.get("first_air_date")
             year = None
             if date_field and len(date_field) >= 4:
@@ -576,7 +611,8 @@ def populate_new_releases(_log_ctx: Optional[dict] = None) -> dict:
             results = r.json().get("results", [])
             out = []
             for item in results:
-                title = item.get("title") if content_type == "movie" else item.get("name")
+                from core.recommendation_api import pick_readable_title
+                title = pick_readable_title(item, content_type)
                 if not title or not item.get("id") or not item.get("poster_path"):
                     continue
                 rd = item.get(date_field)
@@ -638,7 +674,10 @@ def populate_new_releases(_log_ctx: Optional[dict] = None) -> dict:
             used_slugs_db.add(r[0])
 
         for item, ct, rd, rd_date in in_window:
-            title = item.get("title") if ct == "movie" else item.get("name")
+            from core.recommendation_api import pick_readable_title
+            title = pick_readable_title(item, ct)
+            if not title:
+                continue
             year = rd_date.year
             key = (item["id"], ct)
 
