@@ -550,7 +550,12 @@ document.addEventListener("DOMContentLoaded", function () {
             if (e.target.closest(".feedback-actions")) return;
             if (e.target.closest(".result-scroll-more")) return;
             const url = card.dataset.detailUrl;
-            if (url) window.location.href = url;
+            if (url) {
+                // Avvia la barra di caricamento (questa è una nav programmatica,
+                // non un click su <a>, quindi il listener globale non la vede).
+                if (window.cgStartNavProgress) window.cgStartNavProgress();
+                window.location.href = url;
+            }
         });
     });
 

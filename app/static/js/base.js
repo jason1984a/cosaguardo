@@ -134,6 +134,11 @@
             window.addEventListener('load', function() {
                 setTimeout(reset, 100);
             });
+
+            // Esposta globalmente per le navigazioni programmatiche
+            // (es. window.location.href nelle card di /recommend), che il click
+            // listener sugli <a> non intercetta da solo.
+            window.cgStartNavProgress = start;
         })();
     
 
