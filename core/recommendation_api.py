@@ -2711,6 +2711,10 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
         awin_programs = {
             "NOW":       (os.environ.get("AWIN_MID_NOW", ""),       "https://www.nowtv.it/"),
             "NOW TV":    (os.environ.get("AWIN_MID_NOW", ""),       "https://www.nowtv.it/"),
+            # Sky Go non è un prodotto acquistabile a sé (serve un abbonamento Sky):
+            # per chi NON è cliente Sky, il modo per guardare quel contenuto è NOW,
+            # quindi indirizziamo i click di Sky Go allo stesso programma Awin di NOW.
+            "Sky Go":    (os.environ.get("AWIN_MID_NOW", ""),       "https://www.nowtv.it/"),
             "TIMVISION": (os.environ.get("AWIN_MID_TIMVISION", ""), "https://www.timvision.it/"),
         }
         if provider_name in awin_programs:

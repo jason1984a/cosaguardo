@@ -1463,4 +1463,43 @@ Su richiesta: cliccando un chip filtro già attivo ora lo si **deseleziona** las
 
 ---
 
+## 22. Sessione ~08/07/2026 — Fix UX/dati, affiliazione NOW/Awin, outreach influencer
+
+### 22.1 Fix titoli non-latini su hub /dove-vedere ✅
+- **Problema**: la pagina hub `/dove-vedere` mostrava titoli in cirillico/tamil/telugu/hindi (es. "Твоё сердце", "कॉकटेल"). L'hub NON fa query live: pesca da tabella DB `seo_titles` via `list_seo_titles()`, e quei titoli erano già dentro (inseriti prima del filtro leggibilità).
+- **Fix in `core/seo_pages.py`** (3 livelli, riusa `_is_latin_readable`/`pick_readable_title` già esistenti in recommendation_api.py):
+  1. **Pulizia una-tantum**: in `_ensure_db`, guard modulo `_UNREADABLE_CLEANUP_DONE`, al primo accesso dopo deploy cancella dal DB le righe con titolo non-latino (log: "seo_titles: rimossi N titoli illeggibili").
+  2. **Prevenzione in scrittura**: `populate_seo_titles_db` (evergreen) e `populate_new_releases` (uscite, 2 punti) usano `pick_readable_title` → item illeggibile = skippato, non entra più.
+- Validato con ast.parse + test regex sui titoli reali. Il conteggio hub cala un po' (voluto). File: `core/seo_pages.py`.
+
+### 22.2 Fix barra di caricamento su card /recommend ✅
+- **Problema**: cliccando un titolo nei risultati `/recommend`, la scheda impiega ~2s a caricare ma NON compariva la top progress bar → utente pensa a dead-click e ri-clicca.
+- **Causa**: la barra (`#cg-nav-progress` in base.html + logica in base.js) esisteva e funziona su tutti i link `<a>`, ma le card risultati sono `<article>` che navigano via `window.location.href` (nav programmatica) → invisibile al click-listener.
+- **Fix**: esposta `window.cgStartNavProgress` in `base.js`; chiamata in `results.html` prima di `window.location.href`. File: `app/static/js/base.js`, `app/templates/results.html`. (base.html invariato.)
+- Bonus: per future nav via JS basta chiamare `window.cgStartNavProgress()` prima.
+
+### 22.3 Affiliazione NOW / Awin — ATTIVATA (solo env, zero codice) ⭐
+- NOW ora iscritto su Awin → tracking attivabile. **Il codice era GIÀ predisposto** in `recommendation_api.py` (`_build_affiliate_link` + dict `awin_programs` con chiavi "NOW"/"NOW TV" → env `AWIN_MID_NOW`; provider id 39 → nome "NOW").
+- **Attivazione = 2 env var su Render** (nessun deploy codice):
+  - `AFFILIATE_AWIN_ID = 2879325` (publisher ID Cosaguardo)
+  - `AWIN_MID_NOW = 9535` (merchant ID NOW IT)
+- Risultato: bottone NOW → `https://www.awin1.com/cread.php?awinmid=9535&awinaffid=2879325&ued=https%3A%2F%2Fwww.nowtv.it%2F`. Destinazione = homepage nowtv.it. Il tracking `select_provider` (già cablato) misura anche questi clic.
+- **TIMVision già predisposto**: quando approvato, aggiungere env `AWIN_MID_TIMVISION` e si accende (stesso meccanismo). Disney+/Paramount+/Netflix NON hanno programma Awin IT → restano su fallback JustWatch.
+- Meccanismo coerente con Amazon (`AFFILIATE_AMAZON=cosaguardo-21`) e Apple (`AFFILIATE_APPLE`, Partnerize).
+
+### 22.4 Outreach influencer — strategia + primi test ⭐
+- **Impostazione definitiva**: in questa fase SOLO **storie con link** (unico formato IG con link cliccabile → traffico misurabile; reel/post non linkano). Metrica di giudizio: **costo per click reale su GA4** (non tap dichiarati, non follower) vs baseline **IG ads ~15 cent/visita**. Ogni creator = link UTM dedicato (`utm_source=<creator>&utm_medium=influencer&utm_campaign=test_storie_lug25`), approvazione storia prima della pubblicazione, richiesta screenshot statistiche a fine test per calibrare rapporto **tap→visita GA4** (dato che serve per tutti i creator futuri).
+- **Test avviati** (tutti a performance, budget da test):
+  - **cinesocialclub**: 2 storie 20€ + 5€ bonus a 400 click. (Il profilo ha 8,5M views ma tutto reel non-linkabili; storie solo 2-3k viste.)
+  - **ludovicaledger** (~100k): 25€ + 10€ bonus a 200 click. Profilo motivato/autentico (voleva visitare il sito prima). Nel brief spinto il differenziale "più aggiungi titoli, più ti consiglia altro".
+  - **cinefilomalefico**: 2 storie 10€/cad + 5€ bonus a target click.
+- **Scartati/rinviati**: Enrica Ilari (200k, verticale libri+cinema, ottimo profilo MA storie a 500€ e collab analoga fece solo 176 click → ~2,8€/click, ~19× le ads; rinviata a fase awareness futura). JustWatch resta chiuso.
+- **Principio appreso**: costo-per-click CRESCE coi follower (i grandi vendono reach/awareness non-linkabile). Sweet spot per traffico misurabile = micro/nano-creator 20-30€. I grandi si tengono per quando l'obiettivo sarà notorietà, non traffico.
+- **Lettura risultati**: GA4 → Acquisizione traffico → dimensione "Sorgente/mezzo sessione" → filtra per nome creator. Guardare volume, durata, e `select_provider`/`sign_up` da quella sorgente (qualità, non solo click).
+
+### 22.5 TikTok — follow-up inviato (oltre i 7 giorni)
+- Passati i 7+ giorni indicati da Elina senza ripristino → inviato sollecito cortese-ma-fermo sullo stesso thread (feedback_eu@tiktok.com), ribadendo che il ripristino è già approvato (mail "Appeal Update") e chiedendo aggiornamento concreto + tempi. Motivo ban confermato da TikTok: "Comportamenti di interazione anomali" (= automazione Metricool su account nuovo, come sospettato). Prossimo passo se vago: chiedere escalation a team specializzato. Sempre: nessun account nuovo.
+
+---
+
 **Fine documento.** In nuova chat, carica questo file come primo upload e ripartiamo da qui.
