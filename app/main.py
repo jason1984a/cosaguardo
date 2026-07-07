@@ -750,6 +750,24 @@ def _patched_TemplateResponse(*args, **kwargs):
     if request and "user_email" not in context:
         context["user_email"] = request.session.get("user_email", "")
 
+    # Registra un "giorno attivo" per l'utente loggato (per le colonne visite in
+    # /admin/utenti). Scatta solo sulle render di pagina (= visite reali, non
+    # asset/API) e al massimo 1 volta al giorno per sessione: il DB viene toccato
+    # ~1 volta/giorno per utente, non a ogni richiesta. Silenzioso: non deve mai
+    # rompere una render.
+    if request:
+        try:
+            _uid = request.session.get("user_id")
+            if _uid:
+                from datetime import datetime, timezone
+                _today = datetime.now(timezone.utc).date().isoformat()
+                if request.session.get("cg_activity_day") != _today:
+                    from app.db import record_user_activity
+                    record_user_activity(_uid)
+                    request.session["cg_activity_day"] = _today
+        except Exception:
+            pass
+
     return _original_TemplateResponse(*args, **kwargs)
 
 templates.TemplateResponse = _patched_TemplateResponse

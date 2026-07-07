@@ -180,6 +180,36 @@ def verify_user(email: str, password: str):
 
     return user
 
+def record_user_activity(user_id: int):
+    """
+    Registra un 'giorno attivo' per l'utente loggato e aggiorna last_seen.
+    Idempotente: INSERT OR IGNORE sulla PK (user_id, day) → al massimo 1 riga
+    per utente per giorno. Usa date('now')/datetime('now') di SQLite (UTC),
+    coerente con created_at. Non deve MAI far fallire una richiesta → silenzioso.
+    """
+    if not user_id:
+        return
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_activity (
+                user_id INTEGER NOT NULL,
+                day     TEXT NOT NULL,
+                PRIMARY KEY (user_id, day)
+            )
+        """)
+        cur.execute(
+            "INSERT OR IGNORE INTO user_activity (user_id, day) VALUES (?, date('now'))",
+            (user_id,),
+        )
+        cur.execute("UPDATE users SET last_seen = datetime('now') WHERE id = ?", (user_id,))
+        conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
 def init_db():
     conn = get_connection()
     try:
@@ -199,9 +229,20 @@ def init_db():
 
         # Migrazione sicura — aggiunge colonne se non esistono già
         existing_cols = {row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
-        for col, typedef in [("first_name","TEXT"), ("last_name","TEXT"), ("birth_date","TEXT")]:
+        for col, typedef in [("first_name","TEXT"), ("last_name","TEXT"), ("birth_date","TEXT"), ("last_seen","TIMESTAMP")]:
             if col not in existing_cols:
                 cur.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
+
+        # Registro "giorni attivi" per utente loggato: 1 riga per utente per
+        # giorno (PK composta). Popola le colonne visite in /admin/utenti.
+        # NB: non retroattivo, parte dai dati raccolti da ora in poi.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_activity (
+                user_id INTEGER NOT NULL,
+                day     TEXT NOT NULL,
+                PRIMARY KEY (user_id, day)
+            )
+        """)
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS searches (
@@ -1332,6 +1373,10 @@ def get_admin_stats() -> dict:
             seen INTEGER DEFAULT 0, preference TEXT,
             updated_at TEXT DEFAULT (datetime('now'))
         )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS user_activity (
+            user_id INTEGER NOT NULL, day TEXT NOT NULL,
+            PRIMARY KEY (user_id, day)
+        )""")
         conn.commit()
 
         def count(sql, params=()):
@@ -1352,14 +1397,17 @@ def get_admin_stats() -> dict:
             cur.execute("""
                 SELECT
                     u.id, u.email, u.first_name, u.last_name,
-                    u.birth_date, u.created_at,
+                    u.birth_date, u.created_at, u.last_seen,
                     COUNT(DISTINCT s.id) as n_searches,
                     COUNT(DISTINCT CASE WHEN ts.preference = 'liked' THEN ts.id END) as n_liked,
                     COUNT(DISTINCT CASE WHEN ts.seen = 1 THEN ts.id END) as n_seen,
+                    COUNT(DISTINCT a.day) as active_days_total,
+                    COUNT(DISTINCT CASE WHEN a.day >= date('now','-30 days') THEN a.day END) as active_days_30d,
                     p.content_pref, p.platforms
                 FROM users u
                 LEFT JOIN searches s ON s.user_id = u.id
                 LEFT JOIN user_title_state ts ON ts.user_id = u.id
+                LEFT JOIN user_activity a ON a.user_id = u.id
                 LEFT JOIN user_preferences p ON p.user_id = u.id
                 GROUP BY u.id
                 ORDER BY u.created_at DESC

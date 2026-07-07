@@ -59,6 +59,9 @@
                     <th>Nome</th>
                     <th>Nato</th>
                     <th>Registrato</th>
+                    <th>Ultimo accesso</th>
+                    <th>Giorni attivi</th>
+                    <th>Attivo 30gg</th>
                     <th>Ricerche</th>
                     <th>Preferiti</th>
                     <th>Visti</th>
@@ -85,6 +88,11 @@
                     <td style="font-size:0.78rem;color:var(--muted);white-space:nowrap;">
                         {{ u.created_at[:10] if u.created_at else '—' }}
                     </td>
+                    <td style="font-size:0.78rem;white-space:nowrap;{% if not u.last_seen %}color:var(--muted);{% endif %}">
+                        {{ u.last_seen[:10] if u.last_seen else '—' }}
+                    </td>
+                    <td class="admin-num">{{ u.active_days_total or 0 }}</td>
+                    <td class="admin-num">{{ u.active_days_30d or 0 }}</td>
                     <td class="admin-num">{{ u.n_searches }}</td>
                     <td class="admin-num">{{ u.n_liked }}</td>
                     <td class="admin-num">{{ u.n_seen }}</td>
