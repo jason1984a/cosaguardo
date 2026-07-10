@@ -1714,6 +1714,30 @@ def api_push_subscribe(request: Request, data: dict = Body(...)):
     return {"status": "ok"}
 
 
+# ─── Digital Asset Links (verifica dominio ↔ app Android TWA) ──────────────
+# Servito a /.well-known/assetlinks.json: collega cosaguardo.com all'app così
+# la TWA si apre a schermo intero (senza barra del browser). Deve contenere le
+# impronte SHA-256 di TUTTE le chiavi che firmano l'app consegnata agli utenti.
+_ASSETLINKS_FINGERPRINTS = [
+    # Chiave di upload generata da PWABuilder (fa funzionare l'APK di test)
+    "84:BE:C5:9C:3C:C2:0D:1A:A3:50:A2:78:74:25:C9:92:1D:C0:92:EF:26:D4:6F:A2:20:CB:B9:82:82:C8:81:85",
+    # TODO dopo upload su Play: aggiungere qui l'impronta della "App signing key"
+    # di Google (Play Console → Integrità app → Firma dell'app).
+]
+
+
+@app.get("/.well-known/assetlinks.json")
+def assetlinks_json():
+    return JSONResponse([{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.cosaguardo.app",
+            "sha256_cert_fingerprints": _ASSETLINKS_FINGERPRINTS,
+        },
+    }])
+
+
 # ─── Episodi di una stagione (per sezione "Episodi" del detail page) ────────
 # Restituisce la lista episodi di (tmdb_id, season_number) in JSON.
 # Cache lato server 7gg (series_episodes_cache). Cache HTTP 1h.
