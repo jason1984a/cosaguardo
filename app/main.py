@@ -82,6 +82,10 @@ from core.seo_pages import (
     weekly_seo_refresh, get_last_refresh_info, list_recent_refresh_log,
     get_seo_stats, get_seasons_bump_info,
 )
+from core.push import (
+    init_push_db, save_subscription, is_configured as push_is_configured,
+    VAPID_PUBLIC_KEY,
+)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
@@ -724,6 +728,7 @@ async def cloudflare_cache_headers(request: Request, call_next):
 
 
 init_db()
+init_push_db()   # tabella push_subscriptions per le notifiche web push
 
 app.mount(
     "/static",
@@ -1651,6 +1656,23 @@ def api_streaming_alert(request: Request, data: dict = Body(...)):
     # inserted=True → primo signup; False → email già registrata per quel titolo.
     # In entrambi i casi rispondiamo OK (UX: utente vede "✓ Ti avviseremo")
     return {"status": "ok", "already_registered": not inserted}
+
+
+# ─── Web Push: chiave pubblica + sottoscrizione ────────────────────────────
+@app.get("/api/push/public-key")
+def api_push_public_key():
+    """Il client usa questa chiave (VAPID public) come applicationServerKey."""
+    return {"key": VAPID_PUBLIC_KEY, "enabled": push_is_configured()}
+
+
+@app.post("/api/push/subscribe")
+def api_push_subscribe(request: Request, data: dict = Body(...)):
+    """Salva la sottoscrizione push del device, legata all'utente se loggato."""
+    user_id = request.session.get("user_id")
+    ok = save_subscription(data, user_id=user_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail="sottoscrizione non valida")
+    return {"status": "ok"}
 
 
 # ─── Episodi di una stagione (per sezione "Episodi" del detail page) ────────

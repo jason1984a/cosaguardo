@@ -11,7 +11,7 @@
  * dal timestamp di build, ma puoi anche bumpare manualmente.
  */
 
-const CACHE_VERSION = "v2026.05.06-1";
+const CACHE_VERSION = "v2026.07.10-push";
 const STATIC_CACHE = `cosaguardo-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `cosaguardo-runtime-${CACHE_VERSION}`;
 
@@ -204,6 +204,45 @@ function offlinePage() {
     { status: 503, headers: { "Content-Type": "text/html; charset=utf-8" } }
   );
 }
+
+// ─── PUSH: notifica in arrivo dal server ─────────────────────────────────
+// Payload atteso (JSON): { title, body, url, tag, icon }
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (e) {
+    data = { title: "CosaGuardo", body: event.data ? event.data.text() : "" };
+  }
+  const title = data.title || "CosaGuardo";
+  const options = {
+    body: data.body || "",
+    icon: data.icon || "/static/icons/icon-192.png",
+    badge: "/static/icons/icon-192.png",
+    tag: data.tag || "cosaguardo",
+    data: { url: data.url || "/" },
+    renotify: true,
+  };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+// ─── CLICK sulla notifica → apre/riporta l'app sulla pagina giusta ───────
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || "/";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) {
+          client.focus();
+          if ("navigate" in client) client.navigate(target).catch(() => {});
+          return;
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(target);
+    })
+  );
+});
 
 // ─── MESSAGE HANDLER (per skip-waiting forzato lato client) ──────────────
 self.addEventListener("message", (event) => {

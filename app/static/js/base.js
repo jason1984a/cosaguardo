@@ -260,6 +260,58 @@
                     });
             });
         }
+
+        // ─── WEB PUSH: attivazione notifiche ────────────────────────────────
+        // Esposta globalmente: la chiami da un pulsante "Attiva notifiche"
+        // (es. sul form "Avvisami quando arriva"). Chiede il permesso, crea la
+        // sottoscrizione col SW e la invia al server. Solo per chi è loggato.
+        function _urlB64ToUint8(base64) {
+            var pad = '='.repeat((4 - base64.length % 4) % 4);
+            var b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+            var raw = atob(b64);
+            var arr = new Uint8Array(raw.length);
+            for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+            return arr;
+        }
+
+        window.cgEnablePush = async function () {
+            try {
+                if (cgIsOptedOut && cgIsOptedOut()) return { ok: false, reason: 'optout' };
+                if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                    return { ok: false, reason: 'unsupported' };
+                }
+                // 1) permesso notifiche
+                var perm = await Notification.requestPermission();
+                if (perm !== 'granted') return { ok: false, reason: 'denied' };
+
+                // 2) chiave pubblica VAPID dal server
+                var keyRes = await fetch('/api/push/public-key');
+                var keyData = await keyRes.json();
+                if (!keyData || !keyData.key) return { ok: false, reason: 'no-key' };
+
+                // 3) sottoscrizione col push manager
+                var reg = await navigator.serviceWorker.ready;
+                var sub = await reg.pushManager.getSubscription();
+                if (!sub) {
+                    sub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: _urlB64ToUint8(keyData.key),
+                    });
+                }
+
+                // 4) invio al server
+                var res = await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sub),
+                });
+                if (!res.ok) return { ok: false, reason: 'save-failed' };
+                return { ok: true };
+            } catch (e) {
+                console.warn('cgEnablePush error:', e);
+                return { ok: false, reason: 'error' };
+            }
+        };
     
 
 
