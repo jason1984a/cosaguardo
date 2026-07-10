@@ -552,6 +552,40 @@ def streaming_alerts_stats() -> dict:
         conn.close()
 
 
+def list_pending_streaming_alerts(limit: int = 500) -> list[dict]:
+    """Alert ancora da notificare (notified_at IS NULL)."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, email, tmdb_id, content_type, title, user_id
+            FROM streaming_alerts
+            WHERE notified_at IS NULL
+            ORDER BY created_at ASC
+            LIMIT ?
+        """, (int(limit),))
+        rows = cur.fetchall()
+        return [{
+            "id": r[0], "email": r[1], "tmdb_id": r[2],
+            "content_type": r[3], "title": r[4], "user_id": r[5],
+        } for r in rows]
+    finally:
+        conn.close()
+
+
+def mark_streaming_alert_notified(alert_id: int):
+    """Marca un alert come notificato (imposta notified_at = adesso)."""
+    conn = get_connection()
+    try:
+        conn.execute(
+            "UPDATE streaming_alerts SET notified_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (int(alert_id),),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def top_requested_titles(limit: int = 10) -> list[dict]:
     """
     Top N titoli più richiesti (con più alert ancora pending). Utile per

@@ -86,6 +86,7 @@ from core.push import (
     init_push_db, save_subscription, is_configured as push_is_configured,
     VAPID_PUBLIC_KEY,
 )
+from core.alerts_job import check_and_notify_alerts
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(BASE_DIR)
@@ -346,6 +347,44 @@ def _start_seo_refresh_scheduler():
     )
     t.start()
     log.info("_seo_refresh: scheduler avviato (prossimo lunedì 03:00 Europe/Rome)")
+
+
+# ─── Scheduler giornaliero: notifica arrivi streaming (web push) ──────────
+def _seconds_until_next_hour_rome(hour: int = 4) -> float:
+    from datetime import datetime, timedelta
+    try:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("Europe/Rome")
+    except Exception:
+        tz = None
+    now = datetime.now(tz)
+    nxt = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+    if nxt <= now:
+        nxt = nxt + timedelta(days=1)
+    return max(60.0, (nxt - now).total_seconds())
+
+
+def _alerts_worker():
+    while True:
+        try:
+            _time.sleep(_seconds_until_next_hour_rome(4))
+            res = check_and_notify_alerts()
+            log.info("alerts_job: run completata %s", res)
+        except Exception as e:
+            log.warning("alerts_worker: errore: %s", e)
+            _time.sleep(3600)
+
+
+@app.on_event("startup")
+def _start_alerts_scheduler():
+    """Job giornaliero (04:00 Europe/Rome): rileva arrivi in streaming e notifica.
+    Disabilitabile via env DISABLE_ALERTS_JOB=1."""
+    if os.environ.get("DISABLE_ALERTS_JOB"):
+        log.info("alerts_job: SKIP (DISABLE_ALERTS_JOB set)")
+        return
+    import threading
+    threading.Thread(target=_alerts_worker, daemon=True, name="alerts_scheduler").start()
+    log.info("alerts_job: scheduler avviato (giornaliero 04:00 Europe/Rome)")
 
 
 # ─── Anti-scanner middleware ─────────────────────────────────────────────
@@ -4157,6 +4196,14 @@ ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
 def _check_admin(request: Request) -> bool:
     """Verifica sessione admin."""
     return request.session.get("is_admin") is True
+
+
+@app.get("/admin/run-alerts")
+def admin_run_alerts(request: Request):
+    """Esegue SUBITO il controllo arrivi + notifiche (per test). Solo admin."""
+    if not _check_admin(request):
+        raise HTTPException(status_code=403, detail="non autorizzato")
+    return check_and_notify_alerts()
 
 
 @app.get("/admin", response_class=HTMLResponse)
