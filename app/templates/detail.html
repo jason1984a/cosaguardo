@@ -2316,11 +2316,31 @@ function submitStreamingAlert(event) {
         // Successo: nascondo form, mostro conferma
         form.style.display = 'none';
         status.className = 'cg-alert-status is-success';
-        status.textContent = data.already_registered
-            ? '✓ Sei già nella lista. Ti scriviamo appena arriva.'
-            : '✓ Ti avviseremo appena arriva in streaming!';
-        // Anche la nota e l'icona possono restare visibili; la card resta lì
-        // per rinforzare il messaggio. Niente redirect.
+        {% if is_logged_in %}
+        // Utente loggato → attiviamo le notifiche push (il submit è un gesto valido)
+        status.textContent = data.already_registered ? '✓ Sei già nella lista.' : '✓ Fatto!';
+        if (typeof window.cgEnablePush === 'function') {
+            window.cgEnablePush().then(function (res) {
+                if (res && res.ok) {
+                    status.textContent = '🔔 Perfetto! Ti mandiamo una notifica appena arriva in streaming.';
+                } else if (res && res.reason === 'denied') {
+                    status.textContent = '✓ Salvato. Per la notifica, consenti le notifiche dal browser (icona accanto all\'indirizzo).';
+                } else {
+                    status.textContent = '✓ Ti avviseremo appena arriva in streaming!';
+                }
+            });
+        } else {
+            status.textContent = '✓ Ti avviseremo appena arriva in streaming!';
+        }
+        {% else %}
+        // Utente anonimo → email salvata (lead), ma la notifica istantanea arriva
+        // solo agli iscritti: onesto + incentivo alla registrazione.
+        status.innerHTML = (data.already_registered
+            ? '✓ Email già salvata! '
+            : '✓ Email salvata! ')
+            + '<a href="/register" style="color:#6EA8FE;font-weight:700;text-decoration:underline;">Accedi o registrati</a> e ti mandiamo la notifica 🔔 appena arriva.';
+        {% endif %}
+        // La card resta visibile per rinforzare il messaggio. Niente redirect.
     })
     .catch(err => {
         console.warn('streaming-alert error', err);
