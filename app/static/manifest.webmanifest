@@ -4,13 +4,17 @@
   "description": "Scopri film e serie TV perfetti per te. Consigli personalizzati basati sui tuoi gusti.",
   "start_url": "/",
   "scope": "/",
+  "id": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#0b1020",
   "theme_color": "#0b1020",
   "lang": "it",
   "dir": "ltr",
-  "categories": ["entertainment", "lifestyle"],
+  "categories": [
+    "entertainment",
+    "lifestyle"
+  ],
   "icons": [
     {
       "src": "/static/icons/icon-192.png",
@@ -43,14 +47,24 @@
       "short_name": "Scopri",
       "description": "Esplora film e serie",
       "url": "/scopri",
-      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/static/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Profilo",
       "short_name": "Profilo",
       "description": "Il tuo profilo e consigli",
       "url": "/profilo",
-      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/static/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

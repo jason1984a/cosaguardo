@@ -1502,4 +1502,55 @@ Su richiesta: cliccando un chip filtro già attivo ora lo si **deseleziona** las
 
 ---
 
+## 23. Sessione ~10/07/2026 — Sistema notifiche PUSH (app), Sky Go, admin visite, risultati influencer
+
+### 23.1 ⭐ SISTEMA NOTIFICHE WEB PUSH (Fasi 1-3) — COMPLETO end-to-end
+Costruito il sistema di notifiche automatiche, base per l'app Android. Flusso: utente loggato apre un titolo non in streaming → "Avvisami" → attiva push → quando il titolo arriva in streaming, riceve un push che apre la scheda. **Zero gestione manuale.**
+
+**Architettura (3 parti):**
+- **Fase 1 — Trasporto push**: nuovo modulo **`core/push.py`** (autonomo, come seo_pages.py): tabella `push_subscriptions`, `save_subscription()`, `get_subscriptions_for_user()`, `send_push_to_user()` (usa `pywebpush`). Handler `push`+`notificationclick` in `app/static/sw.js`. Funzione globale **`window.cgEnablePush()`** in `base.js` (chiede permesso, sottoscrive, invia a server; rispetta l'opt-out). Route `GET /api/push/public-key` e `POST /api/push/subscribe` in main.py. `init_push_db()` allo startup. Bumpati `base.js?v=3` e `CACHE_VERSION` del SW.
+- **Fase 2 — Job rilevamento arrivi**: nuovo **`core/alerts_job.py`** → `check_and_notify_alerts()`: legge alert pending (`list_pending_streaming_alerts` in db.py), raggruppa per titolo, controlla `get_watch_providers(title, ct)` (flatrate non vuoto = arrivato), invia push + marca notificato (`mark_streaming_alert_notified`). Scheduler giornaliero **04:00 Europe/Rome** in main.py (`_start_alerts_scheduler`, thread; disattiva con env `DISABLE_ALERTS_JOB=1`). Route test manuale **`GET /admin/run-alerts`** (solo admin).
+- **Fase 3 — Attivazione UI**: in `detail.html`, il form "Avvisami" ora: se **loggato** → attiva `cgEnablePush()` (msg "🔔 Ti mandiamo una notifica…"); se **anonimo** → salva email + mostra incentivo "**Accedi o registrati** per la notifica 🔔" (link a /register). Onesto (l'email non riceve ancora nulla) + spinge le registrazioni.
+
+**ENV VAPID su Render** (già impostati):
+- `VAPID_PUBLIC_KEY` = `BHMiQG3jUL8X4kGeXDtdMmng9B7wKa6lZLLkQc2q9YALC8gpbWZWnuwBi7NoxAuZwM4WAViSa2Zmr3K3pMFsXlU`
+- `VAPID_PRIVATE_KEY` = `v0uTau_Z9LipFfVVnyY0UjlwhXAgFAzdOrB3OlhxFr0` (SEGRETA)
+- `VAPID_SUBJECT` = `mailto:privacy@cosaguardo.com`
+- **`requirements.txt`**: aggiunto `pywebpush`.
+
+**Come testare**: `cosaguardo.com/api/push/public-key` → deve dare `{"key":...,"enabled":true}`. Console (loggato, non-optout): `await cgEnablePush()` → `{ok:true}`. Job: `/admin/run-alerts` (da admin) → JSON `{pending,arrived,notified}`. ⚠️ L'opt-out (`?optout=1`) blocca anche cgEnablePush (per questo Marco vedeva `reason:'optout'` → risolto con `?optout=0`).
+
+**PENDING sistema notifiche**:
+- **Invio EMAIL** per gli alert anonimi (ora ricevono solo l'incentivo a registrarsi, nessuna email) → richiede servizio tipo Resend/SES. Fase futura.
+- **Contenitore Android** vero (PWABuilder → .aab → Google Play 25$). La PWA + push sono pronti; il push è anche la "funzione nativa" che servirà per la revisione iOS futura.
+
+### 23.2 App CG — piano store (deciso)
+- **Solo Android per ora** (iOS dopo). Android: 25$ una-tantum, no Mac, via **PWABuilder** (genera .aab dalla PWA, carica il sito live → aggiornamenti automatici). iOS: 99$/anno + Mac + revisione ostica (serve funzione nativa = le push, già pronte).
+- Notifiche push automatiche = valore nativo + incentivo registrazione. Contenitore carica sito live (no ricompilazione per ogni modifica).
+
+### 23.3 Sky Go → affiliato NOW/Awin
+Aggiunto "Sky Go" alla mappa `awin_programs` in `recommendation_api.py`: i click su Sky Go (provider TMDb id 29) vanno all'affiliato NOW (stesso merchant `AWIN_MID_NOW`, dest. nowtv.it). Razionale: Sky Go non è acquistabile a sé, per chi non è cliente Sky il modo di guardare è NOW. Riusa le env NOW già impostate.
+
+### 23.4 Admin /utenti — colonne visite (user_activity)
+Aggiunta tabella `user_activity` (1 riga/utente/giorno) + `last_seen` + `record_user_activity()` in db.py; hook in `_patched_TemplateResponse` (main.py) che registra 1x/giorno/sessione (solo render pagine). Colonne in admin_utenti.html: **Ultimo accesso · Giorni attivi · Attivo 30gg**. NON retroattivo. "Ultimo accesso" = segnale-chiave retention.
+
+### 23.5 ⭐ Risultati primi test influencer (dati GA4 reali)
+Letti in GA4 (Acquisizione traffico → Sorgente/mezzo sessione, campagna `test_storie_lug25`):
+- **ludovicaledger** (25€): **41 sessioni**, durata **1m05s**, coinvolgimento **70,7%** → costo/visita **61 cent**. Eventi chiave: **2 install_banner_clicked + 1 sign_up**. Il sign_up (2,4% conv su traffico freddo) è ottimo → traffico DI QUALITÀ che converte.
+- **cinesocialclub** (10€, 1ª storia): **23 sessioni**, durata **52s**, coinvolgimento 47,8% → costo/visita **43 cent**. **0 eventi chiave**. Traffico superficiale.
+- **Baseline IG ads**: ~15 cent/visita. **Entrambi ~3-4× più cari a visita.**
+- **VERDETTO**: sul costo-per-visita gli influencer NON battono le ads. MA la metrica giusta è **costo-per-REGISTRATO/conversione**: lì Ludovica (1 sign_up) ha dato valore, cinesocialclub no. **cinesocialclub → non ripetere. Ludovica → profilo giusto (autentica, in target), da riprovare.** cinesocialclub deve ancora fare la **2ª storia** → test in sospeso fino a quella (segnarsi baseline 23 sessioni/0 eventi per isolare la 2ª). Enrica Ilari rinviata (troppo cara). unchained_cinema + cinefilomalefico test avviati (2 storie 20€+5€).
+- **Principio confermato**: costo/click cresce coi follower; il costo-per-visita da solo inganna, conta cosa fanno DOPO (conversioni).
+
+### 23.6 Contenuti social — tracking Excel aggiornato + apprendimenti
+- **`cosaguardo_report_social.xlsx`** popolato: foglio Metriche con 28 rilevazioni (IG+YouTube per R01-R10 coppie, C01-C05 caroselli, +TL01/C06/Q01/Q02), colonna Categoria (mainstream/nicchia), nuovo foglio **Analisi**. 0 errori formula.
+- **Numeri chiave**: media viste **YouTube 473 vs IG 260**. Coppie **mainstream YT 851 vs nicchia YT 100 (8,5×!)**. Su IG il divario si schiaccia (316 vs 250, IG è piatto).
+- **STRATEGIA CONTENUTI**: raddoppiare su **YouTube Shorts** (soffitto alto, breakout fino 2.300; titoli ricercabili + link cliccabile in descrizione), **coppie universali/mainstream** (le nicchie solo per variare), **lavorare sull'engagement** (domanda + primo commento tuo) per sbloccare la reach IG. Formato **tier list** = macchina da commenti (template brandizzati creati: finali, "quando smettere"). Video "coppie" format: hook "se ti sono piaciuti X e Y" + 5 titoli con 1-2 chicche (verificate in streaming IT) + CTA "la tua coppia? …su cosaguardo.com".
+- **Copertine/template generati** (in /mnt/user-data/outputs/caroselli/): stile "testuale" (titolo grande + card laterali) e "coppia" (2 slot poster + "5 FILM DA VEDERE"); tier list 1080×1920 con celle poster vuote. Env generazione: `pip install cairosvg pillow --break-system-packages; apt-get install -y fonts-montserrat`.
+
+### 23.7 Bit.ly per link influencer
+I link UTM lunghi vengono rifiutati dallo sticker link IG → accorciati con **bit.ly** (mantiene gli UTM, redirect trasparente). Feature futura possibile: redirect on-brand `cosaguardo.com/go/<creator>` (route redirect) invece di bit.ly.
+
+---
+
 **Fine documento.** In nuova chat, carica questo file come primo upload e ripartiamo da qui.
