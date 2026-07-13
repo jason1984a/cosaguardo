@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eliminazione account e dati — CosaGuardo</title>
+  <meta name="robots" content="noindex">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --navy:#0B1020; --navy2:#141d3d; --azure:#6EA8FE; --purple:#a78bfa;
+      --white:#F4F7FF; --muted:#9fb0d0;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      font-family:'Montserrat',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      background:radial-gradient(1200px 700px at 50% -10%, #1b2748 0%, var(--navy) 55%, #070b18 100%);
+      color:var(--white); min-height:100vh; line-height:1.6;
+      padding:32px 20px;
+    }
+    .wrap{max-width:760px;margin:0 auto}
+    .brand{display:flex;align-items:center;gap:14px;margin-bottom:36px}
+    .logo{width:52px;height:52px;border-radius:14px;
+      background:linear-gradient(135deg,var(--purple),var(--azure));
+      display:flex;align-items:center;justify-content:center}
+    .logo svg{display:block}
+    .brand span{font-weight:800;font-size:1.5rem;letter-spacing:.2px}
+    h1{font-size:2rem;font-weight:800;line-height:1.2;margin-bottom:10px}
+    .lead{color:var(--muted);font-size:1.05rem;margin-bottom:32px}
+    .card{background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);
+      border-radius:18px;padding:26px 26px;margin-bottom:22px}
+    h2{font-size:1.15rem;font-weight:700;color:var(--azure);margin-bottom:14px}
+    ol{padding-left:22px} ol li{margin-bottom:10px}
+    ul{padding-left:22px;margin-top:6px} ul li{margin-bottom:6px}
+    .email{display:inline-block;font-weight:700;color:var(--azure);
+      text-decoration:none;border-bottom:2px solid rgba(110,168,254,.5)}
+    .email:hover{border-color:var(--azure)}
+    .tag{display:inline-block;background:rgba(110,168,254,.15);color:var(--azure);
+      border-radius:8px;padding:2px 10px;font-weight:700;font-size:.92rem}
+    .muted{color:var(--muted)}
+    footer{color:var(--muted);font-size:.9rem;margin-top:30px;text-align:center}
+    a.plain{color:var(--azure);text-decoration:none}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="brand">
+      <span class="logo">
+        <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M11 7 L22 15 L11 23 Z" fill="#0B1020"/>
+        </svg>
+      </span>
+      <span>CosaGuardo</span>
+    </div>
+
+    <h1>Eliminazione dell'account e dei dati</h1>
+    <p class="lead">Questa pagina spiega come richiedere l'eliminazione del tuo account
+      <strong>CosaGuardo</strong> e dei dati a esso associati.</p>
+
+    <div class="card">
+      <h2>Come richiedere l'eliminazione</h2>
+      <ol>
+        <li>Invia una email a
+          <a class="email" href="mailto:info@cosaguardo.com?subject=Elimina%20account">info@cosaguardo.com</a>
+          <span class="muted">dall'indirizzo email con cui ti sei registrato.</span></li>
+        <li>Indica nell'oggetto: <span class="tag">Elimina account</span></li>
+        <li>Se vuoi, specifica nel messaggio se desideri eliminare <em>l'intero account</em>
+          oppure <em>solo alcuni dati</em> (vedi sotto).</li>
+      </ol>
+      <p class="muted" style="margin-top:14px">Elaboreremo la tua richiesta e completeremo
+        l'eliminazione <strong>entro 30 giorni</strong>. Riceverai una conferma via email.</p>
+    </div>
+
+    <div class="card">
+      <h2>Quali dati vengono eliminati</h2>
+      <p>Al momento dell'eliminazione dell'account rimuoviamo in modo definitivo:</p>
+      <ul>
+        <li>l'account e l'<strong>indirizzo email</strong> di registrazione;</li>
+        <li>i tuoi <strong>preferiti</strong> e la tua <strong>«La mia raccolta»</strong>
+          (titoli che stai guardando, vuoi guardare, hai visto);</li>
+        <li>la <strong>cronologia delle ricerche</strong> e dei consigli richiesti;</li>
+        <li>le <strong>iscrizioni alle notifiche</strong> (avvisi sui titoli in arrivo in streaming).</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <h2>Dati eventualmente conservati</h2>
+      <p class="muted">Alcuni dati tecnici minimi (ad esempio log di sicurezza necessari a
+        prevenire abusi o richiesti da obblighi di legge) possono essere conservati per un
+        breve periodo aggiuntivo e poi eliminati. Questi dati non vengono utilizzati per
+        identificarti né per finalità commerciali.</p>
+    </div>
+
+    <div class="card">
+      <h2>Eliminare solo alcuni dati (senza chiudere l'account)</h2>
+      <p class="muted">Se preferisci mantenere l'account ma eliminare determinati dati
+        (ad esempio la cronologia o i preferiti), indicalo nella stessa email a
+        <a class="email" href="mailto:info@cosaguardo.com?subject=Elimina%20dati">info@cosaguardo.com</a>
+        e procederemo di conseguenza.</p>
+    </div>
+
+    <footer>
+      CosaGuardo · <a class="plain" href="https://cosaguardo.com">cosaguardo.com</a>
+      · <a class="plain" href="https://cosaguardo.com/privacy">Privacy</a>
+    </footer>
+  </div>
+</body>
+</html>

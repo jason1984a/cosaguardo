@@ -1738,6 +1738,19 @@ def assetlinks_json():
     }])
 
 
+# ─── Eliminazione account e dati (requisito Google Play) ───────────────────
+# Pagina statica servita a /elimina-account: spiega come richiedere la
+# cancellazione dell'account e quali dati vengono eliminati/conservati.
+@app.get("/elimina-account", response_class=HTMLResponse)
+def elimina_account_page():
+    _p = os.path.join(os.path.dirname(__file__), "templates", "elimina_account.html")
+    try:
+        with open(_p, encoding="utf-8") as _f:
+            return HTMLResponse(_f.read())
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="pagina non trovata")
+
+
 # ─── Episodi di una stagione (per sezione "Episodi" del detail page) ────────
 # Restituisce la lista episodi di (tmdb_id, season_number) in JSON.
 # Cache lato server 7gg (series_episodes_cache). Cache HTTP 1h.
