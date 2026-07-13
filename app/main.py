@@ -1801,29 +1801,86 @@ def api_series_untrack(request: Request, tmdb_id: int):
 
 def _enrich_titles_with_posters(items):
     """Items: list di sqlite3.Row o dict che contengono almeno 'title' e
-    'content_type'. Aggiunge poster_url e tmdb_id (best-effort) leggendo
-    da poster_cache in batch. Non fa chiamate TMDb live, quindi è veloce.
-    Items senza poster in cache restano senza poster (renderizzano placeholder).
+    'content_type'. Aggiunge poster_url e tmdb_id leggendo prima da poster_cache
+    (veloce), poi con un fallback TMDb live per gli item non risolti — così le
+    card nella raccolta hanno sempre poster E link (niente più dead-click).
+    I titoli risolti live vengono ri-salvati in cache (self-healing).
     """
     if not items:
         return []
     out = [dict(r) for r in items]
     needs = [(d['title'], d['content_type']) for d in out if not d.get('poster_url')]
-    if not needs:
-        return out
-    try:
-        cache = get_poster_cache(needs)
-    except Exception as e:
-        log.warning("_enrich_titles_with_posters: get_poster_cache fallita: %s", e)
-        return out
-    for d in out:
-        if d.get('poster_url'):
-            continue
-        cached = cache.get((d['title'], d['content_type']))
-        if cached:
-            d['poster_url'] = cached.get('poster_url', '')
-            if not d.get('tmdb_id'):
-                d['tmdb_id'] = cached.get('tmdb_id')
+    if needs:
+        try:
+            cache = get_poster_cache(needs)
+        except Exception as e:
+            log.warning("_enrich_titles_with_posters: get_poster_cache fallita: %s", e)
+            cache = {}
+        for d in out:
+            if d.get('poster_url'):
+                continue
+            cached = cache.get((d['title'], d['content_type']))
+            if cached:
+                d['poster_url'] = cached.get('poster_url', '')
+                if not d.get('tmdb_id'):
+                    d['tmdb_id'] = cached.get('tmdb_id')
+
+    # Fallback LIVE: item ancora senza poster O senza tmdb_id (= dead-click).
+    still = [d for d in out if not d.get('poster_url') or not d.get('tmdb_id')]
+    if still:
+        import re as _re
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def _clean(t):
+            # "Matrix Reloaded (The Matrix Reloaded)" -> "Matrix Reloaded"
+            s = (t or '').strip()
+            s = _re.sub(r'\s*\([^)]*\)\s*$', '', s).rstrip(' .\u2026')
+            return s.strip()
+
+        def _resolve(d):
+            title = d.get('title') or ''
+            ct = d.get('content_type') or 'movie'
+            tried = []
+            for cand in (title, _clean(title)):
+                if not cand or cand in tried:
+                    continue
+                tried.append(cand)
+                try:
+                    if ct == 'movie':
+                        info = get_movie_tmdb_info(cand)
+                        if info and info.get('tmdb_id'):
+                            d['tmdb_id'] = d.get('tmdb_id') or info.get('tmdb_id')
+                            if not d.get('poster_url'):
+                                d['poster_url'] = info.get('poster_url', '')
+                            return d
+                    else:
+                        tv = find_tv_by_title(cand)
+                        if tv and (tv.get('id') or tv.get('tv_id')):
+                            d['tmdb_id'] = d.get('tmdb_id') or tv.get('id') or tv.get('tv_id')
+                            if not d.get('poster_url') and tv.get('poster_path'):
+                                d['poster_url'] = f"https://image.tmdb.org/t/p/w342{tv['poster_path']}"
+                            return d
+                except Exception as e:
+                    log.debug("_enrich live resolve '%s' fallita: %s", cand, e)
+            return d
+
+        try:
+            with ThreadPoolExecutor(max_workers=6) as ex:
+                list(as_completed({ex.submit(_resolve, d): d for d in still}))
+        except Exception as e:
+            log.warning("_enrich_titles_with_posters: live fallback fallito: %s", e)
+
+        # write-back in cache dei risolti (self-healing: la prossima volta è istantaneo)
+        writeback = [{
+            "title": d['title'], "content_type": d.get('content_type') or 'movie',
+            "poster_url": d.get('poster_url', ''), "tmdb_id": d.get('tmdb_id'),
+        } for d in still if d.get('tmdb_id') or d.get('poster_url')]
+        if writeback:
+            try:
+                save_poster_cache(writeback)
+            except Exception as e:
+                log.debug("_enrich write-back cache fallito: %s", e)
+
     return out
 
 
