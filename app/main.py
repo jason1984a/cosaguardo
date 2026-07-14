@@ -1,7 +1,7 @@
 import os
 import sys
 import signal
-from fastapi import FastAPI, Form, Request, HTTPException
+from fastapi import FastAPI, Form, Request, HTTPException, Query
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -2042,7 +2042,7 @@ def login_submit(
     return RedirectResponse(url="/profilo?logged_in=1", status_code=303)
 
 @app.post("/recommend")
-def recommend(
+def recommend_submit(
     request: Request,
     content_type: str = Form("movie"),
     movie1: str = Form(""),
@@ -2051,6 +2051,29 @@ def recommend(
     movie4: str = Form(""),
     movie5: str = Form(""),
     movie6: str = Form(""),
+):
+    # POST -> Redirect -> GET (PRG): evita l'avviso "Conferma reinvio modulo"
+    # al refresh (fastidioso dentro l'app). Reindirizza ai risultati come GET,
+    # coi titoli nella query string. Bonus: la pagina risultati diventa
+    # condivisibile/bookmarkabile.
+    from urllib.parse import urlencode
+    _params = [("content_type", content_type)]
+    for _i, _m in enumerate([movie1, movie2, movie3, movie4, movie5, movie6], 1):
+        if _m and _m.strip():
+            _params.append((f"movie{_i}", _m.strip()))
+    return RedirectResponse(url="/recommend?" + urlencode(_params), status_code=303)
+
+
+@app.get("/recommend")
+def recommend(
+    request: Request,
+    content_type: str = Query("movie"),
+    movie1: str = Query(""),
+    movie2: str = Query(""),
+    movie3: str = Query(""),
+    movie4: str = Query(""),
+    movie5: str = Query(""),
+    movie6: str = Query(""),
 ):
     seed_titles = [
         m.strip()
