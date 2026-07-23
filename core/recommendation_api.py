@@ -2324,8 +2324,12 @@ MOOD_GENRES = {
 }
 
 PLATFORM_MAP = {
+    # ATTENZIONE: gli ID devono restare allineati a PLATFORM_SLUGS (più in basso).
+    # Con watch_region=IT il provider Prime Video su TMDb è 119, NON 9:
+    # l'ID 9 è la variante di altri mercati e in Italia non restituisce risultati
+    # (causava la schermata vuota su /scopri?piattaforma=prime).
     "netflix":   8,
-    "prime":     9,
+    "prime":     119,
     "disney":    337,
     "apple":     350,
     "paramount": 531,
