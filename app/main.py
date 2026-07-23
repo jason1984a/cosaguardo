@@ -71,6 +71,7 @@ from core.recommendation_api import (
     get_popular_by_genre_tmdb,
     get_franchise_key,
     is_same_franchise,
+    get_amazon_bounty_link,
 )
 
 from core.recommendation_tv import recommend_tv_from_seed_titles, search_tv_series, find_tv_by_title
@@ -2591,6 +2592,8 @@ def film_detail(request: Request, tmdb_id: int):
             "is_liked":   title_state.get("preference") == "liked",
             "is_seen":    title_state.get("seen", 0) == 1,
             "seo_slug":   seo_slug,
+            # Link prova gratuita Prime (bounty 3 €) per la CTA nelle schede
+            "amazon_bounty_link": get_amazon_bounty_link(),
             "meta_robots":  meta_robots,
             "canonical_url": canonical_url,
             # Per chip generi cliccabili → /scopri (vedi GENRE_TO_SCOPRI_SLUG)
@@ -2660,6 +2663,8 @@ def serie_detail(request: Request, tmdb_id: int):
             "is_liked":   title_state.get("preference") == "liked",
             "is_seen":    title_state.get("seen", 0) == 1,
             "seo_slug":   seo_slug,
+            # Link prova gratuita Prime (bounty 3 €) per la CTA nelle schede
+            "amazon_bounty_link": get_amazon_bounty_link(),
             "meta_robots":   meta_robots,
             "canonical_url": canonical_url,
             "series_tracking": series_tracking,

@@ -1553,4 +1553,106 @@ I link UTM lunghi vengono rifiutati dallo sticker link IG → accorciati con **b
 
 ---
 
+## 24. Sessione ~14–17/07/2026 — APP ANDROID PUBBLICATA (Play, test chiuso), APP iOS in preparazione, fix UX, apprendimenti social, nuovo TikTok
+
+### 24.1 APP ANDROID — pubblicata in TEST CHIUSO su Google Play ✅
+Via PWABuilder (TWA che carica il sito live → aggiornamenti automatici). **Package ID PERMANENTE: `com.cosaguardo.app`**.
+- **Account Play Console**: ID `7306521630854481240`, App ID `4974417119108202241`. Tipo Personale, dev name `CosaGuardo`, login `mfantini84@gmail.com`, email pubblica `info@cosaguardo.com`. Identità + telefono verificati.
+- **Scheda Store** completa: titolo `CosaGuardo`, descr. breve 74char, descr. lunga, categoria **Intrattenimento**, tag (streaming/film/serie tv/guida tv/intrattenimento — NO "biglietti cinema"). Contatti: email + sito, no telefono. Video store saltato (i reel IG sono 9:16).
+- **Questionario/dichiarazioni** (risposte chiave): monetizzazione=Sì (affiliati); no bambini; dettagli accesso=Sì (account test sul sito + nota EN); **annunci=No** (affiliati non contano → CAMBIARE se attivi AdSense); classificazione contenuti tutta **No** tranne "Contenuto online=Sì" → **PEGI 3/Per tutti ovunque**; pubblico 13+; no posizione (IP non conta); Sicurezza dati: HTTPS sì, account nome+password, criptati in transito=Sì, dati dichiarati = email + ID utente (non condivisi) + Interazioni app (GA4+Clarity, CONDIVISI) + Cronologia ricerche + ID dispositivo (GA4, CONDIVISO); no finanziarie/salute/governative; **ID pubblicità=No** (TWA, no SDK pubblicitari nativi; GA4 web NON usa l'AAID).
+- **URL eliminazione account**: `cosaguardo.com/elimina-account`.
+- **Materiali store** (cartella `/mnt/user-data/outputs/store/`): `icon-512.png`, `feature_graphic.png` (1024×500), `store_1..5.png` (1080×1920).
+- **Release test chiuso (Alpha) PUBBLICATA E LIVE (14/07)**: stato "Pubblicata", app bundle 1.0.0.0, 659 kB, **solo Italia**. Link opt-in: `https://play.google.com/apps/testing/com.cosaguardo.app`. Testata su Android: **si apre a schermo intero + push OK**.
+- **⚠️ REGOLA account nuovo**: serve **test chiuso con ≥12 tester per ≥14 giorni** → poi si può **richiedere la Produzione**. I tester devono dare la loro **email Google reale** (match con l'account del loro telefono); non basta metterne una qualsiasi. Meglio 15-18 per margine.
+- **Verifica sviluppatori Android**: registrazione automatica già fatta (nessuna azione; riguarda solo chi distribuisce fuori Play).
+- **PENDING**: completare 12 tester → attendere 14gg → richiedere Produzione → poi link Play Store su sito+social.
+
+### 24.2 assetlinks — impronta Google Play aggiunta (verifica TWA)
+Route `GET /.well-known/assetlinks.json` in `main.py` con `_ASSETLINKS_FINGERPRINTS` = **DUE impronte SHA-256**:
+- Chiave di firma dell'app di **GOOGLE** (Play App Signing, firma le release consegnate): `17:35:4B:A6:C3:4A:85:77:57:03:5C:15:67:63:85:B7:2E:36:24:62:5B:F6:4E:AE:18:BA:DD:54:6D:48:56:EE`
+- Chiave di caricamento PWABuilder: `84:BE:C5:9C:3C:C2:0D:1A:A3:50:A2:78:74:25:C9:92:1D:C0:92:EF:26:D4:6F:A2:20:CB:B9:82:82:C8:81:85`
+
+Impronta Google trovata (nuova UI 2026): **Protetto con Play → Protezione del Play Store → Vai a Play app signing** → Certificato della chiave di firma dell'app → SHA-256. **Verificato online**: l'endpoint restituisce entrambe → app a schermo intero senza barra browser.
+
+### 24.3 APP iOS — in preparazione (in PAUSA tecnica)
+Via PWABuilder (progetto iOS/TWA). Rischio revisione Apple **4.2** (siti impacchettati) → le **push** sono il valore nativo anti-rifiuto.
+- **Account Apple Developer PAGATO** (99$/anno, ordine `W1815035906`, 14/07) ma **IN ELABORAZIONE**. Attendere email *"Welcome to the Apple Developer Program"* + Membership attiva su `developer.apple.com/account`. La ricevuta di pagamento NON è l'attivazione.
+- **Mac fisso in ufficio** (Sequoia 15.7.7). **Xcode 26.3 installato** (scaricato `Universal.xip` da `developer.apple.com/download/all`, NON dal Mac App Store che pretendeva macOS 26.2/Tahoe). Compatibilità: Sequoia 15 → Xcode 16+; Xcode 26 → richiede 15.6+.
+- Progetto iOS aperto in Xcode (`.xcworkspace`): contiene AppDelegate/PushNotifications/WebView/GoogleService-Info (push predisposte). Target: **"Any iOS Device (arm64)"**. Signing: "Automatically manage" ON, Team **Marco Fantini**, **Bundle ID `com.cosaguardo`** (senza .app, va bene, diverso da Android). Errori firma "Communication with Apple failed / No profiles" = **NORMALI** finché l'account non è attivo.
+- **Materiali iOS pronti** (`/mnt/user-data/outputs/ios/`): `AppIcon_1024.png` (1024×1024 quadrato pieno, no trasparenza/angoli, RGB), `ios_1..5.png` (iPhone 6.7" **1290×2796**), `testi_app_store.md` (nome, sottotitolo "Cosa guardare e dove vederlo", **keyword SENZA marchi** Netflix/Disney, descrizione, note revisore EN sul valore nativo).
+- **PENDING**: attesa attivazione account → in Xcode "Try Again" firma → **Product > Archive → Distribute → App Store Connect** (upload) → creare scheda su App Store Connect → superare revisione. Ignorare/disattivare target **macOS Catalyst**.
+
+### 24.4 FIX DEPLOYATI
+- **POST→Redirect→GET su `/recommend`** (`main.py`): la POST ora reindirizza (303) a **GET** `/recommend?content_type=...&movie1=...` → elimina l'avviso **"Conferma reinvio modulo"** al refresh (segnalato dalla tester Sharon, fastidioso in-app). Aggiunto import `Query`. Bonus: risultati bookmarkabili/condivisibili.
+- **Fix raccolta poster / dead-click** (`main.py`, `_enrich_titles_with_posters`): fallback TMDb live per item non in cache + pulizia titolo malformato (regex rimuove "(...)" finale) + write-back cache (self-healing).
+- **Pagina eliminazione account** (`app/templates/elimina_account.html` self-contained + route `GET /elimina-account` in `main.py` che legge il template): requisito Play. Eliminazione **via email** a `info@cosaguardo.com` entro 30gg (metodo accettato da Google). **[DECISIONE Marco]**: NON mettere il bottone nel profilo — basta la pagina sul sito (risulta comunque per Play).
+
+### 24.5 NOW TV / Awin — ATTIVATA + sul sito ✅ FATTA
+NOW TV (Awin) **attivata e aggiunta al sito** (non più pending). Env: `AFFILIATE_AWIN_ID=2879325`, `AWIN_MID_NOW=9535`. Sky Go (TMDb id 29) → mappato su affiliato NOW in `core/recommendation_api.py`. **Restano pending**: TIMVision (Awin), Apple TV+ (2-3 mesi).
+
+### 24.6 BANDA / RENDER — OTTIMA ✅
+Dopo **17 giorni di luglio: banda < 1 GB** → il Cloudflare proxy contiene i bot scraper, tutto sotto controllo. Upgrade a Render Standard (~$25/mese) rinviato finché non arriva traffico organico (strategia conservativa confermata).
+
+### 24.7 APPRENDIMENTI SOCIAL (chiave)
+- **TIER LIST = formato regina su IG**: "Quando smettere di guardarla" **57,6k** (virale), "Finali che non dimentichi" **2.213**, "Capolavori" **878**. Coppie solide (Se7en+Shutter 488, Forrest Gump+Ali libertà 462, White Lotus+BLL 311). Caroselli **testuali** rendono meno (90-249) → contenuti **CON locandine/volti** battono i solo-testo.
+- **⚠️ YouTube — LEZIONE TITOLI**: "Capolavori" ha fatto **8 views** su YT (pubblicato come Short, nessuna rivendicazione) perché il **titolo** partiva da "Obsession" (nicchia, nessuno lo cerca). Quella da **2.800** aveva titolo "Serie TV: quando dovevi smettere di guardarla" (keyword "Serie TV" davanti + gancio). **REGOLA YouTube** (è un motore di ricerca, ≠ IG): keyword ricercabile all'inizio (Film/Serie TV/titolo famoso) + gancio provocatorio; **MAI partire da un titolo di nicchia**. Su IG il titolo conta poco (contano immagine + pubblico).
+- **Statici crollano su YT Shorts** anche se pubblicati come Short (l'algoritmo Shorts vuole movimento); i **video parlati reggono** (coppie fino 2.300, White Lotus 183). STRATEGIA: IG = tier list + coppie con locandine; YouTube = **solo video parlati con titolo ricercabile**.
+- **Formato "coppia + chicche"**: coppia MAINSTREAM come amo (aggancia il pubblico largo) + 5 consigli con 1-2 **chicche di nicchia** (verificate in streaming IT). L'esca in una tier list = titolo **riconoscibile** (Stranger Things sì, I Soprano no).
+- **Excel report aggiornato** (snapshot 15/07): `/mnt/user-data/outputs/cosaguardo_report_social.xlsx` (fogli Contenuti/Metriche/Riepilogo/Analisi; +6 contenuti, +14 rilevazioni). N.B.: media IG gonfiata dal virale 57,6k, tipico ~200-500.
+
+### 24.8 CONTENUTI PRONTI (in canna)
+- **Video coppie** (script a blocchi TTS 1.1x, hook "se ti sono piaciuti X+Y" + 5 titoli + CTA "su cosaguardo.com", caption + titolo YT ricercabile + musica forniti):
+  1. Inception+Interstellar → chicca **Predestination** (Netflix/Prime). Musica epico/cinematic.
+  2. Breaking Bad+Peaky Blinders → chicca **Snowfall** (Disney+). Musica dark/crime.
+  3. Fight Club+Se7en (coppia famosa → CHICCHE dark) → Lo Sciacallo · Prisoners · L'uomo senza sonno · Oldboy · **Enemy** (verificato Prime/TIMVision, "erede di Fight Club"). Musica dark/inquietante.
+- **Tier list** (template 1080×1920 in `/mnt/user-data/outputs/caroselli/`): "Capolavori" (con Obsession — horror 2026 record incassi <1M$), "Finali di serie" (esca The Walking Dead, non I Soprano), "Serie partite bene, poi..." (MAI ROVINATA/CALO LIEVE/CROLLATA/DISASTRO).
+- **Principi caption**: alternare stile "dichiarato" (Ho messo X tra…) vs "sincero/non dichiarato" (così l'esca sembra opinione genuina). Musica: royalty-free per YT (Content ID), audio trend IG solo su Instagram.
+
+### 24.9 NUOVO TIKTOK (vecchio bannato per Metricool)
+Vecchio account `@cosaguardoapp` sospeso per **automazione (Metricool)**; reclamo fermo senza tempistica ("qualcuno lo controlla") → aperto **NUOVO account** (altro cel, altro numero, altra connessione).
+- **PROTOCOLLO**: email+telefono NUOVI; **zero automazione/scheduler esterni (MAI Metricool)** — MA la **programmazione NATIVA di TikTok è OK** (da tiktok.com desktop / TikTok Studio). Username variante (`@cosaguardo.app`/`.it`); no file identici ai vecchi; **no watermark IG/CapCut**; ritmo umano 1 video/1-2gg; "riscaldare" l'account prima di postare; tier list ideali per pubblico giovane.
+- **Bio** (max 80 char; link cliccabile solo da ~1000 follower → mettere `cosaguardo.com` in chiaro): scelta stile "POV: non sai cosa guardare 🍿 ci pensiamo noi → cosaguardo.com". Account **Creator** meglio di Business all'inizio (audio trend disponibili).
+
+### 24.10 INFLUENCER / MARKETING
+- **cinesocialclub — 2ª storia: ESITO (bocciata sul dato-chiave)**. Lato storia IG: 900 account raggiunti, 20 clic sul link (CTR ~2,2%, discreto), 4 like. Lato sito GA4: 10 sessioni, 9 utenti, **90% engagement, 2m00s permanenza, 13,7 eventi/sessione, 0 conversioni**. Lettura: nettamente meglio della 1ª storia (23 sess, 0 eventi) — il **traffico è di qualità** e il **sito converte l'engagement** (esplorano 2 minuti, la landing NON è il problema), MA dopo 2 storie **0 registrati**. Confronto: ludovicaledger (25€) aveva portato 1 sign_up + 2 install_click. VERDETTO: **non ripetere cinesocialclub**; il pubblico si diverte ma non è in target-registrazione e i volumi sono troppo piccoli. APPRENDIMENTO: il collo di bottiglia è **portare il pubblico giusto in volume**, non la landing.
+- **ludovicaledger** (25€): 41 sessioni, **2 install_banner_clicked + 1 sign_up** (promettente). Metrica vera = **costo-per-registrato**.
+- **unchained_cinema (10€) — INUTILE**: ha ricondiviso il reel nella storia SENZA mettere il link al sito → 1.600 views, 40 visite profilo (2,5%), **0 traffico sito, 0 conversioni**. Errore di esecuzione (niente link) + reach bassa.
+- **CONCLUSIONE STRATEGICA (dopo 3 test influencer)**: le **storie "spot" da pochi euro con creator random sono CHIUSE** — reach bassa/incostante, raramente convertono, contro le Ads (IG/Google) partono in svantaggio (le Ads sono misurabili, scalabili, con link tracciabile). **Priorità: Ads (traffico/download) + contenuti organici (tier list, costo zero).** Influencer SOLO se: (a) davvero in target, (b) obiettivo download, (c) link tracciabile + brief rispettato (filtro da applicare alla proposta Benedetta/Eleonora).
+- **Test IG boost 10€ — NON fatto** (Marco ha deciso di non procedere). [Nota strategica per il futuro: sponsorizzare per follower è vanity; se si sponsorizza, meglio puntare a traffico sito o, quando l'app è live, a "scarica l'app".]
+
+### 24.12 ADS — efficienza per canale + strategia (dato chiave 17/07)
+Spesa Ads finora: **IG 562€, Google 58€** (tot 620€). Efficienza:
+- **Instagram**: ~0,15€/visita → ~3.700 visite, **~90 registrazioni** → **~6,2€/registrazione**.
+- **Google**: ~0,60€/visita → ~97 visite, **2-3 registrazioni** → **~19-29€/registrazione**.
+- **CONCLUSIONE: Instagram vince nettamente** (visita 4× più economica, registrazione 3-5× più economica). **DECISIONE: spostare il grosso del budget su IG**; Google solo se utile per awareness/intercettare ricerche.
+- **Costo-per-registrazione IG ~6€ = numero-guida** per valutare ogni canale futuro.
+- **[Marco] Nessun ritorno economico atteso in early stage (per scelta)**: focus ora = **crescita del sito**, monetizzazione più avanti. Il business plan post-lancio dovrà chiarire quanto vale un utente registrato nel tempo (per capire se ~6€ di acquisizione è sostenibile).
+- Dati tracciati nel file bilancio, foglio **"Ritorno Ads"**.
+- **Video freelance per Ads**: costa solo **31,44€** → conveniente; per la campagna app conviene farne **2-3 varianti** da testare A/B su Meta.
+
+### 24.13 STRATEGIA CAMPAGNA APP (post-lancio, da ricordare)
+- Creare una **NUOVA campagna dedicata all'app** (non riusare quella traffico-sito): obiettivo diverso, ottimizzazione e misurazione separate. Tenere viva anche quella verso il sito.
+- **Tracciamento Livello 1 (semplice, consigliato all'avvio)**: link Play Store con **UTM/referrer** → Play Console mostra installazioni per sorgente. Nessuna modifica al codice app.
+- **Tracciamento Livello 2 (complesso)**: Meta SDK/MMP dentro l'app per far ottimizzare Meta sui download — con la TWA è laborioso → solo se si scala forte.
+
+### 24.14 ⚠️ SCADENZA AGOSTO 2026 — target API 36 (Google Play)
+Mail da Play Console (22/07): l'app targeta **API 35**, ma **dal 31 agosto 2026** nuove app e **aggiornamenti** devono targetare **Android 16 (API 36)**. Le app esistenti restano disponibili ai nuovi utenti se targetano almeno API 35 → **oggi sei conforme**, non è bloccante.
+- **[DECISIONE Marco]**: si fa **DOPO** che l'app è online in produzione (non durante i 14 giorni di test).
+- **Perché non ora**: (1) PWABuilder storicamente è in ritardo sulle scadenze Google (nel 2024 generava ancora API 33 quando serviva 34) → si rischia di rifare tutto per nulla; (2) caricare release durante il conteggio dei 14gg è un rischio inutile; (3) Android 16 cambia comportamenti (notifiche full-screen richiedono permesso esplicito) → l'app va ritestata con calma.
+- **Come si farà (inizio agosto)**: rigenerare il pacchetto su PWABuilder → ⚠️ **usare LO STESSO `signing.keystore`** dello zip originale (altrimenti Play rifiuta per upload key mismatch) → alzare **version code a 2** → caricare come aggiornamento → ritestare push e schermo intero.
+- Se serve più tempo: si può richiedere **proroga fino al 1° novembre 2026** (form nella Play Console, sezione stato norme).
+
+### 24.11 PENDING (todolist aggiornata al 17/07)
+- **Android**: completare 12 tester → 14gg → richiedere Produzione → link Play su sito/social.
+- **Android (agosto)**: dopo la produzione, **bump a target API 36** entro il 31/08/2026 (vedi 24.14).
+- **iOS**: attesa attivazione account Apple → Archive + upload in Xcode → scheda App Store Connect → revisione (4.2) → disattivare target macOS.
+- **Verificare deploy online**: PRG /recommend, raccolta poster, /elimina-account, assetlinks (2 impronte), push (Fasi 1-3), Sky Go/NOW.
+- **Misurare**: GA4 30gg vs 30gg, GSC.
+- **Social**: ramp-up nuovo TikTok (manuale/nativo), continuare tier list (IG) + video-coppie (YouTube con titolo ricercabile).
+- **Futuro**: invio EMAIL alert anonimi (Resend); redirect on-brand `/go/<creator>` vs bit.ly; quando attivi AdSense → cambiare dichiarazione annunci su Play; Awin TIMVision; monitorare Render bandwidth.
+- **File bilancio uscite creato**: `/mnt/user-data/outputs/cosaguardo_bilancio_uscite.xlsx` (fogli Uscite + Riepilogo, totali automatici + costo mensile/annuale equivalente). Spese registrate: influencer ludovicaledger 25€ / cinesocialclub 20€ / unchained_cinema 10€, Google Play 15€ una tantum, Apple 99€/anno; celle gialle DA COMPILARE: Render, CapCut, Google Ads. (Boost IG 10€ NON fatto.)
+- **Bilancio / Business plan**: [Marco] preparare un **bilancio delle uscite attuali** (Render, dominio, Apple 99$/anno, ads, influencer, ecc.) per tenere i costi monitorati; **dopo il lancio dell'app**, costruire un **business plan da seguire** (proiezioni costi/ricavi, break-even, obiettivi).
+
+---
+
 **Fine documento.** In nuova chat, carica questo file come primo upload e ripartiamo da qui.

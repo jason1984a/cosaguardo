@@ -372,7 +372,7 @@
         <a href="{{ meta.subscribe_link }}"
            class="platform-cta"
            target="_blank"
-           rel="nofollow noopener noreferrer">
+           rel="sponsored nofollow noopener noreferrer">
             <i data-lucide="external-link" style="width:14px;height:14px;stroke:currentColor;stroke-width:2;"></i>
             Abbonati a {{ meta.name }}
         </a>
@@ -601,4 +601,14 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 });
 </script>
+
+{# ── Disclosure affiliazione (contratto Amazon Associates) ── #}
+{% if meta.subscribe_link and 'tag=' in meta.subscribe_link %}
+<p style="max-width:1200px;margin:26px auto 0;padding:0 20px 10px;
+          font-size:12px;line-height:1.55;color:#8b96b5;text-align:center;">
+    Il link di abbonamento è affiliato: in qualità di Affiliato Amazon,
+    CosaGuardo riceve un guadagno dagli acquisti idonei. Per te il prezzo non cambia.
+</p>
+{% endif %}
+
 {% endblock %}

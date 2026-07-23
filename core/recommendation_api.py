@@ -2979,6 +2979,16 @@ def get_platform_subscribe_link(slug: str) -> str:
         return ""
     pid, name, fallback_url = PLATFORM_SLUGS[slug]
 
+    # Amazon: la CTA "Abbonati" deve puntare alla landing della prova gratuita
+    # Prime, non a una ricerca vuota nel catalogo instant-video.
+    # amazon.it/provaprime è l'UNICA pagina che genera il bounty (3 € per
+    # prova attivata): iscrizioni da altre pagine non vengono conteggiate.
+    _amz = os.environ.get("AFFILIATE_AMAZON", "")
+    if _amz:
+        _n = (name or "").lower()
+        if ("amazon" in _n) or ("prime video" in _n):
+            return f"https://www.amazon.it/provaprime?tag={_amz}"
+
     # Prova affiliate (vuota se non configurato)
     aff = _build_affiliate_link(name, title="", tmdb_id=None)
     if aff:
@@ -2986,6 +2996,16 @@ def get_platform_subscribe_link(slug: str) -> str:
 
     # Fallback: link ufficiale alla piattaforma
     return fallback_url
+
+
+
+def get_amazon_bounty_link() -> str:
+    """
+    Link alla prova gratuita Prime (bounty 3 €).
+    Stringa vuota se il tag affiliato non è configurato.
+    """
+    tag = os.environ.get("AFFILIATE_AMAZON", "")
+    return f"https://www.amazon.it/provaprime?tag={tag}" if tag else ""
 
 
 def get_platform_content(slug: str, content_type: str = "movie", limit: int = 60) -> tuple:

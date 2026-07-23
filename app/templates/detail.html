@@ -2059,7 +2059,7 @@ a.detail-genre-tag--link:focus-visible {
             <div class="providers-group-label">Incluso in abbonamento</div>
             <div class="providers-list">
                 {% for p in prov.flatrate %}
-                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="provider-item"
+                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="{{ 'sponsored' if p.is_affiliate else 'nofollow' }} noopener noreferrer" class="provider-item"
                    data-cg-track="select_provider" data-cg-provider="{{ p.name }}" data-cg-title="{{ detail.title }}" data-cg-group="streaming">
                     {% if p.logo_url %}
                     <img src="{{ p.logo_url }}" alt="{{ p.name }}" class="provider-logo">
@@ -2075,7 +2075,7 @@ a.detail-genre-tag--link:focus-visible {
             <div class="providers-group-label">Noleggio</div>
             <div class="providers-list">
                 {% for p in prov.rent[:3] %}
-                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="provider-item"
+                <a href="{{ p.link or prov.link or '#' }}" target="_blank" rel="{{ 'sponsored' if p.is_affiliate else 'nofollow' }} noopener noreferrer" class="provider-item"
                    data-cg-track="select_provider" data-cg-provider="{{ p.name }}" data-cg-title="{{ detail.title }}" data-cg-group="noleggio">
                     {% if p.logo_url %}
                     <img src="{{ p.logo_url }}" alt="{{ p.name }}" class="provider-logo">
@@ -2085,6 +2085,24 @@ a.detail-genre-tag--link:focus-visible {
                 </a>
                 {% endfor %}
             </div>
+            {% endif %}
+
+            {# ── CTA bounty Prime Video ────────────────────────────────
+               Mostrata solo se il titolo è incluso nell'abbonamento Prime.
+               Il link DEVE essere amazon.it/provaprime: è l'unica landing
+               che genera il bounty (3 € per prova gratuita attivata). #}
+            {% set _has_prime = (prov.flatrate or []) | selectattr('name', 'equalto', 'Prime Video') | list %}
+            {% if _has_prime and amazon_bounty_link %}
+            <a href="{{ amazon_bounty_link }}" target="_blank"
+               rel="sponsored noopener noreferrer"
+               data-cg-track="select_provider" data-cg-provider="Prime Video Trial"
+               data-cg-title="{{ detail.title }}" data-cg-group="bounty"
+               style="display:block;margin-top:10px;padding:9px 12px;border-radius:10px;
+                      background:rgba(0,168,224,.08);border:1px solid rgba(0,168,224,.28);
+                      font-size:12.5px;line-height:1.45;color:#9fd4ee;text-decoration:none;
+                      text-align:center;">
+                Non hai Prime Video? <strong style="color:#cfeaf8;">Provalo 30 giorni gratis →</strong>
+            </a>
             {% endif %}
 
             {% if not prov.flatrate and not prov.rent %}
@@ -2223,6 +2241,20 @@ a.detail-genre-tag--link:focus-visible {
         </button>
     </div>
 </div>
+{% endif %}
+
+{# ── Disclosure affiliazione ───────────────────────────────────────────
+   Richiesta dal contratto Amazon Associates su ogni pagina che contiene
+   link affiliati. Mostrata solo se almeno un provider è affiliato. #}
+{% set _pv = detail.providers or {} %}
+{% set _aff_count = ((_pv.flatrate or []) | selectattr('is_affiliate') | list | length)
+                  + ((_pv.rent or []) | selectattr('is_affiliate') | list | length) %}
+{% if _aff_count > 0 %}
+<p style="max-width:1200px;margin:26px auto 0;padding:0 20px 10px;
+          font-size:12px;line-height:1.55;color:#8b96b5;text-align:center;">
+    Alcuni link verso le piattaforme sono affiliati: in qualità di Affiliato Amazon,
+    CosaGuardo riceve un guadagno dagli acquisti idonei. Per te il prezzo non cambia.
+</p>
 {% endif %}
 
 {% endblock %}
