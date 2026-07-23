@@ -332,7 +332,7 @@
             <h3 style="font-size:15px;color:var(--muted);margin:0 0 10px;font-weight:700;">Incluso in abbonamento</h3>
             <div class="dv-providers" style="margin-bottom:18px;">
                 {% for p in detail.providers.flatrate %}
-                <a href="{{ p.link or detail.providers.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="dv-provider"
+                <a href="{{ p.link or detail.providers.link or '#' }}" target="_blank" rel="{{ 'sponsored' if p.is_affiliate else 'nofollow' }} noopener noreferrer" class="dv-provider"
                    data-cg-track="select_provider" data-cg-provider="{{ p.name }}" data-cg-title="{{ detail.title }}" data-cg-group="streaming">
                     {% if p.logo_url %}<img src="{{ p.logo_url }}" alt="{{ p.name }}">{% endif %}
                     <div class="dv-provider-info">
@@ -342,13 +342,26 @@
                 </a>
                 {% endfor %}
             </div>
+
+            {# CTA bounty Prime: solo landing /provaprime genera il bounty #}
+            {% set _has_prime = (detail.providers.flatrate or []) | selectattr('name', 'equalto', 'Prime Video') | list %}
+            {% if _has_prime and amazon_bounty_link %}
+            <a href="{{ amazon_bounty_link }}" target="_blank" rel="sponsored noopener noreferrer"
+               data-cg-track="select_provider" data-cg-provider="Prime Video Trial"
+               data-cg-title="{{ item.title }}" data-cg-group="bounty"
+               style="display:block;margin:-8px 0 18px;padding:10px 14px;border-radius:12px;
+                      background:rgba(0,168,224,.08);border:1px solid rgba(0,168,224,.28);
+                      font-size:13px;color:#9fd4ee;text-decoration:none;text-align:center;">
+                Non hai Prime Video? <strong style="color:#cfeaf8;">Provalo 30 giorni gratis &rarr;</strong>
+            </a>
+            {% endif %}
             {% endif %}
 
             {% if detail.providers.rent %}
             <h3 style="font-size:15px;color:var(--muted);margin:0 0 10px;font-weight:700;">Noleggio o acquisto</h3>
             <div class="dv-providers">
                 {% for p in detail.providers.rent[:6] %}
-                <a href="{{ p.link or detail.providers.link or '#' }}" target="_blank" rel="nofollow noopener noreferrer" class="dv-provider"
+                <a href="{{ p.link or detail.providers.link or '#' }}" target="_blank" rel="{{ 'sponsored' if p.is_affiliate else 'nofollow' }} noopener noreferrer" class="dv-provider"
                    data-cg-track="select_provider" data-cg-provider="{{ p.name }}" data-cg-title="{{ detail.title }}" data-cg-group="noleggio">
                     {% if p.logo_url %}<img src="{{ p.logo_url }}" alt="{{ p.name }}">{% endif %}
                     <div class="dv-provider-info">
@@ -365,6 +378,15 @@
             Al momento {{ item.title }} non risulta disponibile su nessuna piattaforma streaming in Italia.
             Le piattaforme aggiornano i cataloghi regolarmente: torna a controllare tra qualche giorno.
         </div>
+        {% endif %}
+
+        {% set _aff = ((detail.providers.flatrate or []) | selectattr('is_affiliate') | list | length)
+                    + ((detail.providers.rent or []) | selectattr('is_affiliate') | list | length) if detail.providers else 0 %}
+        {% if _aff > 0 %}
+        <p style="margin:16px 0 0;font-size:12px;line-height:1.55;color:#8b96b5;text-align:center;">
+            Alcuni link verso le piattaforme sono affiliati: in qualit&agrave; di Affiliato Amazon,
+            CosaGuardo riceve un guadagno dagli acquisti idonei. Per te il prezzo non cambia.
+        </p>
         {% endif %}
     </section>
 

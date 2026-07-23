@@ -289,7 +289,7 @@
         <a href="{{ meta.platform_subscribe_link }}"
            class="best-cta"
            target="_blank"
-           rel="nofollow noopener noreferrer">
+           rel="sponsored nofollow noopener noreferrer">
             <i data-lucide="external-link" style="width:13px;height:13px;stroke:currentColor;stroke-width:2;"></i>
             Vai a {{ meta.platform_name }}
         </a>
@@ -387,6 +387,13 @@
             <a href="/migliori" class="best-chip">Tutte le classifiche</a>
         </div>
     </section>
+
+    {% if meta.platform_subscribe_link and 'tag=' in meta.platform_subscribe_link %}
+    <p style="margin:22px 0 0;font-size:12px;line-height:1.55;color:#8b96b5;text-align:center;">
+        Il link alla piattaforma &egrave; affiliato: in qualit&agrave; di Affiliato Amazon,
+        CosaGuardo riceve un guadagno dagli acquisti idonei. Per te il prezzo non cambia.
+    </p>
+    {% endif %}
 
 </div>
 

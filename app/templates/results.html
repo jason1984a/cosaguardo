@@ -455,7 +455,7 @@ document.addEventListener("DOMContentLoaded", function () {
                     <div style="font-size:0.75rem;color:var(--muted);margin-bottom:6px;font-weight:600;">${label}</div>
                     <div style="display:flex;gap:8px;flex-wrap:wrap;">`;
                 for (const p of items) {
-                    h += `<a href="${p.link}" target="_blank" rel="nofollow noopener noreferrer" title="${p.name}"
+                    h += `<a href="${p.link}" target="_blank" rel="${p.is_affiliate ? 'sponsored' : 'nofollow'} noopener noreferrer" title="${p.name}"
                         style="display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);text-decoration:none;color:var(--text);font-size:0.8rem;font-weight:600;">
                         ${p.logo_url ? `<img src="${p.logo_url}" style="width:20px;height:20px;border-radius:4px;object-fit:cover;">` : ""}
                         ${p.name}</a>`;

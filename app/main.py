@@ -3030,6 +3030,8 @@ def dove_vedere_detail(request: Request, slug: str):
             "detail": detail,
             "similar_titles": similar_titles,
             "season_bump": season_bump,
+            # Link prova gratuita Prime (bounty 3 €) per la CTA
+            "amazon_bounty_link": get_amazon_bounty_link(),
         },
     )
 
