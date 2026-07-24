@@ -1656,3 +1656,233 @@ Mail da Play Console (22/07): l'app targeta **API 35**, ma **dal 31 agosto 2026*
 ---
 
 **Fine documento.** In nuova chat, carica questo file come primo upload e ripartiamo da qui.
+
+---
+
+## 25. Sessione 23/07/2026 — iOS build caricata su App Store Connect, affiliazione Amazon (bounty Prime), fix filtro Prime, template tier list, Email Routing
+
+### 25.1 STATO GENERALE A INIZIO SESSIONE (22/07)
+- **Android**: test chiuso, giorno 7 di 14, 12 tester ok → poi richiesta Produzione.
+- **iOS**: account Apple ancora "in elaborazione", mail al supporto inviata.
+- **Bump target API 36**: confermato rimandato a dopo il lancio (scadenza 31/08).
+- **TikTok**: nuovo account in ramp-up.
+- **Contenuti in canna (conteggio reale, aggiorna 24.x)**: ~10 tier list, ~10 video, 6-7 caroselli.
+
+---
+
+### 25.2 TEMPLATE TIER LIST — versione definitiva con ZONE DI SICUREZZA
+**Problema**: su TikTok le tier list venivano coperte in 3 punti — barra ricerca (alto), colonna icone (destra), bolla profilo (basso sinistra). Su IG il problema non esiste.
+
+**Soluzione (una sola versione valida per IG + TikTok), tela 1080×1920:**
+| Zona | Riserva |
+|---|---|
+| Alto | 220 px (barra ricerca TikTok) |
+| Destra | 300 px (colonna icone) |
+| Basso | 260 px (bolla profilo + caption) |
+
+**Layout misurato (file `tier_da_quando_v3_*`):**
+- Margine sinistro x=60; nulla oltre **x=780**
+- Logo CosaGuardo (76px) + kicker "TIER LIST" da y=266
+- Titolo Montserrat ExtraBold, base a y=554
+- **Gap titolo→sottotitolo = 86 px** (era 18 → causa della sensazione "incasinata")
+- Sottotitolo y 640→678; griglia y 742→1642
+- Colonna etichette 195 px, poster **140×210**, gap 20 px, **3 poster per riga** (12 titoli, non 16)
+- Colori blocchi ripresi dai reel: blu → verde acqua → ambra → rosso/rosa
+
+**File generati**: `/mnt/user-data/outputs/caroselli/tier_da_quando_v3_BASE.png` (sfondo da caricare in Canva) + `_GUIDA.png` (bande rosse + nomi serie, mai esportare).
+
+**Regola operativa**: in Canva salvare come **modello di brand**, con livello guida bloccato e nascosto prima dell'export. Per le prossime tier list: rigenerare da script cambiando titolo/etichette/titoli.
+
+**Caption TikTok**: sempre **una riga**, il resto in commento fissato (una caption lunga allunga il blocco basso e mangia la griglia).
+
+---
+
+### 25.3 CONTENUTO PRODOTTO IN SESSIONE
+
+**Tier list "Da quando diventa bella"** (approvata, template v3):
+- TI PRENDE SUBITO: Chernobyl · Squid Game · Mare Fuori
+- DOPO 2-3 EPISODI: Stranger Things · The Last of Us · Mercoledì
+- DA METÀ STAGIONE: **Breaking Bad** (provocazione) · Dark · Better Call Saul
+- SOLO DALLA SECONDA: **Il Trono di Spade** (provocazione forte) · Peaky Blinders · Ted Lasso
+- Caption IG nello stile consolidato ("La mia tier list onesta…"), TikTok una riga, commento fissato con lista + domanda.
+- Titolo YouTube: "La mia tier list onesta: da quando le serie TV diventano belle davvero" (alternativa più SEO: "Serie TV: da quando diventano belle davvero (Il Trono di Spade in fondo)").
+
+**VIDEO 4 — coppie: "Se ti sono piaciute CHERNOBYL + LA REGINA DEGLI SCACCHI"**
+Filo: miniserie chiuse, ricostruzione d'epoca, nessuna stagione di troppo.
+1. Unbelievable · 2. Dopesick · 3. Mare of Easttown · 4. When They See Us · 5. **The Terror** (chicca; riserva: Il Miracolo)
+- Musica: "ambient tension", "cold war", "minimal piano", "drone" — registro gelido, non epico.
+- Titolo YT: "5 miniserie come Chernobyl e La regina degli scacchi 💎 (l'ultima non la conosce nessuno)"
+- ⚠️ Già fatti in passato: Stranger Things+Dark, **Breaking Bad+Peaky Blinders**.
+- Prossime coppie pronte: La Casa di Carta+Lupin, The Last of Us+The Walking Dead.
+
+**⚠️ NUOVA REGOLA — LUNGHEZZA VIDEO (dal video 5 in poi)**
+Target: **45-50 secondi** (il video 4 era ~63s / 178 parole).
+- TTS 1.1x ≈ **170 parole/minuto ≈ 2,8 parole/secondo**
+- **Budget: 130-140 parole totali** → Hook 20 · ogni titolo 17 · chicca 24 · CTA 10
+- Tre regole di taglio: (1) una frase sola per titolo; (2) via i richiami alla coppia di partenza (l'hook li ha già stabiliti); (3) un solo dettaglio concreto per titolo.
+- **DA FARE**: calibrare una volta con un blocco reale in CapCut per verificare le 170 wpm.
+
+---
+
+### 25.4 AMAZON ASSOCIATES — approvazione, diagnosi e patch
+
+**Approvazione**: mail 14/07, account `cosaguardo-21` approvato. Le 3 vendite qualificate erano già state fatte.
+**Dati primo mese (23/06-22/07)**: 85 clic · 4 articoli · 37€ ordinato · **1,11€ commissione** · conversione 4,71%.
+- Il filtro "Tracking ID" nella schermata Riepilogo **è buggato** (non mostra nulla filtrando su cosaguardo-21); il CSV del Report guadagni conferma che tutto è sotto quel tag.
+- Le vendite sono **acquisti accidentali**: cookie 24h → l'utente clicca Prime Video, arriva su Amazon e compra altro. ~3% = aliquota elettronica.
+
+**Diagnosi architettura (importante)**:
+- `/cosa-serve` ha solo **4 visualizzazioni/mese** → NON è la fonte dei clic. (Attenzione: in GA4 usare **Pagine e schermate**, non "Pagina di destinazione", che conta solo le sessioni che *iniziano* lì.)
+- I clic vengono dalle **schede film** e da `/piattaforma/prime-video` (111 viste).
+- Il link affiliato NON è nei template: è iniettato a runtime da **`core/recommendation_api.py` → `_build_affiliate_link()`**, che arriva a `detail.html` come `p.link` + flag `p.is_affiliate`.
+- Formato attuale per Amazon: `https://www.amazon.it/s?k={titolo}&i=instant-video&tag=cosaguardo-21` → **ricerca su Amazon**, non pagina del titolo né iscrizione Prime.
+- ⚠️ **Non "migliorare" il link puntando alla pagina del titolo**: oggi si guadagna proprio perché la gente esce dalla ricerca e curiosa. Dati insufficienti per decidere (4 vendite).
+
+**BOUNTY PRIME — la leva vera**
+- Link ufficiale (**unica landing che genera bounty**): `https://www.amazon.it/provaprime?tag=cosaguardo-21`
+- Valore **confermato: 3€ per prova gratuita attivata** (vs 0,03€ medi attuali).
+- Vale solo per **clienti nuovi** idonei ai 30 giorni gratis.
+- Bug trovato: `get_platform_subscribe_link()` chiamava `_build_affiliate_link(name, title="")` → CTA "Abbonati a Prime Video" portava a una **ricerca vuota**. Corretto: ora restituisce il link provaprime.
+
+**PATCH DEPLOYATA (9 file)** — `/mnt/user-data/outputs/patch_affiliati/`
+| File | Modifica |
+|---|---|
+| `core/recommendation_api.py` | bounty in `get_platform_subscribe_link()`; nuova `get_amazon_bounty_link()`; **fix PLATFORM_MAP prime 9→119** |
+| `app/main.py` | import + `amazon_bounty_link` nelle 3 route (detail film, detail serie, dove_vedere) |
+| `detail.html` | rel condizionale, CTA bounty sotto i provider, disclosure in fondo |
+| `dove_vedere.html` | idem (pagina più importante: ~753 URL indicizzati) |
+| `come.html`, `best.html`, `platform.html` | rel sponsored + disclosure |
+| `index.html`, `results.html` | rel in JS: `${p.is_affiliate ? 'sponsored' : 'nofollow'}` |
+
+- **Disclosure**: "Alcuni link verso le piattaforme sono affiliati: in qualità di Affiliato Amazon, CosaGuardo riceve un guadagno dagli acquisti idonei. Per te il prezzo non cambia." — 12px, grigia, mostrata **solo se c'è almeno un link affiliato**.
+- ⚠️ **Debito tecnico**: la disclosure è replicata in 6 template. Soluzione pulita: una riga sola nel footer di `base.html`.
+
+**DA FARE su Amazon**:
+- Verificare periodicamente il bounty (le cifre cambiano con le promozioni).
+- ⚠️ **Policy applicazioni mobili**: l'app Android/iOS serve le stesse pagine con gli stessi link affiliati. Da verificare nel contratto operativo Associates o col supporto — rischio chiusura account.
+- Valutare **Tracking ID separati** per fonte (es. `cosaguardo-cs-21` per /cosa-serve, `cosaguardo-fi-21` per le schede).
+
+---
+
+### 25.5 BUG RISOLTO — filtro Prime su /scopri (schermata vuota)
+**Causa**: due mappe piattaforme con ID diversi.
+- `PLATFORM_MAP` (usata da `/scopri`) aveva `"prime": 9`
+- `PLATFORM_SLUGS` (usata da `/piattaforma/`) ha `"prime-video": 119`
+Con `watch_region=IT` il provider Prime Video su TMDb è **119**; l'ID 9 è di altri mercati → zero risultati.
+**Fix**: `PLATFORM_MAP["prime"] = 119` + commento di avviso. Verificati tutti e 6 gli ID: ora allineati (Netflix 8, Prime 119, Disney 337, Apple 350, Paramount 531, NOW 39).
+⚠️ **Debito tecnico**: due mappe per la stessa cosa è fragile — da unificare.
+
+---
+
+### 25.6 iOS — DA ACCOUNT BLOCCATO A BUILD CARICATA (percorso completo, molti ostacoli)
+
+**Account**: attivo, Team ID **`JJKPDS552T`**, rinnovo 14/07/2027. ⚠️ **Nessuna carta associata per il rinnovo automatico** → da sistemare (senza carta le app vengono rimosse).
+
+**Ostacoli risolti, in ordine:**
+1. **Xcode non vedeva il team** → rimuovere e riaggiungere l'Apple ID in Settings → Accounts.
+2. **Xcode era in `~/Downloads`** invece che `/Applications` → spostato. Versione Xcode 26.3, SDK MacOSX26.2 (aggiornato, nessun problema di versione minima).
+3. **CocoaPods non installabile** con `sudo gem install`: il Ruby di sistema (2.6) non compila `nkf` perché gli SDK recenti **non includono più gli header di Ruby**. → **Soluzione: Homebrew** (`brew install cocoapods`, v1.17.0). Non insistere con gem.
+4. **Pods mancanti** → `cd ~/Downloads/CosaGuardo/src` → `pod install` (Firebase 12.16.0 + 8 dipendenze). ⚠️ **Aprire sempre `CosaGuardo.xcworkspace`, mai il `.xcodeproj`**.
+5. **"Your team has no devices"** → nessun iPhone registrato; il telefono non veniva riconosciuto dal Mac.
+6. ⚠️ **ERRORE COMMESSO DA CLAUDE, da non ripetere**: aver suggerito di forzare `Code Signing Identity = Apple Distribution` nelle Build Settings → genera "conflicting provisioning settings". **Con firma automatica "Apple Development" nella scheda Release è CORRETTO.**
+7. **Soluzione definitiva: FIRMA MANUALE**
+   - Xcode → Settings → Accounts → Manage Certificates → + → **Apple Distribution**
+   - developer.apple.com → Identifiers: `com.cosaguardo` con **Push Notifications + Associated Domains** ✅
+   - Profiles → + → **App Store Connect** → profilo `CosaGuardo AppStore` → Download → doppio clic
+   - Signing & Capabilities → **togliere** "Automatically manage signing" → scheda Release → selezionare il profilo
+8. **Product → Archive** → OK → **Distribute App → App Store Connect → Upload** → **"Uploaded to Apple"** ✅ (Build 1.0 (1), arm64, 23/07 ore 06:01)
+
+**⚠️ Xcode Cloud**: se compare "The workspace is not using Git Source Control" → **Cancel**. È un servizio a pagamento che non serve (build in locale).
+
+**Supported Destinations**: tolte le voci Mac/Catalyst. **iPhone + iPad rimasti** → obbligatori anche gli screenshot iPad.
+
+---
+
+### 25.7 APP STORE CONNECT — stato compilazione
+
+**Fatto:**
+- Record app `com.cosaguardo` esistente; build associata; account di test fornito ai revisori
+- **Contratti**: "Contratto per le app gratuite" **Attivo** (quello a pagamento resta "Nuovo", non serve)
+- **DSA — dichiarato OPERATORE COMMERCIALE**. Motivazione: link affiliati attivi, Google Ads, promozione social, intento di monetizzazione. (Apple accetta **casella postale** al posto dell'indirizzo di casa; email pubblica consigliata `info@cosaguardo.com`.) Documento identità inviato per verifica.
+- **Copertura geografica (.geojson)**: campo **facoltativo**, lasciato vuoto (serve solo ad app geo-limitate).
+- **Screenshot iPhone**: 5 pronti a **1284×2778** in `/mnt/user-data/outputs/ios_screenshot/`. Erano 1290×2796 (nativi iPhone 15/16 Pro Max) → **non accettati**: ridimensionati mantenendo proporzioni + padding navy.
+  - Ordine consigliato (solo i primi 3 appaiono nella scheda di installazione): **ios_4** (home) · **ios_5** (consigli su misura) · **ios_2** (scheda titolo) · ios_1 · ios_3
+
+**Questionario privacy — risposte date:**
+| Dato | Finalità | Collegato | Monitoraggio |
+|---|---|---|---|
+| Indirizzo email | Funzionalità app | Sì | No |
+| ID utente | Funzionalità · Personalizzazione (+Analisi se user-id passa a GA4) | Sì | No |
+| ID dispositivo (token FCM) | Funzionalità app | Sì | No |
+| Interazione con il prodotto | Analisi · Personalizzazione | No | No |
+
+⚠️ **Nodo chiave risolto**: la risposta "No" al monitoraggio era valida **solo disattivando i Segnali Google in GA4** (erano attivi, come documentato nella vecchia privacy policy). Dichiarare monitoraggio = obbligo di implementare **ATT**, non presente nell'app → rifiuto sicuro. **Segnali Google DISATTIVATI** (GA4 → Amministrazione → Impostazioni relative ai dati → Raccolta dei dati).
+
+**MANCA ANCORA:**
+- **Screenshot iPad** (l'app è universale) — Marco li farà dall'iPad, Claude ci metterà la cornice
+- Invio in revisione (24-48h di attesa media)
+
+**⚠️ RISCHIO RIFIUTO PRINCIPALE — cancellazione account**
+Apple richiede che la cancellazione sia **avviabile da dentro l'app**. La pagina `/elimina-account` descrive una procedura via email (accettata da Google Play). Mitigazione applicata: link ora presente **nel menu drawer** (sotto Profilo, se loggato) **e nel footer**. Se Apple contesta comunque → **piano B: pulsante che avvia realmente la cancellazione dal profilo** (richiede Mac per nuova build).
+
+**Altro rischio minore**: negli screenshot compaiono loghi Netflix/Prime/Disney+ e locandine. Uso standard (JustWatch fa uguale); se contestato, rispondere che l'app indica dove i contenuti sono disponibili e non li distribuisce.
+
+---
+
+### 25.8 PRIVACY POLICY — aggiornata (deployata)
+File: `privacy.html` + `base.html` in `/mnt/user-data/outputs/patch_affiliati/app/templates/`
+- **Rimossi Google Signals** da sez. 2, 4, 5 (coerenza con la disattivazione in GA4 e con la dichiarazione Apple). Resta una sola menzione, nella frase che dichiara di NON usarli.
+- **Aggiunto Firebase Cloud Messaging**: token dispositivo tra i dati raccolti, tra le finalità e tra i soggetti con cui si condivide.
+- **Sez. 6 riscritta**: link diretto a `/elimina-account` + "entro 30 giorni".
+- Data → luglio 2026.
+
+---
+
+### 25.9 EMAIL — Cloudflare Email Routing configurato
+**Problema**: `info@cosaguardo.com` non arrivava. Causa: il forwarding era configurato su **Namecheap**, ma i nameserver puntano a **Cloudflare** → inattivo.
+
+**Fatto:**
+- Cancellati i **5 record MX** `eforward*.registrar-servers.com` e il TXT SPF di Namecheap (gli MX non possono convivere)
+- Cloudflare Email Routing → Settings → **Add missing records** (3 MX `route1/2/3.mx.cloudflare.net` + TXT DKIM + TXT SPF `include:_spf.mx.cloudflare.net`)
+- Destination address verificata + regola per `info`
+
+⚠️ **`privacy@cosaguardo.com` è citato 4 volte nella privacy policy** come unico canale GDPR → serve la regola dedicata **o il catch-all** (consigliato: copre anche supporto@, contatti@, ecc.).
+
+**Regola generale**: un solo TXT `v=spf1` per dominio (due sono invalidi). Namecheap gestisce solo il dominio; DNS ed email sono su Cloudflare.
+
+---
+
+### 25.10 TODO AGGIORNATA (fine sessione 23/07)
+
+**iOS — imminente (fattibile senza Mac, da PC/iPad):**
+1. Screenshot iPad → Claude aggiunge la cornice → caricare
+2. Completare gli ultimi campi scheda → **Aggiungi alla verifica**
+3. Attendere esito (24-48h). Se rifiuto per cancellazione account → serve il Mac (Marco lo riavrà tra 4 giorni)
+4. Aggiungere **carta di credito** per il rinnovo Apple
+
+**Android:**
+5. Completare i 14 giorni (scadenza ~28-29/07) → richiedere Produzione. ⚠️ Non caricare nuove release nel frattempo; verificare intorno al giorno 10 che i 12 tester siano ancora iscritti
+6. **Agosto**: bump target API 36 entro il 31/08 (vedi 24.14)
+
+**Amazon:**
+7. Verificare la **policy applicazioni mobili** (rischio account)
+8. Valutare Tracking ID separati per fonte
+9. Dopo il deploy: verificare che la CTA bounty e la disclosure compaiano (Ctrl+Shift+R)
+
+**Tecnico / debito:**
+10. Disclosure affiliazione → spostare nel footer di `base.html` (togliere le 6 copie)
+11. Unificare `PLATFORM_MAP` e `PLATFORM_SLUGS`
+12. `privacy@` su Cloudflare (regola o catch-all)
+
+**Contenuti:**
+13. Smaltire l'arretrato (~10 tier list, ~10 video, 6-7 caroselli). TikTok: **i post foto NON sono programmabili nativamente** → pubblicazione manuale; i video sì (fino a 10 giorni, solo da desktop, account Creator/Business, non modificabili dopo)
+14. Video 5 con il nuovo budget di 130-140 parole
+15. Calibrare la velocità TTS reale in CapCut
+
+**Analytics:**
+16. Verificare in GA4 i **clic in uscita** verso Amazon per pagina di origine (Esplorazioni: dimensioni `Percorso pagina` + `Link URL`, metrica `Conteggio eventi`, filtro `Nome evento = click`). Prima controllare che "Clic in uscita" sia attivo in Misurazione avanzata
+17. Con 945 sessioni/mese ogni analisi di conversione è fragile: **il collo di bottiglia è il traffico**, non l'ottimizzazione
+
+---
+
+**Fine sezione 25.**
