@@ -417,16 +417,86 @@
             </div>
         </main>
 
+        {# ─── STILI FOOTER LEGALE ──────────────────────────────────────────────
+           Inline e scoped (prefisso .cg-foot-) come le altre micro-componenti:
+           evita di toccare style.css e quindi di dover bumpare ?v=N.
+           Serve per: disclosure affiliati (obbligo Accordo Operativo Amazon
+           Associates + trasparenza AGCM/AGCOM) e attribuzione TMDb col logo
+           (obbligo termini d'uso API TMDb). #}
+        <style>
+            .cg-foot-legal {
+                margin-top: 10px;
+                font-size: 12px;
+                line-height: 1.55;
+                opacity: .72;
+                max-width: 62ch;
+            }
+            .cg-foot-legal p { margin: 0 0 6px; }
+            .cg-foot-legal p:last-child { margin-bottom: 0; }
+            .cg-foot-legal a { color: inherit; text-decoration: underline; }
+            /* La riga "è gratis" è l'unica volutamente più leggibile:
+               risponde all'equivoco ricorrente nei commenti social
+               ("CosaGuardo è a pagamento?"). */
+            .cg-foot-free {
+                opacity: 1;
+                font-size: 13px;
+            }
+            .cg-foot-free strong { color: #6ea8fe; }
+            .cg-foot-tmdb {
+                margin-top: 12px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                flex-wrap: wrap;
+                font-size: 12px;
+                line-height: 1.5;
+                opacity: .72;
+                max-width: 62ch;
+            }
+            .cg-foot-tmdb img {
+                height: 14px;
+                width: auto;
+                display: block;
+                flex: 0 0 auto;
+            }
+            .cg-foot-tmdb span { flex: 1 1 220px; min-width: 0; }
+        </style>
+
         <footer class="site-footer">
             <div class="container footer-inner">
                 <div>
                     © 2026 CosaGuardo — Scopri cosa guardare in base ai tuoi gusti.
-                    {# Attribuzione richiesta dai termini d'uso dell'API TMDb. #}
-                    <div style="margin-top:8px;font-size:12px;line-height:1.5;opacity:.72;">
-                        Questo prodotto utilizza l'API di
+
+                    {# ── DISCLOSURE AFFILIATI ──
+                       La frase Amazon è testuale e NON va riformulata: è quella
+                       imposta dall'Accordo Operativo del Programma di Affiliazione
+                       Amazon.it, che la richiede "in modo chiaro ed evidente". #}
+                    <div class="cg-foot-legal">
+                        <p class="cg-foot-free">
+                            <strong>CosaGuardo è gratuito.</strong>
+                            Gli abbonamenti sono delle piattaforme (Netflix, Prime Video, Disney+, NOW…), non nostri.
+                        </p>
+                        <p>
+                            Alcuni link verso le piattaforme di streaming e verso Amazon sono link di
+                            affiliazione: se attivi un abbonamento o fai un acquisto dopo averli usati,
+                            CosaGuardo può ricevere una commissione, <strong>senza alcun costo aggiuntivo
+                            per te</strong>. Le commissioni non influenzano i consigli, che dipendono solo
+                            dai titoli che indichi.
+                        </p>
+                        <p>In qualità di Affiliato Amazon io ricevo un guadagno dagli acquisti idonei.</p>
+                    </div>
+
+                    {# ── ATTRIBUZIONE TMDb ──
+                       Richiesta dai termini d'uso dell'API. Il logo va scaricato da
+                       themoviedb.org/about/logos-attribution (variante "Primary Short",
+                       blu) e salvato come static/tmdb.svg. #}
+                    <div class="cg-foot-tmdb">
                         <a href="https://www.themoviedb.org" target="_blank" rel="noopener noreferrer"
-                           style="color:inherit;text-decoration:underline;">TMDB</a>
-                        ma non è approvato o certificato da TMDB.
+                           aria-label="The Movie Database (TMDB)">
+                            <img src="{{ url_for('static', path='tmdb.svg') }}"
+                                 alt="TMDB" width="107" height="14" loading="lazy" decoding="async">
+                        </a>
+                        <span>Questo prodotto utilizza l'API di TMDB ma non è approvato o certificato da TMDB.</span>
                     </div>
                 </div>
                 <div class="footer-links">
