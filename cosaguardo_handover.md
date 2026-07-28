@@ -1886,3 +1886,284 @@ File: `privacy.html` + `base.html` in `/mnt/user-data/outputs/patch_affiliati/ap
 ---
 
 **Fine sezione 25.**
+
+---
+
+## 26. Metriche social al 24/07/2026 + screenshot iPad + invio App Store
+
+### 26.1 iOS — INVIATA IN REVISIONE ✅
+- Stato: **"1.0 In attesa di verifica"** (inviata 24/07). Esito entro 48h via mail su mfantini84@gmail.com.
+- **Screenshot iPad**: 5 file **2048×2732** in `/mnt/user-data/outputs/ios_screenshot/` (`ipad_1..5_*`). Sorgenti 1640×2360 (iPad Air 11"), **ritagliata via la chrome di Safari** (URL bar + barra di stato) — lasciarla avrebbe dichiarato apertamente il webview → rischio linea guida 4.2. Cornice ricostruita nello stile degli iPhone (navy radiale, logo + wordmark, titolo Montserrat ExtraBold).
+  - Ordine: 1. Consigli fatti su misura · 2. Esplora per genere e umore · 3. Il catalogo di ogni piattaforma · 4. Il meglio dello streaming, ogni giorno · 5. Le classifiche dei migliori
+- **App ID App Store Connect: 6793943636**
+- **Prezzo**: Gratuita. **Privacy dell'app**: questionario **pubblicato** (senza "Pubblica" risulta mancante).
+- **Diritti sui contenuti**: dichiarato **Sì** (contenuti TMDb + loghi piattaforme). → Aggiunta **attribuzione TMDb nel footer** di `base.html`: "Questo prodotto utilizza l'API di TMDB ma non è approvato o certificato da TMDB" con link a themoviedb.org. ⚠️ **Manca il logo TMDb**, richiesto dai loro termini: da scaricare dalle risorse di brand e affiancare al testo.
+- **Classificazione età: 13+**. Risposte date:
+  - Controlli in-app: tutti No · Contenuti generati utenti / social / chat / gioco d'azzardo / loot box: No
+  - **Pubblicità: Sì** (coerenza con la dichiarazione DSA da operatore commerciale: link affiliati = promozione a pagamento)
+  - Horror, alcol/sostanze, violenza cartoon, violenza realistica, armi, suggestivo, nudità non esplicita → **Poco frequente**
+  - Violenza sadica prolungata, sessuale esplicito → **Nessuno** (regge grazie al filtro adult già implementato)
+  - ⚠️ **Accesso al web senza limitazioni → No**: da VERIFICARE su TestFlight che i link esterni (Amazon/Netflix/Prime) si aprano in Safari e non dentro l'app.
+- **TestFlight**: build installabile senza attendere la revisione (test interni). Primo tentativo → "L'app richiesta non è disponibile": molto probabilmente propagazione del prezzo appena impostato. Se persiste, controllare **conformità all'esportazione** sulla build.
+- **Email**: `privacy@` e `supporto@` creati su Cloudflare ✅ (chiude il punto aperto della privacy policy)
+
+---
+
+### 26.2 METRICHE SOCIAL — il dato che cambia le priorità
+
+**Instagram**
+| Contenuto | Views |
+|---|---|
+| Quando smettere di guardarla (tier) | **62.500** (era 57.600, cresce ancora) |
+| Film di supereroi (tier) | 18.400 |
+| Film da vedere prima di morire (tier) | 10.700 |
+| I film che tutti chiamano capolavori (tier) | 1.788 |
+| I finali di serie più discussi (tier) | 1.503 |
+| Interstellar+Inception (coppia) | 850 |
+| Breaking Bad+Peaky Blinders (coppia) | 824 |
+| Serie partite bene, poi… (tier) | 440 |
+| Almeno una volta (carosello) | 210 |
+| Odissea+Il Gladiatore (coppia) | **91** |
+
+**YouTube Shorts**
+| Contenuto | Views |
+|---|---|
+| Serie partite bene, poi… (tier) | 2.500 |
+| Film da vedere prima di morire (tier) | 1.700 |
+| Film di supereroi (tier) | 570 |
+| Braveheart / Odissea+Gladiatore (coppia) | 530 |
+| Shutter Island / Interstellar+Inception (coppia) | 264 |
+| Narcos / Breaking Bad+Peaky (coppia) | 212 |
+
+**TikTok (account nuovo, 4 post, 2 follower, 206 like)**
+| Contenuto | Views |
+|---|---|
+| I finali di serie più discussi (tier) | **10.818** |
+| Quando smettere di guardarla (tier) | 3.439 |
+| Troy / Odissea+Il Gladiatore (coppia) | 609 |
+| Da quando diventa bella (tier, template v3, online da 2h) | 140 |
+
+**LETTURA:**
+- **Le tier list battono le coppie di 1-2 ordini di grandezza su IG** (62,5k vs 850). Anche la tier list peggiore (440) è in linea con la coppia migliore (850).
+- **Su YouTube il divario si stringe** (2,5k vs 530): il formato parlato funziona meglio dove la gente cerca. Odissea+Gladiatore: 91 su IG, 530 su YT.
+- **Su TikTok** le tier list dominano (10,8k vs 609).
+- **Costo/beneficio**: montare una coppia costa molto più di una tier list e su IG rende una frazione.
+
+**DECISIONE DI MARCO (editoriale, non solo metrica):** continuare comunque con le coppie — evitano il mono-argomento e **mostrano cosa fa davvero il sito** (il motore di raccomandazione). Ipotesi da valutare: **riservare le coppie a YouTube/Shorts** e tenere IG prevalentemente per le tier list.
+
+---
+
+### 26.3 PROBLEMA APERTO — TikTok: view alte, follower ~0
+10.818 view → **2 follower**. Conversione praticamente nulla.
+
+**Diagnosi**: con **4 post** il profilo non dà motivo di seguire. Chi arriva da un video virale controlla il profilo, vede una griglia vuota e non torna. Le metriche di conversione a questo volume sono premature.
+
+**Leve, in ordine di impatto:**
+1. **Volume**: pubblicare l'arretrato (~10 tier list, ~10 video, 6-7 caroselli). È di gran lunga la leva principale.
+2. **Serializzazione**: dare un nome ricorrente al format e una cadenza dichiarata ("ogni giovedì una tier list") → motivo esplicito per seguire.
+3. **CTA verbale dentro il video**, non solo in caption.
+4. **Commento fissato** con la domanda + invito a seguire.
+5. **Rispondere ai commenti**: genera visite al profilo, che è dove avviene la conversione.
+
+---
+
+### 26.4 TODO AGGIORNATA (24/07)
+1. ⏳ Esito revisione Apple (entro 48h)
+2. ⏳ Android: 14 giorni completi ~28-29/07 → richiedere Produzione (non caricare release nel frattempo; check tester al giorno 10)
+3. TestFlight: installare e **verificare che i link esterni escano in Safari**
+4. Aggiungere **logo TMDb** nel footer
+5. Aggiungere **carta di credito** per il rinnovo Apple Developer
+6. Pubblicare l'arretrato social (leva principale per i follower TikTok)
+7. Video 5 (coppie candidate: **La Casa di Carta + Lupin**, The Last of Us + The Walking Dead) con budget 130-140 parole
+8. Calibrare la velocità TTS reale in CapCut
+9. Debito tecnico: disclosure nel footer di `base.html`; unificare PLATFORM_MAP/PLATFORM_SLUGS
+10. Amazon: verificare policy applicazioni mobili; valutare Tracking ID per fonte
+
+**Fine sezione 26.**
+
+---
+
+## 27. Sessione 27/07/2026 — iOS rifiuto+reinvio, generatore tier list (agente), accredito Venezia
+
+### 27.1 iOS — RIFIUTO AUTOMATICO E REINVIO (build 2)
+
+**Primo esito revisione: RIFIUTATA** (rifiuto automatico, non di merito).
+Motivo: **purpose string segnaposto/insufficienti** nell'`Info.plist`. L'analisi automatica ha trovato 3 permessi con descrizioni generiche che l'app NON usa:
+- `NSMicrophoneUsageDescription` → "Capture Audio by user request"
+- `NSLocationWhenInUseUsageDescription` → "Track current location by user request"
+- `NSCameraUsageDescription` → "Capture Video by user request"
+
+**Causa**: residui del template Xcode (erano finiti anche in App Sandbox lato macOS, già tolto). L'app è una webapp che mostra film: microfono, posizione e fotocamera non servono → la strada giusta era RIMUOVERLI, non riscrivere le descrizioni.
+
+**FIX applicato sul Mac** (percorso `~/Downloads/CosaGuardo/src`):
+1. Aperto `CosaGuardo/Info.plist` in Xcode → eliminate le 3 voci UsageDescription (verificato con `grep -A1 "UsageDescription" CosaGuardo/Info.plist` → non stampa più nulla)
+2. Signing & Capabilities: nessun App Sandbox residuo da sistemare (le capability rimaste — Associated Domains, Background Modes/Remote notifications, Push Notifications — sono legittime)
+3. **General → Build da 1 a 2** (Version resta 1.0). ⚠️ Obbligatorio: senza cambio numero l'upload viene rifiutato
+4. Product → Archive → Distribute App → App Store Connect → Upload → Manually manage signing → profilo `CosaGuardo AppStore`
+5. Build 2 elaborata (verde). Riassociata alla versione 1.0 → **Aggiorna la verifica**
+
+**Stato**: build 2 in revisione (inviata 27/07). Attesa esito 24-48h.
+
+**⚠️ Procedura reinvio build (per il futuro)**: i metadati (scheda, screenshot, privacy, prezzo, età, DSA) sono legati alla VERSIONE 1.0, non alla build → sostituendo la build NON si ricompila nulla. Solo: incrementa Build, Archive, Upload, riassocia, Aggiorna la verifica.
+
+**TestFlight — problema NON risolto**: installazione continua a fallire con "L'app richiesta non è disponibile o non esiste", anche con la build 2 (numero diverso, che era il rimedio più citato). **È un bug ricorrente lato Apple** (confermato da molte segnalazioni sui forum, anni di storia). NON blocca nulla: TestFlight e revisione App Store sono binari separati. Se Apple approva, l'app si scarica dallo Store e TestFlight diventa irrilevante. Tentativi lato device: disinstallare/reinstallare TestFlight, pull-to-refresh.
+
+**App ID App Store Connect: 6793943636** · Team ID: JJKPDS552T
+
+---
+
+### 27.2 GENERATORE TIER LIST — "agente" semi-autonomo (NUOVO STRUMENTO)
+
+Cartella consegnata: `/mnt/user-data/outputs/agente_tierlist/`. Gira in **locale su Windows**.
+Da tenere in `C:\Users\m.fantini\Desktop\tierlist\`.
+
+**File:**
+| File | Funzione |
+|---|---|
+| `tierlist.py` | Fase 1 — grafica: legge JSON, scarica poster TMDb, compone PNG 1080×1920 |
+| `genera.py` | Fase 2 — contenuti: chiede a Claude argomento/fasce/16 titoli, poi crea il PNG |
+| `esempio_tierlist.json` | modello del file di input |
+| `storico.json` | memoria delle tier list già fatte (precompilato con le 7+2 pubblicate) |
+| `.env.esempio` | modello per le chiavi (rinominare in `.env`) |
+| `ISTRUZIONI.md` | guida completa |
+
+**Uso quotidiano**: `python genera.py` → propone → `[s=va bene · m=modifica · r=rifai · n=annulla]` → a `s` crea il PNG in `output\`.
+- **`m` = modifica mirata**: cambia solo ciò che chiedi, il resto resta identico. Ripetibile.
+- **`r` = rifai da capo**: proposta nuova (si perde il resto).
+
+**Chiavi (`.env`)**: file `.env` nella cartella con `TMDB_API_KEY=...` e `ANTHROPIC_API_KEY=...`. Gli script lo leggono da soli. NON va su GitHub. Path alternativo via `set CG_ENV=...`. ⚠️ Serve account API Anthropic separato (console.anthropic.com) con credito — pochi centesimi a tier list. Chiave TMDb: quella già su Render.
+
+**Preset**: `--titoli 12` (rispetta zone TikTok, griglia entro x=780) · `--titoli 16` (default; 4ª colonna sotto le icone TikTok, x=895 — deciso accettabile). Poster 140×210 identici nei due preset (l'altezza è vincolata dalle 4 fasce).
+
+**LEZIONI IMPARATE (già codificate nel prompt/script):**
+- **Poster sbagliati su titoli generici**: TMDb ordina per popolarità e sbaglia (es. "Dark" → prendeva "Dark Shadows"; "Unbelievable" → serie coreana). Soluzione: campi opzionali `"anno"` e `"tmdb_id"` nel JSON; regola nel prompt di scrivere sempre l'anno.
+- **Titoli compositi**: "Il Trono di Spade: House of the Dragon" non trova il poster. Lo script ora prova varianti (parti dopo i due punti, poi inglese); il prompt chiede il titolo esatto senza prefissi di franchise.
+- **Ordine fasce = colore**: la 1ª fascia dev'essere sempre la più desiderabile (blu), l'ultima la meno (rosso). Prima capitava il rosso sui titoli migliori. Regola aggiunta al prompt.
+- **Etichette illeggibili**: erano troppo piccole. Fix: colonna etichette più larga nel preset 16 (260px), algoritmo che sceglie la miglior spezzatura su 1-3 righe, tetto a 34px, penalità sulle righe extra. Regola nel prompt: **max 16 caratteri, max 3 parole**. Supporto opzionale a un font condensato (`fonts/Etichette.ttf`).
+- **max_token**: i modelli recenti "ragionano" prima di rispondere; budget alzato a 12000 (troncava a 3000). Il prefill `{` NON è supportato da alcuni modelli → rimosso.
+
+**JSON salvati** in sottocartella `json_salvati\` (con suffisso `_2` se stesso titolo). ⚠️ Se una tier list generata non viene pubblicata, cancellare la sua voce da `storico.json`, altrimenti il criterio resta "bruciato".
+
+**Tier list generate finora con l'agente (già in storico, DA PUBBLICARE o SCARTARE)**: "Quanto puoi guardare il telefono", "I cattivi che tifiamo davvero".
+
+**Prossimi step possibili dell'agente**: Fase 4 (caption IG/TikTok + titolo YT + commento fissato in un .txt) e MP4 muto da 8s (già progettati, non implementati).
+
+---
+
+### 27.3 ACCREDITO MOSTRA DEL CINEMA DI VENEZIA 2026 (tentativo esplorativo)
+
+**Contesto**: valutata la richiesta di accredito per la 83. Mostra (2-12 settembre 2026). Analisi delle opzioni:
+- **Accredito Stampa** (scad. 5 ago): riservato a testate/operatori dell'informazione. Profilo CosaGuardo debole → improbabile.
+- **Pass photo** (gratuito): solo area Mostra, no proiezioni, ma dà accesso a photocall/red carpet → **ottimo per contenuti social**. Alternativa consigliata se Marco decide di andarci.
+- **Accredito Cinema** (€95 tariffa full, scad. 12 ago): "profilo culturale". Scelto come tentativo. Requisito 2 anni di attività vale solo per la 3ª opzione (piattaforma web); si è puntato sulla 2ª (documentazione attività di progetto culturale).
+
+**Documenti preparati** in `/mnt/user-data/outputs/venezia_accredito/`:
+- `CosaGuardo_accredito_cinema_completo.pdf` (3 pagine: lettera su carta intestata + allegato dati) ← **file unico da caricare** (il modulo accetta 1 file)
+- Anche separati in docx/pdf per modifiche
+
+**Dati usati**: Marco Fantini, CEO e fondatore, CF FNTMRC84M11B819Q, Via Carso 22 Fabbrico (RE), info@cosaguardo.com. 1 accredito solo per lui.
+**Compilazione modulo**: Ruolo = **Blogger**; Tipologia = **Altro** → "Piattaforma editoriale digitale sul cinema e le serie".
+**Dati social nell'allegato** (solo visualizzazioni, NO follower per scelta — TikTok nuovo): tabella con i numeri reali (62,5k IG, ecc.), handle @cosaguardoapp (IG/YT) e @cosaguardo.app (TikTok). ⚠️ Dati serie TV riportati onestamente col loro titolo, non camuffati da film.
+
+**⚠️ Il formulario scade dopo 20 minuti** — tenere il PDF pronto prima di iniziare.
+**Nota**: esito a insindacabile giudizio della Biennale; progetto recente → aspettative caute. Marco procede senza mail interlocutoria (è un test).
+
+---
+
+### 27.4 CONTENUTI — caption prodotte in sessione
+- **Tier list supereroi (TikTok)**: "La mia tier list onesta sui film di supereroi 🦸 Qualcuno si offenderà per la fascia più bassa 😏 #supereroi #tierlist"
+- **Carosello "5 film che ti fanno piangere" (TikTok, primo test carosello)**: "5 film che ti faranno piangere 😭 L'ultimo quasi nessuno l'ha visto 💎 #film #filmdavedere" + commento fissato. ⚠️ Su TikTok i caroselli: prima immagine deve reggere da sola; pubblicazione manuale (non programmabili).
+
+---
+
+### 27.5 TODO AGGIORNATA (27/07)
+1. ⏳ Esito revisione iOS build 2 (24-48h). Se rifiuto per cancellazione account → serve Mac
+2. ⏳ **Android: 14 giorni scadono 28-29/07 → richiedere PRODUZIONE** (imminente!)
+3. Carta di credito per rinnovo Apple Developer (scad. 14/07/2027)
+4. Agosto: bump target API 36 entro 31/08 (Android)
+5. Pubblicare arretrato social (leva principale follower TikTok: 4 post → 2 follower)
+6. Tier list: pubblicare o scartare le 2 generate dall'agente
+7. Deploy patch affiliati + privacy + fix Prime + TMDb footer (se non già fatto): `/mnt/user-data/outputs/patch_affiliati/` — git add/commit/push
+8. Debito tecnico: disclosure nel footer base.html; unificare PLATFORM_MAP/PLATFORM_SLUGS
+9. Amazon: policy applicazioni mobili; Tracking ID per fonte
+10. Logo TMDb nel footer (attribuzione richiesta dai termini API)
+11. Venezia: caricare domanda entro 12/08 (se Marco decide di procedere)
+
+**Fine sezione 27.**
+
+---
+
+## 28. Sistema completo di produzione contenuti (3 formati) + Android + fix reel iOS
+
+### 28.1 iOS — STATO (aggiornamento fine 27/07)
+- Build 2 (permessi Info.plist rimossi) **inviata, in revisione**. Attesa esito.
+- TestFlight continua a dare "app non disponibile" anche con build 2 — bug lato Apple, NON blocca. Se approvata, l'app si scarica dallo Store.
+- ⚠️ Se rifiuto per cancellazione account → serve pulsante in-app (richiede Mac).
+
+### 28.2 Android — IMMINENTE
+- 14 giorni di closed test in scadenza **28-29/07** → **richiedere PRODUZIONE** in Play Console (Rilasci → Produzione). È lo sblocco della pubblicazione Android, ferma da settimane.
+- Non caricare release fino ad allora. Poi: bump target API 36 entro 31/08.
+
+---
+
+### 28.3 SISTEMA CONTENUTI — 3 FORMATI, stesso schema (NUOVO, tutto in `/mnt/user-data/outputs/agente_tierlist/`)
+
+Cartella unica su Windows: `C:\Users\m.fantini\Desktop\tierlist\`. Tutti gli script condividono:
+- **`.env`** con `TMDB_API_KEY` e `ANTHROPIC_API_KEY` (loader comune; path alt. via `set CG_ENV=...`). NON su GitHub.
+- **`cache_poster\`** condivisa (un poster scaricato vale per tutti i formati).
+- **`fonts\`** con Montserrat. Pesi necessari: ExtraBold, Bold (tier list) + Black, SemiBold, MediumItalic (caroselli) + Medium (reel). Da fonts.google.com, cartella `static/`.
+- **`icon-512.png`** (logo) nella cartella.
+
+**Schema comune**: `python genera_X.py` → Claude propone → `[s=va bene · m=modifica mirata · r=rifai da capo · n=annulla]` → a `s` crea gli asset. Ogni formato ha storico separato (no ripetizioni). Modelli: `claude-sonnet-5`, max_token alto (i modelli ragionano prima; il prefill `{` NON è supportato → non usarlo).
+
+**FORMATO 1 — TIER LIST** (`genera.py` + `tierlist.py`)
+- 1 immagine 1080×1920, 4 fasce × 4 titoli (16) o × 3 (12). `--titoli 12/16`.
+- Preset 12 rispetta zone TikTok (griglia ≤ x=780); preset 16 usa tutta la larghezza (4ª colonna sotto le icone TikTok). Poster 140×210 in entrambi.
+- Regole: criterio originale (non bello/brutto), ≥1 collocazione provocatoria, prima fascia = più desiderabile (blu) / ultima = meno (rosso), etichette max 16 caratteri.
+- Storico precompilato con 7+ tier list pubblicate.
+
+**FORMATO 2 — CAROSELLO "collezione"** (`genera_carosello.py` + `carosello.py`)
+- 7 slide 1080×1920: cover (poster più iconico, sfocato blur 15) + 5 schede (mood + 3 poster + frase) + chiusura CTA.
+- Cover: etichetta "15 SERIE/FILM/TITOLI" dedotta dai contenuti. Opzioni `--cover`, `--no-cover-blur`, `--tipo`.
+- Sottocategorie = mood/occasioni ("quando sei giù"), NON giudizi. Mono-tipo. Frase descrittiva per scheda (dà carattere).
+- Genera anche **`_testo_tiktok.txt`**: titolo TikTok + caption + commento fissato.
+- Contenuto slide 2-6 abbassato (parte y≈440) per non finire sotto la barra ricerca TikTok. Niente puntini (TikTok li mette da sé).
+- ⚠️ IG: i caroselli vanno come **POST**, non reel. Ma rendono poco su IG (210 view) → formato pensato per TikTok. Su TikTok: pubblicazione manuale.
+
+**FORMATO 3 — REEL "coppie"** (`genera_reel.py` + `reel.py`)
+- 7 schermate 1080×1920: hook (2 poster coppia, bordo verde smeraldo) + 5 consigli (poster grande + titolo + anno) + CTA. Il montaggio VIDEO resta in CapCut.
+- Concordanza auto: "il quinto" (film) / "la quinta" (serie); etichetta "5 FILM/5 SERIE" dal tipo. Chicca = 5° consiglio.
+- **Budget voiceover 130-140 parole ≈ 45-50s**, verificato dalla validazione. Ripartizione: hook ~20, consigli ~17, chicca ~24, CTA ~10.
+- **CTA parlata FISSA**: "Ti consiglio altri cinque titoli su cosaguardo punto com." (forzata in reel.py, non modificabile dal JSON).
+- File generati: 7 PNG + `_voiceover.txt` (con durate) + **`_voiceover_pulito.txt`** (solo parlato, da incollare in TTS) + `_montaggio.txt` (scaletta) + **`_pubblicazione.txt`** (musica suggerita, titolo YouTube, titolo TikTok, caption, commento).
+- Titolo YouTube: apre con parola cercabile + gancio (mai titolo di nicchia in apertura).
+
+**LEZIONI VALIDE PER TUTTI (già nel codice/prompt):**
+- Poster sbagliati su titoli generici → campi opzionali `"anno"` e `"tmdb_id"` nel JSON; anno sempre richiesto nel prompt.
+- Titoli compositi ("Il Trono di Spade: House of the Dragon") → lo script prova varianti (parti dopo i due punti, poi inglese); il prompt chiede il titolo esatto senza prefissi.
+- Emoji: Montserrat non le ha → rese come rettangoli. Rimosse da tutti i testi disegnati (restano ok nelle caption/testi copiabili).
+- Se un contenuto generato non viene pubblicato → cancellare la voce dal rispettivo storico (`storico.json`, `storico_caroselli.json`, `storico_reel.json`).
+
+**File di esempio pronti**: `esempio_tierlist.json`, `esempio_carosello.json`, `esempio_reel.json`. Guida completa in `ISTRUZIONI.md`.
+
+⚠️ **Le chiavi API Anthropic esposte in chat in sessioni precedenti vanno revocate su console.anthropic.com.** Nel `.env` solo la chiave nuova.
+
+---
+
+### 28.4 CONTENUTI PRODOTTI IN SESSIONE (caption/titoli)
+- Tier list "Saghe e trilogie": caption + titolo TikTok "Le saghe che tutti amano, ordinate senza pietà" (curiosità, non rage-bait: il trigger sta nella caption, non nel titolo).
+- Carosello "15 film per ogni tipo di serata" (primo carosello pubblicato, generato dallo strumento).
+
+---
+
+### 28.5 TODO AGGIORNATA (fine 27/07)
+1. ⏳ **Android: richiedere PRODUZIONE (28-29/07, imminente)**
+2. ⏳ Esito revisione iOS build 2
+3. Provare i 3 generatori con contenuti reali; pubblicare l'arretrato (leva #1 per follower TikTok)
+4. Carta di credito rinnovo Apple; Venezia entro 12/08 (se Marco procede)
+5. Revocare chiavi API esposte
+6. Deploy patch affiliati+privacy+Prime+TMDb se non fatto
+7. Debito tecnico: disclosure nel footer base.html; unificare PLATFORM_MAP/PLATFORM_SLUGS
+8. Bump target API 36 Android entro 31/08
+
+**Fine sezione 28.**
