@@ -3269,12 +3269,23 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
         cache_get = None
         cache_set = None
 
-    # Chiamata TMDb con doppio filtro: provider + genre
-    out = []
+    # Chiamata TMDb con doppio filtro: provider + genre.
+    # NB: with_genres su TMDb significa "ha quel genere TRA i suoi", non "genere
+    # principale". Es. The Wolf of Wall Street e' Crime+Dramma+Commedia insieme →
+    # rientrerebbe in "commedia" pur non essendolo. Sotto filtriamo sul genere
+    # PRINCIPALE (genre_ids[0], che TMDb ordina per rilevanza) e riordiniamo con
+    # un mix voto-pesato + popolarita', invece della sola popularity.desc.
+    #
+    # Pesi del punteggio finale: alza VOTO_W per premiare la qualita', POP_W per
+    # premiare i titoli piu' cercati del momento.
+    VOTO_W = 0.70
+    POP_W  = 0.30
+    BAYES_M = 500     # voti "di garanzia": sotto questa soglia il voto pesa meno
+
+    raw = []
     seen_ids = set()
-    for page in range(1, 4):
-        if len(out) >= limit:
-            break
+    # piu' pagine del necessario: il filtro sul genere principale scarta parecchio
+    for page in range(1, 7):
         try:
             r = requests.get(
                 f"https://api.themoviedb.org/3/discover/{ct}",
@@ -3286,22 +3297,30 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
                     "with_genres": genre_id,
                     "sort_by": "popularity.desc",
                     "page": page,
-                    "vote_count.gte": 50,  # qualità più stretta delle pagine piattaforma
+                    "vote_count.gte": 50,  # qualita' piu' stretta delle pagine piattaforma
                     "vote_average.gte": 6.0,  # solo "buoni"/"ottimi"
                 },
                 timeout=6,
             )
-            for item in r.json().get("results", []):
+            results = r.json().get("results", [])
+            if not results:
+                break
+            for item in results:
                 # Filtro contenuti per adulti (difensivo)
                 if _is_adult_content(item):
                     continue
                 tid = item.get("id")
                 if not tid or tid in seen_ids:
                     continue
-                seen_ids.add(tid)
                 poster = item.get("poster_path")
                 if not poster:
                     continue
+                # ── FILTRO GENERE PRINCIPALE ──
+                # Tiene solo i titoli il cui PRIMO genere e' quello della pagina.
+                gids = item.get("genre_ids", []) or []
+                if not gids or gids[0] != genre_id:
+                    continue
+                seen_ids.add(tid)
 
                 if ct == "movie":
                     title = pick_readable_title(item, "movie")
@@ -3312,7 +3331,7 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
                 if not title:
                     continue
 
-                out.append({
+                raw.append({
                     "tmdb_id":      tid,
                     "title":        title,
                     "poster_url":   f"https://image.tmdb.org/t/p/w342{poster}",
@@ -3320,11 +3339,30 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
                     "year":         date[:4] if date else "",
                     "content_type": ct,
                     "overview":     (item.get("overview") or "").strip(),
+                    "_vote":        float(item.get("vote_average") or 0),
+                    "_votes":       int(item.get("vote_count") or 0),
+                    "_pop":         float(item.get("popularity") or 0),
                 })
-                if len(out) >= limit:
-                    break
         except Exception:
             continue
+
+    # ── PUNTEGGIO: voto-pesato (bayesiano) + popolarita' normalizzata ──
+    if raw:
+        media_globale = sum(x["_vote"] for x in raw) / len(raw)
+        pop_max = max((x["_pop"] for x in raw), default=1.0) or 1.0
+        for x in raw:
+            v, n = x["_vote"], x["_votes"]
+            bayes = (n / (n + BAYES_M)) * v + (BAYES_M / (n + BAYES_M)) * media_globale
+            voto_norm = bayes / 10.0
+            pop_norm  = x["_pop"] / pop_max
+            x["_score"] = VOTO_W * voto_norm + POP_W * pop_norm
+        raw.sort(key=lambda x: x["_score"], reverse=True)
+
+    out = []
+    for x in raw[:limit]:
+        for k in ("_vote", "_votes", "_pop", "_score"):
+            x.pop(k, None)
+        out.append(x)
 
     if cache_set and out:
         try:
