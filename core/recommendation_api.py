@@ -2324,8 +2324,12 @@ MOOD_GENRES = {
 }
 
 PLATFORM_MAP = {
+    # ATTENZIONE: gli ID devono restare allineati a PLATFORM_SLUGS (più in basso).
+    # Con watch_region=IT il provider Prime Video su TMDb è 119, NON 9:
+    # l'ID 9 è la variante di altri mercati e in Italia non restituisce risultati
+    # (causava la schermata vuota su /scopri?piattaforma=prime).
     "netflix":   8,
-    "prime":     9,
+    "prime":     119,
     "disney":    337,
     "apple":     350,
     "paramount": 531,
@@ -2979,6 +2983,16 @@ def get_platform_subscribe_link(slug: str) -> str:
         return ""
     pid, name, fallback_url = PLATFORM_SLUGS[slug]
 
+    # Amazon: la CTA "Abbonati" deve puntare alla landing della prova gratuita
+    # Prime, non a una ricerca vuota nel catalogo instant-video.
+    # amazon.it/provaprime è l'UNICA pagina che genera il bounty (3 € per
+    # prova attivata): iscrizioni da altre pagine non vengono conteggiate.
+    _amz = os.environ.get("AFFILIATE_AMAZON", "")
+    if _amz:
+        _n = (name or "").lower()
+        if ("amazon" in _n) or ("prime video" in _n):
+            return f"https://www.amazon.it/provaprime?tag={_amz}"
+
     # Prova affiliate (vuota se non configurato)
     aff = _build_affiliate_link(name, title="", tmdb_id=None)
     if aff:
@@ -2986,6 +3000,16 @@ def get_platform_subscribe_link(slug: str) -> str:
 
     # Fallback: link ufficiale alla piattaforma
     return fallback_url
+
+
+
+def get_amazon_bounty_link() -> str:
+    """
+    Link alla prova gratuita Prime (bounty 3 €).
+    Stringa vuota se il tag affiliato non è configurato.
+    """
+    tag = os.environ.get("AFFILIATE_AMAZON", "")
+    return f"https://www.amazon.it/provaprime?tag={tag}" if tag else ""
 
 
 def get_platform_content(slug: str, content_type: str = "movie", limit: int = 60) -> tuple:
@@ -3245,23 +3269,12 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
         cache_get = None
         cache_set = None
 
-    # Chiamata TMDb con doppio filtro: provider + genre.
-    # NB: with_genres su TMDb significa "ha quel genere TRA i suoi", non "genere
-    # principale". Es. The Wolf of Wall Street è taggato Crime+Dramma+Commedia →
-    # rientrerebbe in "commedia" pur non essendolo. Sotto filtriamo sul genere
-    # PRINCIPALE (genre_ids[0], che TMDb ordina per rilevanza) e riordiniamo con
-    # un mix voto-pesato + popolarità, invece della sola popularity.desc.
-    #
-    # Pesi del punteggio finale (0..1, somma non vincolata): alza VOTO_W per
-    # premiare la qualità, POP_W per premiare i titoli più cercati del momento.
-    VOTO_W = 0.70
-    POP_W  = 0.30
-    BAYES_M = 500     # voti "di garanzia": sotto questa soglia il voto pesa meno
-
-    raw = []
+    # Chiamata TMDb con doppio filtro: provider + genre
+    out = []
     seen_ids = set()
-    # più pagine del necessario: il filtro sul genere principale scarta parecchio
-    for page in range(1, 7):
+    for page in range(1, 4):
+        if len(out) >= limit:
+            break
         try:
             r = requests.get(
                 f"https://api.themoviedb.org/3/discover/{ct}",
@@ -3273,29 +3286,22 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
                     "with_genres": genre_id,
                     "sort_by": "popularity.desc",
                     "page": page,
-                    "vote_count.gte": 50,
-                    "vote_average.gte": 6.0,
+                    "vote_count.gte": 50,  # qualità più stretta delle pagine piattaforma
+                    "vote_average.gte": 6.0,  # solo "buoni"/"ottimi"
                 },
                 timeout=6,
             )
-            results = r.json().get("results", [])
-            if not results:
-                break
-            for item in results:
+            for item in r.json().get("results", []):
+                # Filtro contenuti per adulti (difensivo)
                 if _is_adult_content(item):
                     continue
                 tid = item.get("id")
                 if not tid or tid in seen_ids:
                     continue
+                seen_ids.add(tid)
                 poster = item.get("poster_path")
                 if not poster:
                     continue
-                # ── FILTRO GENERE PRINCIPALE ──
-                # Tiene solo i titoli il cui PRIMO genere è quello della pagina.
-                gids = item.get("genre_ids", []) or []
-                if not gids or gids[0] != genre_id:
-                    continue
-                seen_ids.add(tid)
 
                 if ct == "movie":
                     title = pick_readable_title(item, "movie")
@@ -3306,7 +3312,7 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
                 if not title:
                     continue
 
-                raw.append({
+                out.append({
                     "tmdb_id":      tid,
                     "title":        title,
                     "poster_url":   f"https://image.tmdb.org/t/p/w342{poster}",
@@ -3314,33 +3320,11 @@ def get_best_content(tipo: str, genere: str, platform: str, limit: int = 30) -> 
                     "year":         date[:4] if date else "",
                     "content_type": ct,
                     "overview":     (item.get("overview") or "").strip(),
-                    "_vote":        float(item.get("vote_average") or 0),
-                    "_votes":       int(item.get("vote_count") or 0),
-                    "_pop":         float(item.get("popularity") or 0),
                 })
+                if len(out) >= limit:
+                    break
         except Exception:
             continue
-
-    # ── PUNTEGGIO: voto-pesato (bayesiano) + popolarità normalizzata ──
-    if raw:
-        media_globale = sum(x["_vote"] for x in raw) / len(raw)
-        pop_max = max((x["_pop"] for x in raw), default=1.0) or 1.0
-        for x in raw:
-            # media bayesiana: un voto alto con pochi votanti viene "tirato"
-            # verso la media globale finché non ha abbastanza voti (BAYES_M).
-            v, n = x["_vote"], x["_votes"]
-            bayes = (n / (n + BAYES_M)) * v + (BAYES_M / (n + BAYES_M)) * media_globale
-            voto_norm = bayes / 10.0                 # 0..1
-            pop_norm  = x["_pop"] / pop_max           # 0..1
-            x["_score"] = VOTO_W * voto_norm + POP_W * pop_norm
-        raw.sort(key=lambda x: x["_score"], reverse=True)
-
-    # pulizia dei campi interni prima di restituire
-    out = []
-    for x in raw[:limit]:
-        for k in ("_vote", "_votes", "_pop", "_score"):
-            x.pop(k, None)
-        out.append(x)
 
     if cache_set and out:
         try:
