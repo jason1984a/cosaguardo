@@ -49,8 +49,22 @@
         </div>
     </div>
 
+    <!-- TOOLBAR: ricerca + righe per pagina + paginazione -->
+    <div class="admin-toolbar">
+        <input type="search" id="adminSearch" class="admin-search"
+               placeholder="Cerca per email o nome..." autocomplete="off">
+        <select id="adminPerPage" class="admin-select" aria-label="Righe per pagina">
+            <option value="20">20 per pagina</option>
+            <option value="50" selected>50 per pagina</option>
+            <option value="100">100 per pagina</option>
+            <option value="all">Tutti</option>
+        </select>
+        <div id="adminPager" class="admin-pager"></div>
+        <div id="adminCount" class="admin-count"></div>
+    </div>
+
     <!-- TABELLA UTENTI -->
-    <div class="admin-table-wrap">
+    <div class="admin-table-wrap" id="adminTableWrap">
         <table class="admin-table">
             <thead>
                 <tr>
@@ -68,9 +82,9 @@
                     <th>Preferenze</th>
                 </tr>
             </thead>
-            <tbody>
+            <tbody id="adminTableBody">
                 {% for u in stats.users %}
-                <tr>
+                <tr data-search="{{ ((u.email or '') ~ ' ' ~ (u.first_name or '') ~ ' ' ~ (u.last_name or '')) | lower }}">
                     <td style="color:var(--muted);font-size:0.75rem;">{{ u.id }}</td>
                     <td>
                         <div style="font-weight:600;font-size:0.82rem;">{{ u.email }}</div>
@@ -148,13 +162,67 @@
     color: var(--muted);
 }
 
+/* Toolbar */
+.admin-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+}
+.admin-search {
+    flex: 1 1 220px;
+    min-width: 170px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: inherit;
+    font-family: inherit;
+    font-size: 0.85rem;
+}
+.admin-search:focus { outline: none; border-color: rgba(110,168,254,0.5); }
+.admin-select {
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.04);
+    color: inherit;
+    font-family: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.admin-pager { display: flex; align-items: center; gap: 6px; }
+.admin-pagebtn {
+    min-width: 34px;
+    padding: 7px 10px;
+    border-radius: 9px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+.admin-pagebtn:hover:not(:disabled) { background: rgba(255,255,255,0.06); color: #93c5fd; }
+.admin-pagebtn:disabled { opacity: 0.35; cursor: default; }
+.admin-pageinfo { font-size: 0.78rem; color: var(--muted); padding: 0 4px; white-space: nowrap; }
+.admin-count { font-size: 0.75rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
+
 /* Table */
 .admin-table-wrap {
-    background: rgba(22,31,61,0.65);
+    /* Tinta piena e non traslucida: serve alle celle sticky, che devono
+       coprire il contenuto che ci scorre sotto. */
+    --admin-surface: #171f3d;
+    background: var(--admin-surface);
     border: 1px solid rgba(255,255,255,0.07);
     border-radius: 18px;
     overflow: auto;
-    backdrop-filter: blur(8px);
+    /* LA CHIAVE: senza questo il box e' alto quanto tutta la lista e la
+       barra di scorrimento orizzontale finisce in fondo alla pagina. */
+    max-height: 72vh;
+    overscroll-behavior: contain;
 }
 .admin-table {
     width: 100%;
@@ -170,8 +238,13 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--muted);
-    border-bottom: 1px solid rgba(255,255,255,0.07);
     white-space: nowrap;
+    /* Intestazione sempre visibile mentre si scorre in verticale */
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--admin-surface);
+    box-shadow: inset 0 -1px 0 rgba(255,255,255,0.07);
 }
 .admin-table td {
     padding: 12px 14px;
@@ -179,7 +252,9 @@
     vertical-align: middle;
 }
 .admin-table tr:last-child td { border-bottom: none; }
-.admin-table tr:hover td { background: rgba(255,255,255,0.03); }
+.admin-table tbody tr { --row-bg: transparent; }
+.admin-table tbody tr:hover { --row-bg: rgba(255,255,255,0.045); }
+.admin-table tbody td { background: var(--row-bg); }
 .admin-num {
     text-align: center;
     font-weight: 700;
@@ -200,5 +275,110 @@
 @media (min-width: 640px) {
     .admin-stats-grid { grid-template-columns: repeat(5, 1fr); }
 }
+
+/* Da desktop in su: # ed Email restano ancorate a sinistra, cosi' scorrendo
+   verso destra si sa sempre di quale utente si stanno leggendo i numeri. */
+@media (min-width: 900px) {
+    .admin-table th:nth-child(1),
+    .admin-table td:nth-child(1) {
+        width: 54px;
+        min-width: 54px;
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background: linear-gradient(var(--row-bg, transparent), var(--row-bg, transparent)), var(--admin-surface);
+    }
+    .admin-table th:nth-child(2),
+    .admin-table td:nth-child(2) {
+        position: sticky;
+        left: 54px;
+        z-index: 2;
+        background: linear-gradient(var(--row-bg, transparent), var(--row-bg, transparent)), var(--admin-surface);
+        box-shadow: inset -1px 0 0 rgba(255,255,255,0.07);
+    }
+    .admin-table thead th:nth-child(1),
+    .admin-table thead th:nth-child(2) { z-index: 4; }
+    .admin-table thead th:nth-child(2) {
+        box-shadow: inset -1px 0 0 rgba(255,255,255,0.07),
+                    inset 0 -1px 0 rgba(255,255,255,0.07);
+    }
+}
 </style>
+
+<script>
+/* Paginazione e ricerca lato client: le righe sono gia' tutte nel DOM,
+   qui si limita solo quali mostrare. Nessuna modifica al backend. */
+(function () {
+    var wrap    = document.getElementById('adminTableWrap');
+    var body    = document.getElementById('adminTableBody');
+    var search  = document.getElementById('adminSearch');
+    var perPage = document.getElementById('adminPerPage');
+    var pager   = document.getElementById('adminPager');
+    var count   = document.getElementById('adminCount');
+    if (!body || !wrap) return;
+
+    var rows = Array.prototype.slice.call(body.querySelectorAll('tr'));
+    var filtered = rows.slice();
+    var page = 1;
+
+    function pageSize() {
+        return perPage.value === 'all' ? (filtered.length || 1) : parseInt(perPage.value, 10);
+    }
+
+    function render() {
+        var size  = pageSize();
+        var pages = Math.max(1, Math.ceil(filtered.length / size));
+        if (page > pages) page = pages;
+        if (page < 1) page = 1;
+
+        var start = (page - 1) * size;
+        var end   = Math.min(start + size, filtered.length);
+
+        for (var i = 0; i < rows.length; i++) rows[i].style.display = 'none';
+        for (var j = start; j < end; j++) filtered[j].style.display = '';
+
+        count.textContent = filtered.length
+            ? (start + 1) + '\u2013' + end + ' di ' + filtered.length
+            : 'Nessun utente trovato';
+
+        pager.innerHTML = '';
+        if (pages > 1) {
+            pager.appendChild(btn('\u2039', page <= 1, function () { page--; render(); }));
+            var info = document.createElement('span');
+            info.className = 'admin-pageinfo';
+            info.textContent = page + ' / ' + pages;
+            pager.appendChild(info);
+            pager.appendChild(btn('\u203a', page >= pages, function () { page++; render(); }));
+        }
+        wrap.scrollTop = 0;
+    }
+
+    function btn(label, disabled, onClick) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'admin-pagebtn';
+        b.textContent = label;
+        b.disabled = disabled;
+        b.addEventListener('click', onClick);
+        return b;
+    }
+
+    var timer = null;
+    search.addEventListener('input', function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () {
+            var q = search.value.trim().toLowerCase();
+            filtered = q
+                ? rows.filter(function (r) { return (r.dataset.search || '').indexOf(q) !== -1; })
+                : rows.slice();
+            page = 1;
+            render();
+        }, 150);
+    });
+
+    perPage.addEventListener('change', function () { page = 1; render(); });
+
+    render();
+})();
+</script>
 {% endblock %}
