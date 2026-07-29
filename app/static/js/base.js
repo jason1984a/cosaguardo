@@ -22,27 +22,40 @@
             var resetTimeout = null;
             var currentWidth = 0;
 
+            // Applica una percentuale di avanzamento via transform.
+            // scaleX gira sul compositor: continua ad animare anche quando il
+            // thread principale e' bloccato dalla navigazione in corso.
+            function setPct(pct) {
+                bar.style.transform = 'scaleX(' + (pct / 100) + ')';
+            }
+
             function start() {
                 if (progressInterval) return;  // già in corso
                 clearTimeout(resetTimeout);
                 currentWidth = 0;
+
+                // Stato iniziale a zero SENZA transizione, poi reflow forzato:
+                // senza il reflow il browser accorpa le due modifiche di stile
+                // e la transizione non parte.
+                bar.style.transition = 'none';
+                setPct(0);
                 bar.classList.add('cg-progress-active');
-                bar.style.transition = 'width 0.25s ease-out, opacity 0.2s ease-out';
-                // Salto rapido al 45% per feedback istantaneo al click.
-                // Era 25%: troppo conservativo, su pagine veloci (<1s) la bar
-                // non arrivava neanche a metà prima del fade-out. YouTube/GitHub
-                // partono molto più aggressivi: l'utente deve vedere movimento.
-                requestAnimationFrame(function() {
-                    currentWidth = 45;
-                    bar.style.width = '45%';
-                });
+                void bar.offsetWidth;                 // <- reflow forzato
+                bar.style.transition = '';            // torna alla transizione del CSS
+
+                // BUG FIX iPad/Safari: il salto iniziale era dentro
+                // requestAnimationFrame. Su Safari iOS i callback rAF smettono
+                // di essere serviti appena inizia la navigazione, quindi quel
+                // callback non girava mai e la barra restava a zero (invisibile).
+                // Ora la larghezza iniziale e' assegnata in modo SINCRONO.
+                currentWidth = 45;
+                setPct(45);
+
                 // Poi cresce graduale verso 95% (mai 100% finché non arriva la nuova pagina).
-                // Aggiungiamo il 25% della distanza restante ogni 180ms (era 10% ogni 250ms),
-                // così la bar riempie velocemente nei primi 500-800ms e poi rallenta verso il 95%.
                 progressInterval = setInterval(function() {
                     if (currentWidth < 95) {
                         currentWidth += (95 - currentWidth) * 0.25;
-                        bar.style.width = currentWidth + '%';
+                        setPct(currentWidth);
                     }
                 }, 180);
                 // Safety: se la nav non avviene entro 4s, resetta
@@ -54,12 +67,12 @@
                 clearInterval(progressInterval);
                 clearTimeout(resetTimeout);
                 progressInterval = null;
-                bar.style.width = '100%';
+                setPct(100);
                 setTimeout(function() {
                     bar.classList.remove('cg-progress-active');
                     setTimeout(function() {
                         bar.style.transition = 'none';
-                        bar.style.width = '0%';
+                        setPct(0);
                     }, 220);
                 }, 150);
             }
@@ -72,7 +85,7 @@
                 clearTimeout(resetTimeout);
                 bar.classList.remove('cg-progress-active');
                 bar.style.transition = 'none';
-                bar.style.width = '0%';
+                setPct(0);
             }
 
             // Click handler delegato sul document (cattura anche link aggiunti dinamicamente)
@@ -124,6 +137,11 @@
             //   - 'pageshow' con persisted: per back/forward da bfcache (caso edge).
             // Niente 'beforeunload' qui: era la causa del fade-out prematuro.
             window.addEventListener('pagehide', finish);
+            // Safari iOS non emette sempre 'pagehide' in modo affidabile:
+            // visibilitychange scatta comunque quando la pagina sparisce.
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'hidden') finish();
+            });
             window.addEventListener('pageshow', function(e) {
                 // pageshow scatta su back/forward dalla bfcache: completa la bar
                 // se stava ancora correndo (= utente è tornato indietro mentre la

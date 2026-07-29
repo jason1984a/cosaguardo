@@ -241,14 +241,20 @@
             top: 0;
             left: 0;
             height: 3px;
-            width: 0%;
+            /* Si anima transform, non width: il transform gira sul compositor
+               e continua anche quando il thread principale si blocca durante
+               la navigazione. Animare width invece richiede layout a ogni
+               frame sul main thread -> su Safari iOS la barra non si vedeva. */
+            width: 100%;
+            transform: scaleX(0);
+            transform-origin: 0 50%;
             background: linear-gradient(90deg, #6ea8fe 0%, #a78bfa 100%);
             box-shadow: 0 0 8px rgba(167, 139, 250, 0.6);
             z-index: 99999;
             opacity: 0;
-            transition: width 0.25s ease-out, opacity 0.2s ease-out;
+            transition: transform 0.25s ease-out, opacity 0.2s ease-out;
             pointer-events: none;
-            border-radius: 0 2px 2px 0;
+            will-change: transform, opacity;
         }
         #cg-nav-progress.cg-progress-active {
             opacity: 1;
@@ -259,7 +265,7 @@
         }
     </style>
     <script>window.__CG_LOGGED_IN = {% if is_logged_in %}true{% else %}false{% endif %};</script>
-    <script src="{{ url_for('static', path='js/base.js') }}?v=3" defer></script>
+    <script src="{{ url_for('static', path='js/base.js') }}?v=4" defer></script>
     {# ─── /NAVIGATION PROGRESS BAR ──────────────────────────────────────── #}
 
     <div class="site-wrapper">
