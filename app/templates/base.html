@@ -31,6 +31,69 @@
             try { return localStorage.getItem('cg_optout') === '1'; } catch (_) { return false; }
         }
 
+        // ── CONTESTO APP vs WEB ────────────────────────────────────────────
+        // Le app Android e iOS sono involucri che caricano cosaguardo.com:
+        // GA4 vede gia' quelle sessioni ma le conta insieme al traffico web.
+        // Qui si determina la provenienza UNA VOLTA per sessione e la si passa
+        // a GA4 e Clarity, cosi' si puo' segmentare "app" da "sito".
+        //
+        // Valori possibili:
+        //   android_app  app dal Play Store (TWA)
+        //   ios_app      app dall'App Store
+        //   android_pwa  PWA installata da Chrome ("Aggiungi a schermata Home")
+        //   ios_pwa      PWA installata da Safari
+        //   desktop_pwa  PWA installata da desktop
+        //   web          browser normale
+        function cgAppContext() {
+            try {
+                var KEY = 'cg_app_ctx';
+                var stored = sessionStorage.getItem(KEY);
+                if (stored) return stored;
+
+                var ua  = navigator.userAgent || '';
+                var ref = document.referrer || '';
+                var ctx = 'web';
+
+                var standalone = false;
+                try {
+                    standalone = (window.matchMedia &&
+                                  (window.matchMedia('(display-mode: standalone)').matches ||
+                                   window.matchMedia('(display-mode: fullscreen)').matches)) ||
+                                 window.navigator.standalone === true;
+                } catch (_) {}
+
+                var isAndroid = /Android/i.test(ua);
+                // iPad con iPadOS 13+ si dichiara Macintosh: si riconosce dal touch.
+                var isIOS = /iPhone|iPad|iPod/i.test(ua) ||
+                            (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+
+                if (ref.indexOf('android-app://com.cosaguardo.app') === 0) {
+                    // Segnale certo: il TWA imposta questo referrer al lancio.
+                    // C'e' solo sulla prima pagina, per questo si memorizza.
+                    ctx = 'android_app';
+                } else if (cgQueryParam('src') === 'app') {
+                    // Segnale esplicito, se lo start_url del pacchetto lo include.
+                    ctx = isIOS ? 'ios_app' : 'android_app';
+                } else if (isIOS && /Mobile\//.test(ua) && !/Safari\//.test(ua) &&
+                           !/(FBAN|FBAV|Instagram|Line|Twitter|Snapchat|Pinterest|MicroMessenger|GSA|DuckDuckGo)/i.test(ua)) {
+                    // Euristica iOS: Safari mobile ha sempre il token "Safari/",
+                    // i WebView dentro le app no. Si escludono i browser interni
+                    // delle app note. Meno certa delle precedenti.
+                    ctx = 'ios_app';
+                } else if (standalone) {
+                    ctx = isAndroid ? 'android_pwa' : (isIOS ? 'ios_pwa' : 'desktop_pwa');
+                }
+
+                sessionStorage.setItem(KEY, ctx);
+                return ctx;
+            } catch (_) { return 'web'; }
+        }
+
+        function cgQueryParam(name) {
+            try { return new URLSearchParams(window.location.search).get(name); }
+            catch (_) { return null; }
+        }
+
         function loadGA4() {
             if (cgIsOptedOut()) return;
             if (document.getElementById('ga4-script')) return;
@@ -40,7 +103,11 @@
             s.src = 'https://www.googletagmanager.com/gtag/js?id=G-HMNFXJ98H1';
             document.head.appendChild(s);
             gtag('js', new Date());
-            gtag('config', 'G-HMNFXJ98H1');
+            // app_context passato PRIMA di config: cosi' viaggia gia' sul
+            // primo page_view, non solo sugli eventi successivi.
+            var __cgCtx = cgAppContext();
+            gtag('set', 'user_properties', { app_context: __cgCtx });
+            gtag('config', 'G-HMNFXJ98H1', { app_context: __cgCtx });
             gtag('consent', 'update', {'analytics_storage': 'granted'});
         }
 
@@ -104,6 +171,9 @@
                 ad_Storage: "denied",
                 analytics_Storage: "granted"
             });
+            // Tag personalizzato: permette di filtrare le registrazioni per
+            // provenienza (app vs sito) nella dashboard Clarity.
+            try { window.clarity('set', 'app_context', cgAppContext()); } catch (_) {}
         }
 
         // ── Helper unificato per tracking conversioni su entrambe le piattaforme ─
@@ -114,7 +184,9 @@
                 // GA4: nome eventi snake_case
                 if (typeof gtag === 'function' &&
                     localStorage.getItem('cg_cookie_consent') === 'accepted') {
-                    gtag('event', eventName, params || {});
+                    var p = params || {};
+                    if (!p.app_context) p.app_context = cgAppContext();
+                    gtag('event', eventName, p);
                 }
                 // Meta Pixel: nome eventi PascalCase. Mapping snake_case → standard event.
                 if (typeof fbq === 'function' &&
