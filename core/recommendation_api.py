@@ -1943,9 +1943,15 @@ def get_cinema_news(limit: int = 8) -> list:
             },
             timeout=6
         )
-        for item in r.json().get("results", [])[:4]:
+        movie_added = 0
+        for item in r.json().get("results", []):
+            if movie_added >= 4:
+                break
             # Filtro contenuti per adulti (difensivo)
             if _is_adult_content(item):
+                continue
+            # Strategia E: stesso setaccio delle serie (trama it-IT, voti, immagini)
+            if is_low_value_feed_item(item, "movie"):
                 continue
             bp = item.get("backdrop_path") or item.get("poster_path")
             if not bp: continue
@@ -1962,21 +1968,38 @@ def get_cinema_news(limit: int = 8) -> list:
                 "tmdb_id":   tmdb_id,
                 "internal":  True,
             })
+            movie_added += 1
     except Exception:
         pass
 
     # 2. Serie TV popolari recenti
+    #    Strategia E: si usa /discover/tv al posto di /tv/popular perche'
+    #    permette di escludere generi e imporre una soglia voti LATO SERVER
+    #    (tv/popular non accetta filtri). Si prende una pagina intera e si
+    #    filtra a valle, fermandosi alle prime 4 card valide.
     try:
         r = requests.get(
-            "https://api.themoviedb.org/3/tv/popular",
-            params={"api_key": TMDB_API_KEY, "language": "it-IT",
+            "https://api.themoviedb.org/3/discover/tv",
+            params={
+                "api_key": TMDB_API_KEY,
+                "language": "it-IT",
+                "sort_by": "popularity.desc",
+                "without_genres": ",".join(str(g) for g in sorted(_FEED_EXCLUDED_TV_GENRES)),
+                "vote_count.gte": _FEED_MIN_VOTES_TV,
                 "include_adult":  "false",
             },
             timeout=6
         )
-        for item in r.json().get("results", [])[:4]:
+        tv_added = 0
+        for item in r.json().get("results", []):
+            if tv_added >= 4:
+                break
             # Filtro contenuti per adulti (difensivo)
             if _is_adult_content(item):
+                continue
+            # Strategia E: scarta TG, telenovelas, titoli senza trama it-IT,
+            # sconosciuti e senza immagini (rete di sicurezza lato client)
+            if is_low_value_feed_item(item, "tv"):
                 continue
             bp = item.get("backdrop_path") or item.get("poster_path")
             if not bp: continue
@@ -1993,6 +2016,7 @@ def get_cinema_news(limit: int = 8) -> list:
                 "tmdb_id":   tmdb_id,
                 "internal":  True,
             })
+            tv_added += 1
     except Exception:
         pass
 
@@ -3532,4 +3556,81 @@ def filter_unreadable_titles(items: list, content_type: str = "movie") -> list:
     if not items:
         return items
     return [it for it in items if pick_readable_title(it, content_type) is not None]
+
+
+# ─── FILTRO QUALITA' FEED (Strategia E) ────────────────────────────────────
+# I feed globali TMDb (tv/popular, trending) sono ordinati su un pubblico
+# mondiale: TG tedeschi e telenovelas brasiliane risultano "popolari" perche'
+# hanno migliaia di episodi e un pubblico locale enorme, ma per una guida
+# streaming italiana sono rumore (schede incomplete, nessuno li cerca).
+
+# Generi TV da escludere sempre dai feed editoriali.
+#   10763 News    -> Tagesschau e ogni telegiornale
+#   10766 Soap    -> Malhacao e le telenovelas quotidiane
+#   10767 Talk    -> talk show locali
+#   10764 Reality -> reality regionali
+_FEED_EXCLUDED_TV_GENRES = {10763, 10766, 10767, 10764}
+
+# Soglia minima di voti: sotto questa il titolo e' di fatto sconosciuto.
+# Piu' bassa sui film perche' un'uscita al cinema ha pochi voti per definizione.
+_FEED_MIN_VOTES_TV = 100
+_FEED_MIN_VOTES_MOVIE = 50
+
+# Valvola di sfogo per i casi singoli che sfuggono ai filtri automatici:
+# aggiungere qui il tmdb_id e sparisce da tutti i feed.
+_FEED_DENYLIST_TMDB_IDS = {
+    "tv": set(),
+    "movie": set(),
+}
+
+
+def is_low_value_feed_item(item: dict, content_type: str = "tv") -> bool:
+    """
+    True se l'item TMDb non merita di comparire in un feed editoriale.
+
+    Da usare DOPO pick_readable_title e _is_adult_content, come ultimo
+    setaccio prima di costruire la card. Non fa chiamate di rete: lavora
+    solo sui campi gia' presenti nella risposta del feed.
+
+    Scarta:
+      1. id in denylist manuale
+      2. generi esclusi (news/soap/talk/reality) -> solo serie TV
+      3. overview it-IT vuota (= nessuno ha mai localizzato il titolo in
+         italiano, segnale forte di irrilevanza per il mercato IT)
+      4. vote_count sotto soglia
+      5. poster e backdrop entrambi assenti
+    """
+    if not isinstance(item, dict):
+        return True
+
+    is_tv = content_type == "tv"
+
+    # 1. Denylist manuale
+    tmdb_id = item.get("id")
+    if tmdb_id and tmdb_id in _FEED_DENYLIST_TMDB_IDS.get(content_type, set()):
+        return True
+
+    # 2. Generi esclusi (il campo esiste solo sui feed, non sui detail)
+    if is_tv:
+        for g in (item.get("genre_ids") or []):
+            if g in _FEED_EXCLUDED_TV_GENRES:
+                return True
+
+    # 3. Overview italiana vuota
+    if not (item.get("overview") or "").strip():
+        return True
+
+    # 4. Soglia voti
+    min_votes = _FEED_MIN_VOTES_TV if is_tv else _FEED_MIN_VOTES_MOVIE
+    try:
+        if int(item.get("vote_count") or 0) < min_votes:
+            return True
+    except (TypeError, ValueError):
+        return True
+
+    # 5. Nessuna immagine utilizzabile
+    if not (item.get("poster_path") or item.get("backdrop_path")):
+        return True
+
+    return False
 
