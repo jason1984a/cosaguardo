@@ -2509,6 +2509,52 @@ def _cached_similar_movies(tmdb_id: int, title: str) -> list:
     return cached_call(f"detail:similar:movie:{tmdb_id}", _build)
 
 
+# Generi TV che non hanno senso come "serie simile" in una guida streaming
+# italiana: telenovelas e daily soap (migliaia di episodi senza dati), TG,
+# talk show e reality locali. Stessi ID usati da is_low_value_feed_item()
+# in core/recommendation_api.py.
+_SIMILAR_TV_BAD_GENRES = {10763, 10766, 10767, 10764}
+
+
+def _is_junk_similar_tv(rec: dict) -> bool:
+    """
+    True se la serie non merita di comparire tra i suggeriti.
+
+    Nasce dalle telenovelas filippine (Tanging Yaman, Sa Puso Ko lingatan Ka)
+    che uscivano senza poster e, una volta aperte, mostravano un elenco
+    infinito di episodi vuoti.
+
+    I controlli su overview e vote_count si applicano SOLO se il campo e'
+    presente: recommend_tv_from_seed_titles non garantisce lo schema, e un
+    controllo cieco scarterebbe tutto.
+    """
+    if not isinstance(rec, dict):
+        return True
+
+    # 1. Senza poster non e' presentabile (ed e' il sintomo che si vedeva).
+    if not (rec.get("poster_path") or "").strip():
+        return True
+
+    # 2. Generi esclusi, se il campo c'e'
+    for g in (rec.get("genre_ids") or []):
+        if g in _SIMILAR_TV_BAD_GENRES:
+            return True
+
+    # 3. Trama italiana vuota = titolo mai localizzato per il mercato IT
+    if "overview" in rec and not (rec.get("overview") or "").strip():
+        return True
+
+    # 4. Praticamente sconosciuto
+    if "vote_count" in rec:
+        try:
+            if int(rec.get("vote_count") or 0) < 20:
+                return True
+        except (TypeError, ValueError):
+            return True
+
+    return False
+
+
 def _cached_similar_tv(tmdb_id: int, title: str) -> list:
     from core.tmdb_cache import cached_call
 
@@ -2516,12 +2562,19 @@ def _cached_similar_tv(tmdb_id: int, title: str) -> list:
         out = []
         try:
             res = recommend_tv_from_seed_titles([title])
-            for rec in res.get("recommendations", [])[:6]:
+            # Si scorre l'intera lista fermandosi ai primi 6 titoli validi:
+            # prima si prendevano i primi 6 e basta, quindi bastavano due
+            # scarti per ritrovarsi con quattro card.
+            for rec in res.get("recommendations", []):
+                if len(out) >= 6:
+                    break
+                if _is_junk_similar_tv(rec):
+                    continue
                 pp = rec.get("poster_path", "")
                 sid = rec.get("tv_id")
                 out.append({
                     "title":        rec.get("title", ""),
-                    "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}" if pp else "",
+                    "poster_url":   f"https://image.tmdb.org/t/p/w342{pp}",
                     "tmdb_id":      sid,
                     "content_type": "tv",
                     "seo_slug":     get_slug_by_tmdb_id(sid, "tv") if sid else None,
@@ -2619,6 +2672,22 @@ def serie_detail(request: Request, tmdb_id: int):
     except Exception as e:
         # Stesso fail-open di film_detail.
         log.warning("serie_detail: adult-content check fallito su tmdb_id=%s: %s", tmdb_id, e)
+
+    # Serie senza alcun contenuto da mostrare: niente poster, niente trama
+    # italiana e quasi nessun voto. Sono i daily soap stranieri che TMDb
+    # registra con migliaia di episodi vuoti: la scheda renderizzava un
+    # elenco infinito di puntate senza nulla dentro. Meglio un 404.
+    try:
+        _no_poster   = not (detail.get("poster_url") or "").strip()
+        _no_overview = not (detail.get("overview") or "").strip()
+        _no_votes    = int(detail.get("vote_count") or 0) < 20
+        if _no_poster and _no_overview and _no_votes:
+            raise HTTPException(status_code=404, detail="Pagina non trovata")
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Fail-open come per il check adult: meglio mostrare la scheda.
+        log.warning("serie_detail: check contenuto vuoto fallito su tmdb_id=%s: %s", tmdb_id, e)
 
     user_id = request.session.get("user_id")
     title_state = {}

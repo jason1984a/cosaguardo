@@ -2338,13 +2338,30 @@ GENRE_MAP_TV = {
     "soap": 10766, "talk": 10767, "thriller": 9648, "guerra": 10768, "western": 37,
 }
 
+# I generi vengono uniti con "|" (OR su TMDb): basta UNO dei generi elencati.
+# Per questo qui devono comparire SOLO generi che definiscono davvero il mood.
+#
+# BUG STORICO: "romantico" era [10749, 35, 18] e il codice prendeva i primi
+# due -> "10749|35" = Romance OPPURE Commedia. Siccome Commedia e Dramma sono
+# i due generi piu' popolati di TMDb, l'OR li faceva vincere e sotto "Romantico"
+# finiva qualunque commedia (Deadpool, Jackass, Toy Story, Bud Spencer).
+# Regola da rispettare aggiungendo mood: mai mettere 35 (Commedia) o 18
+# (Dramma) accanto a un genere piu' specifico.
+#
+# "exclude" -> without_genres: taglia i generi che contraddicono il mood.
 MOOD_GENRES = {
-    "leggero":      {"movie": [35, 16, 10749], "tv": [35, 16, 10762]},
-    "intenso":      {"movie": [53, 28, 80],    "tv": [9648, 80, 10759]},
-    "romantico":    {"movie": [10749, 35, 18], "tv": [10749, 35, 18]},
-    "adrenalinico": {"movie": [28, 12, 53],    "tv": [10759, 10765, 80]},
-    "riflessivo":   {"movie": [18, 99, 36],    "tv": [18, 99, 10768]},
-    "spaventoso":   {"movie": [27, 53, 9648],  "tv": [9648, 80, 53]},
+    "leggero":      {"movie": [35, 16],       "tv": [35, 16, 10762],
+                     "exclude": [27, 53, 80, 10752]},          # horror/thriller/crime/guerra
+    "intenso":      {"movie": [53, 80],       "tv": [9648, 80],
+                     "exclude": [35, 16, 10751]},              # commedia/animazione/family
+    "romantico":    {"movie": [10749],        "tv": [10749],
+                     "exclude": [27, 53, 99, 10752]},          # horror/thriller/doc/guerra
+    "adrenalinico": {"movie": [28, 12],       "tv": [10759],
+                     "exclude": [99, 10751, 10402]},           # doc/family/musical
+    "riflessivo":   {"movie": [18, 99, 36],   "tv": [18, 99, 10768],
+                     "exclude": [28, 27, 35, 12]},             # azione/horror/commedia/avventura
+    "spaventoso":   {"movie": [27],           "tv": [9648, 80],
+                     "exclude": [35, 16, 10751, 10749]},       # commedia/animazione/family/romance
 }
 
 PLATFORM_MAP = {
@@ -2402,12 +2419,20 @@ def get_scopri_results(
         if genre_id:
             params["with_genres"] = genre_id
 
-    # Mood → più generi
+    # Mood → generi caratterizzanti (OR) + esclusioni
     if mood:
         mood_genres = MOOD_GENRES.get(mood.lower(), {})
         gids = mood_genres.get("tv" if is_tv else "movie", [])
         if gids:
-            params["with_genres"] = "|".join(str(g) for g in gids[:2])
+            # Si usano TUTTI i generi della lista, non piu' solo i primi due:
+            # ora la lista contiene gia' soltanto generi caratterizzanti.
+            params["with_genres"] = "|".join(str(g) for g in gids)
+            excl = mood_genres.get("exclude", [])
+            if excl:
+                params["without_genres"] = ",".join(str(g) for g in excl)
+        # Un mood e' una pagina editoriale, non un catalogo: si alza l'asticella
+        # per non riempirla di uscite recenti senza riscontro.
+        params["vote_count.gte"] = max(params.get("vote_count.gte", 50), 150)
 
     # Piattaforma
     # provider_id (override diretto) ha priorità: lo passano le pagine
