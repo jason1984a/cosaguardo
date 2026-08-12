@@ -467,12 +467,128 @@
                 </div>
             </div>
 
+            {# ─── STILI FORM — SEMPRE renderizzati ────────────────────────────
+               NON spostare dentro un ramo condizionale: prima le regole delle chip
+               stavano nel blocco riservato agli ospiti, e da utente loggato
+               sparivano facendo ricadere i bottoni sulla regola globale
+               `button { background:#2563eb }` di style.css. Risultato: chip
+               blu piene che competevano visivamente con "Trova consigli". #}
+            <style>
+                /* Chip esempio: suggerimenti, non azioni principali. */
+                #recommend-form .example-combos {
+                    margin: 18px 0 0;
+                    padding-top: 4px;
+                    text-align: center;
+                }
+                #recommend-form .example-combos-label {
+                    display: block;
+                    font-size: 0.8rem;
+                    line-height: 1.4;
+                    color: var(--muted, #94a3b8);
+                    margin: 0 0 10px;
+                    padding: 0 6px;
+                }
+                #recommend-form .example-combos-btns {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    justify-content: center;
+                }
+                #recommend-form .example-combo-btn {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    padding: 8px 14px;
+                    border-radius: 999px !important;
+                    border: 1px solid rgba(110,168,254,0.35) !important;
+                    background: rgba(110,168,254,0.08) !important;
+                    color: #cfe2ff !important;
+                    font-size: 0.82rem;
+                    font-weight: 600;
+                    font-family: inherit;
+                    line-height: 1.2;
+                    cursor: pointer;
+                    box-shadow: none !important;
+                    transition: background 0.15s, border-color 0.15s, transform 0.1s;
+                }
+                #recommend-form .example-combo-btn:hover {
+                    background: rgba(110,168,254,0.18) !important;
+                    border-color: rgba(110,168,254,0.6) !important;
+                }
+                #recommend-form .example-combo-btn:active { transform: scale(0.97); }
+
+                /* Su schermi stretti le due chip stanno in colonna ma restano
+                   larghe quanto il testo, non a tutta pagina: devono leggersi
+                   come suggerimenti. */
+                @media (max-width: 380px) {
+                    #recommend-form .example-combos-btns { flex-direction: column; align-items: center; }
+                    #recommend-form .example-combo-btn { width: auto; max-width: 100%; }
+                }
+
+                /* Riga "Aggiungi un titolo": nascosta da desktop, dove i sei
+                   campi sono gia' tutti visibili (vedi .extra-titles in style.css). */
+                #recommend-form .add-title-row {
+                    display: none;
+                    margin-top: 12px;
+                }
+                #recommend-form .add-title-btn {
+                    -webkit-appearance: none;
+                    appearance: none;
+                    display: inline-flex !important;
+                    align-items: center;
+                    gap: 8px;
+                    width: auto !important;
+                    height: auto !important;
+                    padding: 9px 16px !important;
+                    border-radius: 999px !important;
+                    border: 1px dashed rgba(255,255,255,0.22) !important;
+                    background: transparent !important;
+                    color: var(--muted, #94a3b8) !important;
+                    font-family: inherit;
+                    font-size: 0.82rem !important;
+                    font-weight: 600;
+                    line-height: 1.2;
+                    cursor: pointer;
+                    box-shadow: none !important;
+                }
+                #recommend-form .add-title-btn:hover {
+                    background: rgba(255,255,255,0.05) !important;
+                    border-color: rgba(255,255,255,0.4) !important;
+                    color: #e2e8f0 !important;
+                }
+                #recommend-form .add-title-plus {
+                    font-size: 1.05rem;
+                    line-height: 1;
+                    font-weight: 700;
+                }
+
+                @media (max-width: 760px) {
+                    #recommend-form .add-title-row { display: block; text-align: center; }
+                }
+
+                /* Ora il submit e' figlio unico: puo' occupare davvero
+                   tutta la larghezza senza doverla contendere al "+". */
+                #recommend-form .form-actions-v2 { display: block; margin-top: 14px; }
+                #recommend-form .primary-submit-btn { width: 100%; min-width: 0; }
+            </style>
+
             <div class="example-combos">
                 <span class="example-combos-label">Non sai da dove iniziare? Tocca un esempio, poi premi «Trova consigli»:</span>
                 <div class="example-combos-btns">
                     <button type="button" class="example-combo-btn" onclick="fillExample('movie','Inception','Interstellar')">🎬 Inception + Interstellar</button>
                     <button type="button" class="example-combo-btn" onclick="fillExample('tv','Breaking Bad','I Soprano')">📺 Breaking Bad + I Soprano</button>
                 </div>
+            </div>
+
+            {# Il "+" sta QUI, sotto i campi titolo, perche' la sua funzione e'
+               aggiungere un campo: non ha nulla a che vedere con l'invio.
+               Prima era in riga con "Trova consigli" e su mobile lo comprimeva,
+               visto che un flex item con width:100% e un fratello da 42px non
+               puo' davvero occupare tutta la larghezza. #}
+            <div class="add-title-row">
+                <button type="button" class="add-title-btn" title="Aggiungi altri titoli">
+                    <span class="add-title-plus">+</span>
+                    <span class="add-title-label">Aggiungi un titolo</span>
+                </button>
             </div>
 
             <div class="form-actions-v2">
@@ -482,10 +598,6 @@
                         <span class="btn-spinner"></span>
                         L'algoritmo ragiona…
                     </span>
-                </button>
-
-                <button type="button" class="add-title-btn" title="Aggiungi altri titoli">
-                    +
                 </button>
             </div>
         </form>
@@ -624,47 +736,9 @@
             .cg-signup-card-title { font-size: 18px; }
         }
 
-        /* ── Bottoni ricerche preimpostate (esempi) ── */
-        #recommend-form .example-combos {
-            margin: 18px 0 0;
-            padding-top: 4px;
-            text-align: center;
-        }
-        #recommend-form .example-combos-label {
-            display: block;
-            font-size: 0.8rem;
-            line-height: 1.4;
-            color: var(--muted, #94a3b8);
-            margin: 0 0 10px;
-            padding: 0 6px;
-        }
-        #recommend-form .example-combos-btns {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            justify-content: center;
-        }
-        #recommend-form .example-combo-btn {
-            -webkit-appearance: none;
-            appearance: none;
-            padding: 8px 14px;
-            border-radius: 999px !important;
-            border: 1px solid rgba(110,168,254,0.35) !important;
-            background: rgba(110,168,254,0.08) !important;
-            color: #cfe2ff !important;
-            font-size: 0.82rem;
-            font-weight: 600;
-            font-family: inherit;
-            line-height: 1.2;
-            cursor: pointer;
-            box-shadow: none !important;
-            transition: background 0.15s, border-color 0.15s, transform 0.1s;
-        }
-        #recommend-form .example-combo-btn:hover {
-            background: rgba(110,168,254,0.18) !important;
-            border-color: rgba(110,168,254,0.6) !important;
-        }
-        #recommend-form .example-combo-btn:active { transform: scale(0.97); }
+        /* Le regole delle chip esempio sono state spostate nel blocco stili
+           del form, sempre renderizzato: qui stavano dentro il ramo riservato
+           agli ospiti e da utente loggato sparivano. */
     </style>
     <script>
         try {
