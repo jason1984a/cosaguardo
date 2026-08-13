@@ -432,6 +432,7 @@ async def redirect_legacy_domain(request: Request, call_next):
 # pagine pesanti quando l'IP reale è di un cloud noto. Estendibile se i bot
 # cambiano rete. Disattivabile con env EDGE_GUARD="0" (default attivo).
 import ipaddress as _ipaddress
+import asyncio as _asyncio_seo
 
 _DATACENTER_CIDRS = [
     "17.0.0.0/8",      # Apple (sorgente dominante del primo flood)
@@ -455,13 +456,132 @@ _EDGE_PROTECTED_PREFIXES = ("/film/", "/serie/", "/persona/")
 # arrivava da ISP residenziali vietnamiti, che la blocklist datacenter non
 # prende). Header cf-ipcountry (affidabile, arriva fino all'app). Default
 # "IT"; estendibile via env EDGE_ALLOWED_COUNTRIES (es. "IT,SM,VA,CH").
-# Queste pagine sono noindex → bloccare Googlebot (US) qui non costa SEO.
 # Le pagine SEO /dove-vedere NON sono toccate (Googlebot deve raggiungerle).
+#
+# ⚠️ CORREZIONE 13/08/2026 — qui c'era scritto che bloccare Googlebot su
+# queste pagine "non costa SEO perché sono noindex". È FALSO, ed è costato
+# dieci settimane: un noindex viene applicato solo se Googlebot RIESCE A
+# LEGGERE la pagina. Ricevendo 403 non vedeva mai il meta tag, quindi le
+# ~31.000 URL già indicizzate restavano nell'indice a tempo indeterminato
+# (grafico Search Console piatto dal 06/06, subito dopo il deploy di PR-3).
+# Da ora Googlebot passa: vedi _is_googlebot_ip().
 _EDGE_ALLOWED_COUNTRIES = {
     c.strip().upper()
     for c in os.environ.get("EDGE_ALLOWED_COUNTRIES", "IT,SM,VA").split(",")
     if c.strip()
 }
+
+# ── RICONOSCIMENTO GOOGLEBOT ────────────────────────────────────────────────
+# Verifica per intervalli IP UFFICIALI pubblicati da Google, non per
+# user-agent: lo user-agent lo falsifica chiunque, ed è la prima cosa che
+# fanno gli scraper. La lista viene scaricata e rinfrescata ogni 24h.
+#
+# Fail-closed: se la lista non è disponibile Googlebot resta bloccato e
+# viene loggato un warning. Meglio un giorno di blocco che riaprire le
+# pagine profonde a chiunque dichiari di essere Google.
+_GOOGLEBOT_IPS_URL = "https://developers.google.com/static/search/apis/ipranges/googlebot.json"
+_GBOT_TTL = 60 * 60 * 24
+_gbot_nets: list = []
+_gbot_ts: float = 0.0
+_gbot_lock = _asyncio_seo.Lock()
+
+
+def _fetch_googlebot_nets() -> list:
+    """Scarica gli intervalli IP di Googlebot. Bloccante: va chiamata in thread."""
+    try:
+        r = requests.get(_GOOGLEBOT_IPS_URL, timeout=8)
+        r.raise_for_status()
+        nets = []
+        for entry in r.json().get("prefixes", []):
+            cidr = entry.get("ipv4Prefix") or entry.get("ipv6Prefix")
+            if cidr:
+                try:
+                    nets.append(_ipaddress.ip_network(cidr))
+                except ValueError:
+                    continue
+        return nets
+    except Exception as e:
+        log.warning("Googlebot IP ranges: download fallito (%s)", e)
+        return []
+
+
+async def _ensure_googlebot_nets() -> None:
+    """Rinfresca la lista se scaduta, senza mai bloccare l'event loop."""
+    global _gbot_ts
+    now = _time.time()
+    if _gbot_nets and (now - _gbot_ts) < _GBOT_TTL:
+        return
+    if _gbot_lock.locked():
+        return                      # un altro task sta già aggiornando
+    async with _gbot_lock:
+        nets = await _asyncio_seo.to_thread(_fetch_googlebot_nets)
+        if nets:
+            _gbot_nets[:] = nets
+            _gbot_ts = now
+            log.info("Googlebot IP ranges: caricati %d intervalli", len(nets))
+
+
+def _is_googlebot_ip(ip: str) -> bool:
+    """Verifica per intervalli IP ufficiali (via rapida, nessun DNS)."""
+    if not ip or not _gbot_nets:
+        return False
+    try:
+        addr = _ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _gbot_nets)
+
+
+# Seconda via, indipendente dalla lista scaricata: e' il metodo di verifica
+# documentato da Google. Reverse DNS -> l'hostname deve finire in
+# googlebot.com / google.com -> forward DNS -> deve ritornare allo stesso IP.
+# Serve da rete di sicurezza se il download della lista dovesse fallire.
+_GBOT_DNS_CACHE: dict = {}          # ip -> (esito bool, timestamp)
+_GBOT_DNS_TTL = 60 * 60 * 24
+_GBOT_HOST_SUFFIXES = (".googlebot.com", ".google.com", ".googleusercontent.com")
+
+
+def _verify_googlebot_dns(ip: str) -> bool:
+    import socket
+    cached = _GBOT_DNS_CACHE.get(ip)
+    now = _time.time()
+    if cached and (now - cached[1]) < _GBOT_DNS_TTL:
+        return cached[0]
+    ok = False
+    try:
+        host = socket.gethostbyaddr(ip)[0].lower().rstrip(".")
+        if host.endswith(_GBOT_HOST_SUFFIXES):
+            _, _, addrs = socket.gethostbyname_ex(host)
+            ok = ip in addrs
+    except Exception:
+        ok = False
+    # Cache anche i "no": una botnet con migliaia di IP non deve poter
+    # innescare una risoluzione DNS a ogni richiesta.
+    if len(_GBOT_DNS_CACHE) > 5000:
+        _GBOT_DNS_CACHE.clear()
+    _GBOT_DNS_CACHE[ip] = (ok, now)
+    return ok
+
+
+async def _is_verified_googlebot(request: Request, ip: str) -> bool:
+    """
+    True solo per Googlebot autentico.
+
+    Lo user-agent NON autorizza nulla: e' solo un pre-filtro economico per
+    decidere se vale la pena fare la verifica vera. Senza di esso, ogni IP
+    della botnet estera innescherebbe una risoluzione DNS.
+    """
+    ua = (request.headers.get("user-agent") or "").lower()
+    if "googlebot" not in ua and "google-inspectiontool" not in ua:
+        return False
+    await _ensure_googlebot_nets()
+    if _is_googlebot_ip(ip):
+        return True
+    if _gbot_nets:
+        # Lista disponibile e IP non incluso: e' un impostore.
+        return False
+    # Lista non disponibile: si ripiega sulla verifica DNS.
+    return await _asyncio_seo.to_thread(_verify_googlebot_dns, ip)
 
 # ── ACCESSO RISERVATO PER COLLABORATORI ─────────────────────────────────────
 # Serve a chi lavora al progetto dall'estero (es. il freelance che produce le
@@ -517,8 +637,17 @@ async def block_direct_origin(request: Request, call_next):
     _bypass = _grant_bypass or _has_edge_bypass(request)
 
     if _EDGE_GUARD and not _bypass and request.url.path.startswith(_EDGE_PROTECTED_PREFIXES):
+        _ip = _real_client_ip(request)
+
+        # 0) Googlebot DEVE passare, anche se scansiona dagli USA: e' l'unico
+        #    modo perche' legga il meta noindex e tolga dall'indice le pagine
+        #    che non vogliamo. Verifica per intervalli IP ufficiali, non per
+        #    user-agent. (Vedi la nota storica su _EDGE_ALLOWED_COUNTRIES.)
+        if await _is_verified_googlebot(request, _ip):
+            return await call_next(request)
+
         # 1) IP di datacenter noto → blocca
-        if _is_datacenter_ip(_real_client_ip(request)):
+        if _is_datacenter_ip(_ip):
             return _PlainTextResponse("Forbidden", status_code=403)
         # 2) Paese noto e non consentito → blocca (prende la botnet residenziale
         #    estera). Se cf-ipcountry è assente, non blocchiamo per paese.
