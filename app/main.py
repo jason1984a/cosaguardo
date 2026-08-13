@@ -463,6 +463,38 @@ _EDGE_ALLOWED_COUNTRIES = {
     if c.strip()
 }
 
+# ── ACCESSO RISERVATO PER COLLABORATORI ─────────────────────────────────────
+# Serve a chi lavora al progetto dall'estero (es. il freelance che produce le
+# creativita' per gli annunci): la geo-restrizione sopra gli restituirebbe 403
+# su /film e /serie, e la VPN non basta perche' molte VPN escono da IP di
+# datacenter, bloccati dal controllo precedente a prescindere dal paese.
+#
+# Funzionamento: si visita UNA VOLTA cosaguardo.com/?access=TOKEN da qualsiasi
+# pagina non protetta (la home non lo e'). Il middleware riconosce il token,
+# deposita un cookie e da quel momento le pagine profonde si aprono.
+#
+# Se EDGE_BYPASS_TOKEN non e' impostata la funzione e' DISATTIVATA del tutto:
+# nessun cookie puo' concedere accesso. Fail-closed voluto.
+import hmac as _hmac
+
+_EDGE_BYPASS_TOKEN = os.environ.get("EDGE_BYPASS_TOKEN", "").strip()
+_EDGE_BYPASS_COOKIE = "cg_edge"
+_EDGE_BYPASS_MAX_AGE = 60 * 60 * 24 * 180   # 180 giorni
+
+
+def _edge_token_matches(value: str) -> bool:
+    """Confronto a tempo costante: evita di far dedurre il token dai tempi."""
+    if not _EDGE_BYPASS_TOKEN or not value:
+        return False
+    try:
+        return _hmac.compare_digest(str(value), _EDGE_BYPASS_TOKEN)
+    except Exception:
+        return False
+
+
+def _has_edge_bypass(request: Request) -> bool:
+    return _edge_token_matches(request.cookies.get(_EDGE_BYPASS_COOKIE, ""))
+
 
 def _real_client_ip(request: Request) -> str:
     ip = request.headers.get("cf-connecting-ip") or (request.client.host if request.client else "")
@@ -479,7 +511,12 @@ def _is_datacenter_ip(ip: str) -> bool:
 
 @app.middleware("http")
 async def block_direct_origin(request: Request, call_next):
-    if _EDGE_GUARD and request.url.path.startswith(_EDGE_PROTECTED_PREFIXES):
+    # Token passato in query su una qualsiasi pagina: vale per questa richiesta
+    # e viene depositato come cookie in fondo, cosi' le successive passano.
+    _grant_bypass = _edge_token_matches(request.query_params.get("access", ""))
+    _bypass = _grant_bypass or _has_edge_bypass(request)
+
+    if _EDGE_GUARD and not _bypass and request.url.path.startswith(_EDGE_PROTECTED_PREFIXES):
         # 1) IP di datacenter noto → blocca
         if _is_datacenter_ip(_real_client_ip(request)):
             return _PlainTextResponse("Forbidden", status_code=403)
@@ -488,7 +525,16 @@ async def block_direct_origin(request: Request, call_next):
         country = (request.headers.get("cf-ipcountry") or "").upper()
         if country and country not in _EDGE_ALLOWED_COUNTRIES:
             return _PlainTextResponse("Forbidden", status_code=403)
-    return await call_next(request)
+
+    response = await call_next(request)
+
+    if _grant_bypass:
+        response.set_cookie(
+            _EDGE_BYPASS_COOKIE, _EDGE_BYPASS_TOKEN,
+            max_age=_EDGE_BYPASS_MAX_AGE,
+            httponly=True, secure=True, samesite="lax", path="/",
+        )
+    return response
 
 
 @app.middleware("http")
