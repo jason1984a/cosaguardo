@@ -1022,6 +1022,59 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
     )
 
 
+# Parentesi che NON sono titoli alternativi ma marcatori di disambiguazione.
+# Senza questo filtro "The Office (US)" diventava "US" e il motore consigli
+# cercava la serie piu' simile a quella stringa, restituendo "This Is Us".
+# La regola originale nasce da MovieLens, dove la parentesi finale contiene
+# il titolo italiano ("Life Is Beautiful (La vita è bella)") e preferirla e'
+# corretto; sui titoli TMDb invece le parentesi distinguono le versioni.
+_PAREN_MARKERS = {
+    # paesi e aree
+    "us", "usa", "u.s.", "u.s.a.", "uk", "u.k.", "gb", "it", "ita", "italia",
+    "italy", "fr", "france", "francia", "de", "germany", "germania", "es",
+    "spain", "spagna", "au", "australia", "ca", "canada", "nz", "jp", "japan",
+    "giappone", "kr", "korea", "corea", "in", "india", "br", "brazil",
+    "brasile", "mx", "mexico", "messico", "se", "no", "dk", "fi", "nl", "be",
+    "ch", "at", "ie", "za", "ar", "cl", "co", "tr", "ru", "cn", "china",
+    "hk", "tw", "ph", "th", "vn", "id", "my", "sg", "pt", "pl", "cz", "hu",
+    "ro", "gr", "il", "eg",
+    # tipo di opera
+    "tv", "tv series", "tv show", "serie", "serie tv", "series", "miniserie",
+    "miniseries", "mini series", "film", "movie", "video", "short",
+    "cortometraggio", "corto", "documentario", "documentary", "doc", "anime",
+    "manga", "ova", "special", "speciale", "pilot", "unaired", "web series",
+    # versioni
+    "remake", "reboot", "original", "originale", "classic", "classico",
+    "nuova serie", "new series", "reimagining", "uncut", "extended",
+    "director's cut", "directors cut", "versione estesa",
+}
+
+
+def _is_disambiguation_marker(paren: str) -> bool:
+    """
+    True se il contenuto della parentesi serve a distinguere una versione,
+    non a fornire un titolo alternativo.
+
+    Criteri:
+      1. compare nella lista dei marcatori noti
+      2. e' una sigla in maiuscolo di 1-2 parole (US, UK, BBC, HBO, NBC...):
+         un titolo localizzato ha sempre qualche minuscola
+      3. non contiene lettere (numeri, trattini, simboli)
+    """
+    p = (paren or "").strip()
+    if not p:
+        return True
+    if p.lower().strip(". ") in _PAREN_MARKERS:
+        return True
+    if not any(c.isalpha() for c in p):
+        return True
+    # Tutto maiuscolo e corto -> sigla, non un titolo
+    letters = [c for c in p if c.isalpha()]
+    if letters and all(c.isupper() for c in letters) and len(p.split()) <= 2:
+        return True
+    return False
+
+
 def prettify_title(title: str) -> str:
     """
     Pulisce i titoli stile MovieLens, gestendo:
@@ -1050,12 +1103,14 @@ def prettify_title(title: str) -> str:
 
     main_title = t
 
-    # 3. Filtra le parentesi: scarta a.k.a. e anni soli
+    # 3. Filtra le parentesi: scarta a.k.a., anni e marcatori di disambiguazione
     candidates_loc = []
     for paren in parens_at_end:
         if re.match(r"a\.?k\.?a\.?\b", paren, flags=re.IGNORECASE):
             continue
-        if re.fullmatch(r"\d{4}", paren):
+        if re.fullmatch(r"\d{4}(\s*[-–]\s*\d{4})?", paren):
+            continue
+        if _is_disambiguation_marker(paren):
             continue
         candidates_loc.append(paren)
 
