@@ -434,12 +434,14 @@
             <div class="pf-filter-group">
                 <div class="pf-filter-label">Mood</div>
                 <div class="pf-chips">
-                    {% for m, emoji in [("leggero","😄"),("intenso","😤"),("romantico","❤️"),("adrenalinico","⚡"),("riflessivo","🤔"),("spaventoso","👻")] %}
+                    {# Etichette allineate a scopri.html: nessuna parola in comune con
+                       la riga Genere. I valori restano invariati. #}
+                    {% for m, emoji, label in [("leggero","😄","Leggero"),("intenso","😤","Intenso"),("romantico","❤️","Da innamorarsi"),("adrenalinico","⚡","Adrenalinico"),("riflessivo","🤔","Riflessivo"),("spaventoso","👻","Da brividi")] %}
                     <label class="pf-chip">
                         <input type="radio" name="mood" value="{{ m }}"
                             {% if mood == m %}checked{% endif %}
                             onclick="pfChipClick(this)">
-                        <span>{{ emoji }} {{ m.capitalize() }}</span>
+                        <span>{{ emoji }} {{ label }}</span>
                     </label>
                     {% endfor %}
                 </div>
@@ -467,6 +469,12 @@
                             {% if voto == "7" %}checked{% endif %}
                             onclick="pfChipClick(this)">
                         <span>⭐ 7+ Buoni</span>
+                    </label>
+                    <label class="pf-chip">
+                        <input type="radio" name="voto" value="7.5"
+                            {% if voto == "7.5" %}checked{% endif %}
+                            onclick="pfChipClick(this)">
+                        <span>✨ 7,5+ Ottimi</span>
                     </label>
                     <label class="pf-chip">
                         <input type="radio" name="voto" value="8"
@@ -588,6 +596,14 @@ function pfChipClick(el) {
             r.removeAttribute('data-was-checked');
         });
         el.setAttribute('data-was-checked', '1');
+    }
+    // Genere e Mood si escludono a vicenda (stesso parametro TMDb with_genres).
+    if (el.checked && (el.name === 'genere' || el.name === 'mood')) {
+        var altro = (el.name === 'genere') ? 'mood' : 'genere';
+        document.querySelectorAll('input[name="' + altro + '"]').forEach(function(r) {
+            r.checked = false;
+            r.removeAttribute('data-was-checked');
+        });
     }
     el.form.submit();
 }

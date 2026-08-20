@@ -2360,9 +2360,85 @@ MOOD_GENRES = {
                      "exclude": [99, 10751, 10402]},           # doc/family/musical
     "riflessivo":   {"movie": [18, 99, 36],   "tv": [18, 99, 10768],
                      "exclude": [28, 27, 35, 12]},             # azione/horror/commedia/avventura
-    "spaventoso":   {"movie": [27],           "tv": [9648, 80],
-                     "exclude": [35, 16, 10751, 10749]},       # commedia/animazione/family/romance
+    # TMDb non ha un genere Horror per le serie TV (27 esiste solo per i film):
+    # il piu' vicino e' 9648 Mistero. Prima "spaventoso" TV era [9648, 80] =
+    # IDENTICO a "intenso" TV -> i due mood restituivano la stessa lista.
+    # Ora Crime resta a "intenso" (polizieschi) e "spaventoso" tiene il
+    # mistero/soprannaturale escludendolo.
+    "spaventoso":   {"movie": [27],           "tv": [9648],
+                     "exclude": [35, 16, 10751, 10749],        # commedia/animazione/family/romance
+                     "exclude_tv": [35, 16, 10751, 10749, 80]},
 }
+
+
+# ── Taratura della media bayesiana (usata da get_scopri_results) ────────
+# TMDb espone una media aritmetica NON pesata. Un titolo votato da 400
+# appassionati che l'hanno cercato apposta prende 8,4; uno votato da 40.000
+# spettatori qualunque prende 7,6. Non e' qualita': e' l'effetto di una base
+# di voto piccola e autoselezionata. Colpisce soprattutto anime e drama
+# asiatici, ma anche horror di nicchia e documentari.
+#
+# Correzione: media bayesiana, la stessa formula della Top 250 di IMDb.
+#
+#     WR = (v / (v + m)) * R + (m / (v + m)) * C
+#
+# R = vote_average, v = vote_count, C = media di riferimento del catalogo,
+# m = soglia di credibilita'. Meno voti ha un titolo, piu' il suo punteggio
+# viene tirato verso C.
+#
+# I DUE VALORI DA RITOCCARE DOPO I TEST:
+#   - risultati troppo pochi su 8+  -> ABBASSARE m
+#   - ancora troppo sbilanciato     -> ALZARE m
+# Le serie su TMDb hanno basi di voto molto piu' piccole dei film, per questo
+# m e' separata per tipo: usare lo stesso valore svuoterebbe le serie.
+_BAYES_C       = 6.8
+_BAYES_M_MOVIE = 500
+_BAYES_M_TV    = 200
+
+# Soglie del filtro voto. La chiave e' la forma canonica che gira nell'URL
+# (punto, mai virgola: la virgola resta solo nell'etichetta mostrata).
+VOTO_THRESHOLDS = {"7": 7.0, "7.5": 7.5, "8": 8.0}
+
+# Quante pagine TMDb consumare per ogni pagina mostrata quando il filtro voto
+# e' attivo (la bayesiana scarta titoli, quindi una pagina sola lascerebbe
+# buchi nella griglia). Finestra deterministica: pagina 1 -> TMDb 1-2,
+# pagina 2 -> TMDb 3-4... Cosi' non si ripetono titoli tra una pagina e
+# l'altra e non serve tenere stato lato server.
+_SCOPRI_TMDB_PAGES = 2
+
+
+def bayesian_rating(vote_average, vote_count, m, c=_BAYES_C):
+    """
+    Media pesata stile IMDb: penalizza le medie alte costruite su pochi voti.
+
+    Nota importante: con R > C il risultato e' SEMPRE <= R. Quindi il filtro
+    bayesiano puo' solo TOGLIERE titoli, mai aggiungerne. Per questo la soglia
+    passata a TMDb resta identica a quella chiesta dall'utente e il calcolo si
+    applica sopra, come secondo setaccio.
+    """
+    try:
+        v = max(int(vote_count or 0), 0)
+        r = float(vote_average or 0.0)
+    except (TypeError, ValueError):
+        return c
+    if v <= 0:
+        return c
+    return (v / (v + m)) * r + (m / (v + m)) * c
+
+
+def normalize_voto(voto):
+    """
+    Forma canonica del parametro voto: accetta virgola o punto, restituisce
+    "7" / "7.5" / "8" oppure "" se non riconosciuto.
+
+    Serve perche' il confronto e' per stringa: senza questa, un link condiviso
+    con ?voto=7,5 non farebbe scattare nessun filtro, in silenzio e senza
+    errore visibile.
+    """
+    v = (voto or "").strip().replace(",", ".")
+    if v.endswith(".0"):
+        v = v[:-2]
+    return v if v in VOTO_THRESHOLDS else ""
 
 PLATFORM_MAP = {
     # ATTENZIONE: gli ID devono restare allineati a PLATFORM_SLUGS (più in basso).
@@ -2408,7 +2484,7 @@ def get_scopri_results(
         "language":         "it-IT",
         "sort_by":          "popularity.desc",
         "vote_count.gte":   50,
-        "page":             page,
+        "page":             page,   # sovrascritto nel ciclo di fetch piu' sotto
         "watch_region":     "IT",
     }
 
@@ -2427,7 +2503,10 @@ def get_scopri_results(
             # Si usano TUTTI i generi della lista, non piu' solo i primi due:
             # ora la lista contiene gia' soltanto generi caratterizzanti.
             params["with_genres"] = "|".join(str(g) for g in gids)
-            excl = mood_genres.get("exclude", [])
+            # "exclude_tv" e' opzionale: serve solo dove le esclusioni per le
+            # serie devono differire da quelle dei film (vedi "spaventoso").
+            excl = mood_genres.get("exclude_tv" if is_tv else "exclude") \
+                or mood_genres.get("exclude", [])
             if excl:
                 params["without_genres"] = ",".join(str(g) for g in excl)
         # Un mood e' una pagina editoriale, non un catalogo: si alza l'asticella
@@ -2460,49 +2539,84 @@ def get_scopri_results(
         params[date_field_lte] = "2000-12-31"
         params["vote_count.gte"] = 200
 
-    # Voto minimo
-    if voto == "7":
-        params["vote_average.gte"] = 7.0
-    elif voto == "8":
-        params["vote_average.gte"] = 8.0
+    # Voto minimo. La soglia va a TMDb cosi' com'e'; il riequilibrio per
+    # numero di voti (media bayesiana) avviene dopo, sui risultati.
+    soglia = VOTO_THRESHOLDS.get(normalize_voto(voto))
+    if soglia:
+        params["vote_average.gte"] = soglia
+
+    # Senza filtro voto il comportamento resta quello di prima: UNA chiamata
+    # TMDb, nessun calcolo aggiuntivo. Le pagine extra si pagano solo quando
+    # servono davvero.
+    tmdb_pages = _SCOPRI_TMDB_PAGES if soglia else 1
+    bayes_m    = _BAYES_M_TV if is_tv else _BAYES_M_MOVIE
 
     try:
-        r = requests.get(
-            f"https://api.themoviedb.org/3/discover/{endpoint}",
-            params=params,
-            timeout=8
-        )
-        data = r.json()
-        raw  = data.get("results", [])
-        total = min(data.get("total_results", 0), 500)
-
         results = []
-        # Strategia D: iteriamo su tutti i raw fino a `limit` titoli leggibili
-        # (con `[:limit]` perdevamo titoli quando i primi N erano non-latini).
-        for item in raw:
+        total   = 0
+
+        for i in range(tmdb_pages):
             if len(results) >= limit:
+                break  # la prima pagina e' bastata: niente seconda chiamata
+
+            params["page"] = (page - 1) * tmdb_pages + 1 + i
+            r = requests.get(
+                f"https://api.themoviedb.org/3/discover/{endpoint}",
+                params=params,
+                timeout=8
+            )
+            data = r.json()
+            raw  = data.get("results", [])
+
+            if i == 0:
+                # total diviso per le pagine TMDb consumate a ogni pagina
+                # mostrata, altrimenti la paginazione promette pagine che non
+                # esistono (il chiamante fa `page * 20 < total`).
+                total = min(data.get("total_results", 0), 500) // tmdb_pages
+            if not raw:
                 break
-            pp = item.get("poster_path","")
-            bp = item.get("backdrop_path","")
-            # Filtro titoli non leggibili (devanagari, hangul, kanji, arabo,
-            # cirillico, tailandese, ecc.) — vedi pick_readable_title.
-            title = pick_readable_title(item, "tv" if is_tv else "movie")
-            if not title or not pp:
-                continue
-            results.append({
-                "tmdb_id":      item.get("id"),
-                "title":        title,
-                # w185 (era w300): le card della griglia /scopri sono renderizzate
-                # a 100-180px max, w185 mantiene qualità visiva con peso 30-40% inferiore.
-                # Cruciale per LCP: 92+ poster sulla pagina, ogni KB risparmiato è LCP più veloce.
-                "poster_url":   f"https://image.tmdb.org/t/p/w185{pp}" if pp else "",
-                "backdrop_url": f"https://image.tmdb.org/t/p/w780{bp}" if bp else "",
-                "vote_average": round(item.get("vote_average",0),1),
-                "vote_count":   item.get("vote_count",0),
-                "release_date": item.get("release_date","") or item.get("first_air_date",""),
-                "overview":     (item.get("overview","") or "")[:200],
-                "content_type": "tv" if is_tv else "movie",
-            })
+
+            # Strategia D: iteriamo su tutti i raw fino a `limit` titoli leggibili
+            # (con `[:limit]` perdevamo titoli quando i primi N erano non-latini).
+            for item in raw:
+                if len(results) >= limit:
+                    break
+                pp = item.get("poster_path","")
+                bp = item.get("backdrop_path","")
+                # Filtro titoli non leggibili (devanagari, hangul, kanji, arabo,
+                # cirillico, tailandese, ecc.) — vedi pick_readable_title.
+                title = pick_readable_title(item, "tv" if is_tv else "movie")
+                if not title or not pp:
+                    continue
+                # Secondo setaccio: la media pesata deve reggere la soglia.
+                # Taglia i titoli con media alta e pochi votanti.
+                wr = None
+                if soglia:
+                    wr = bayesian_rating(
+                        item.get("vote_average", 0),
+                        item.get("vote_count", 0),
+                        bayes_m,
+                    )
+                    if wr < soglia:
+                        continue
+                results.append({
+                    "tmdb_id":      item.get("id"),
+                    "title":        title,
+                    # w185 (era w300): le card della griglia /scopri sono renderizzate
+                    # a 100-180px max, w185 mantiene qualità visiva con peso 30-40% inferiore.
+                    # Cruciale per LCP: 92+ poster sulla pagina, ogni KB risparmiato è LCP più veloce.
+                    "poster_url":   f"https://image.tmdb.org/t/p/w185{pp}" if pp else "",
+                    "backdrop_url": f"https://image.tmdb.org/t/p/w780{bp}" if bp else "",
+                    # Resta la media TMDb: e' il numero che l'utente riconosce.
+                    # La bayesiana filtra, non si mostra.
+                    "vote_average": round(item.get("vote_average",0),1),
+                    "vote_count":   item.get("vote_count",0),
+                    # Solo per diagnosi/taratura di m: nessun template lo usa.
+                    "bayes_rating": round(wr, 2) if wr is not None else None,
+                    "release_date": item.get("release_date","") or item.get("first_air_date",""),
+                    "overview":     (item.get("overview","") or "")[:200],
+                    "content_type": "tv" if is_tv else "movie",
+                })
 
         return {"results": results, "total": total, "page": page}
 

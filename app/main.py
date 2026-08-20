@@ -67,6 +67,7 @@ from core.recommendation_api import (
     get_person_detail,
     get_scopri_results,
     get_scopri_strips,
+    normalize_voto,
     get_similar_movies_tmdb,
     get_popular_by_genre_tmdb,
     get_franchise_key,
@@ -4260,7 +4261,10 @@ def _scopri_seo(tipo, genere, mood, piattaforma, anno, voto=""):
     if piattaforma: parts.append(piattaforma.capitalize())
     if anno == "recenti": parts.append("recenti")
     elif anno == "classici": parts.append("classici")
+    # Il valore che gira nell'URL usa il PUNTO ("7.5"); la virgola compare
+    # solo nell'etichetta mostrata. Vedi normalize_voto in recommendation_api.
     if voto == "7": parts.append("7+")
+    elif voto == "7.5": parts.append("7,5+")
     elif voto == "8": parts.append("8+")
 
     tipo_label = "serie TV" if tipo == "serie" else "film"
@@ -4417,6 +4421,11 @@ def platform_page(
     # Filtri opzionali: gli stessi di /scopri, MENO "piattaforma" (già fissa
     # dall'URL). Con un filtro attivo Film e Serie restano sempre separati:
     # niente "Tutti" misto. Se l'utente filtra stando su "Tutti", si ripiega su Film.
+    # Stessa regola di /scopri: mood e genere si escludono (vedi commento la').
+    if mood:
+        genere = ""
+    voto = normalize_voto(voto)
+
     has_filters = any([genere, mood, anno, voto])
     if has_filters:
         eff_tipo = "serie" if tipo == "serie" else "film"
@@ -4545,6 +4554,19 @@ def scopri(
     voto:        str = "",
     page:        int = 1,
 ):
+    # Genere e Mood agiscono sullo stesso parametro TMDb (with_genres): sono
+    # due modi di fare la stessa domanda. Nell'interfaccia si escludono a
+    # vicenda; qui si applica la stessa regola lato server, per i link vecchi
+    # o salvati che portano ancora entrambi. Senza questo il motore ignorerebbe
+    # il genere (fa gia' "if genere and not mood") ma il template mostrerebbe
+    # ATTIVE due chip, di cui una che non filtra niente.
+    if mood:
+        genere = ""
+    # Accetta 7,5 oltre a 7.5 e riporta alla forma canonica: il confronto e'
+    # per stringa, quindi un link con la virgola non filtrerebbe nulla in
+    # silenzio, senza errore visibile.
+    voto = normalize_voto(voto)
+
     has_filters = any([genere, mood, piattaforma, anno, voto])
 
     if has_filters:
@@ -4607,6 +4629,8 @@ def scopri_json(
     piattaforma: str = "", anno: str = "", voto: str = "", page: int = 1,
 ):
     """AJAX endpoint per caricamento pagine successive."""
+    if mood:
+        genere = ""
     return get_scopri_results(
         tipo=tipo, genere=genere, mood=mood,
         piattaforma=piattaforma, anno=anno, voto=voto, page=page

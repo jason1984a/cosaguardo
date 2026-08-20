@@ -73,12 +73,17 @@
                 <div class="scopri-filter-group">
                     <div class="scopri-filter-label">Mood</div>
                     <div class="scopri-chips">
-                        {% for m, emoji in [("leggero","😄"),("intenso","😤"),("romantico","❤️"),("adrenalinico","⚡"),("riflessivo","🤔"),("spaventoso","👻")] %}
+                        {# Le etichette non devono ripetere nessun nome della riga Genere:
+                           "Romantico" compariva identico in entrambe e "Spaventoso" era
+                           l'Horror con un'altra parola. I VALORI restano invariati
+                           (romantico/spaventoso), cosi' link salvati, MOOD_GENRES e
+                           titoli SEO continuano a funzionare. #}
+                        {% for m, emoji, label in [("leggero","😄","Leggero"),("intenso","😤","Intenso"),("romantico","❤️","Da innamorarsi"),("adrenalinico","⚡","Adrenalinico"),("riflessivo","🤔","Riflessivo"),("spaventoso","👻","Da brividi")] %}
                         <label class="scopri-chip">
                             <input type="radio" name="mood" value="{{ m }}"
                                 {% if mood == m %}checked{% endif %}
                                 onclick="scopriChipClick(this)">
-                            <span>{{ emoji }} {{ m.capitalize() }}</span>
+                            <span>{{ emoji }} {{ label }}</span>
                         </label>
                         {% endfor %}
                     </div>
@@ -120,6 +125,12 @@
                                 {% if voto == "7" %}checked{% endif %}
                                 onclick="scopriChipClick(this)">
                             <span>⭐ 7+ Buoni</span>
+                        </label>
+                        <label class="scopri-chip">
+                            <input type="radio" name="voto" value="7.5"
+                                {% if voto == "7.5" %}checked{% endif %}
+                                onclick="scopriChipClick(this)">
+                            <span>✨ 7,5+ Ottimi</span>
                         </label>
                         <label class="scopri-chip">
                             <input type="radio" name="voto" value="8"
@@ -578,6 +589,17 @@ function scopriChipClick(el) {
             r.removeAttribute('data-was-checked');
         });
         el.setAttribute('data-was-checked', '1');
+    }
+    // Genere e Mood si escludono: agiscono sullo stesso parametro TMDb
+    // (with_genres), quindi tenerli entrambi attivi lascerebbe una chip accesa
+    // che non filtra nulla, e permetterebbe combinazioni impossibili come
+    // Horror + Da innamorarsi (il mood esclude proprio l'horror) = pagina vuota.
+    if (el.checked && (el.name === 'genere' || el.name === 'mood')) {
+        var altro = (el.name === 'genere') ? 'mood' : 'genere';
+        document.querySelectorAll('input[name="' + altro + '"]').forEach(function(r) {
+            r.checked = false;
+            r.removeAttribute('data-was-checked');
+        });
     }
     el.form.submit();
 }
