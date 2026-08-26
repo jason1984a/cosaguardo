@@ -273,6 +273,16 @@
         margin: 0 auto;
     }
 }
+        /* Titolo e pulsante Condividi sulla stessa riga. */
+        .dv-title-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: nowrap;
+        }
+        .dv-title-row h1 { flex: 1 1 auto; min-width: 0; }
+        .dv-title-row .cg-share { flex: 0 0 auto; margin-top: 4px; }
 </style>
 
 <div class="dv-page">
@@ -296,7 +306,16 @@
             {% endif %}
         </div>
         <div class="dv-info">
-            <h1>Dove vedere {{ item.title }} in streaming</h1>
+            <div class="dv-title-row">
+                <h1>Dove vedere {{ item.title }} in streaming</h1>
+                <button type="button" class="cg-share"
+                        aria-label="Condividi {{ item.title }}"
+                        data-share-title="Dove vedere {{ item.title }} in streaming"
+                        data-share-url="https://cosaguardo.com/dove-vedere/{{ item.slug }}?src=share">
+                    <i data-lucide="share-2"></i>
+                    <span class="cg-share-label">Condividi</span>
+                </button>
+            </div>
 
             <div class="dv-info-meta">
                 <span><i data-lucide="film" style="width:13px;height:13px;stroke:currentColor;stroke-width:2.5;"></i> {{ _kind }}</span>

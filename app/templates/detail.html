@@ -1598,6 +1598,17 @@ a.detail-genre-tag--link:focus-visible {
     .episode-modal { transition: none; }
     .episode-item { transition: none; }
 }
+        /* Titolo e pulsante Condividi sulla stessa riga. Il titolo occupa
+           lo spazio disponibile, il pulsante non si comprime mai. */
+        .detail-title-row {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: nowrap;
+        }
+        .detail-title-row .detail-title { flex: 1 1 auto; min-width: 0; }
+        .detail-title-row .cg-share { flex: 0 0 auto; margin-top: 4px; }
 </style>
 {% endblock %}
 
@@ -1688,7 +1699,20 @@ a.detail-genre-tag--link:focus-visible {
                 {{ "Serie TV" if detail.content_type == "tv" else "Film" }}
             </div>
 
-            <h1 class="detail-title">{{ detail.title }}</h1>
+            <div class="detail-title-row">
+                <h1 class="detail-title">{{ detail.title }}</h1>
+                {# L'URL condiviso e' SEMPRE il canonico: se il titolo ha una
+                   pagina SEO si condivide quella, altrimenti /film|serie/{id}.
+                   Condividere due indirizzi per la stessa scheda spezzerebbe
+                   in due le condivisioni e vanificherebbe og:url. #}
+                <button type="button" class="cg-share"
+                        aria-label="Condividi {{ detail.title }}"
+                        data-share-title="{{ detail.title }}{% if detail.release_date %} ({{ detail.release_date[:4] }}){% endif %}"
+                        data-share-url="{{ (canonical_url or ('https://cosaguardo.com/' ~ ('serie' if detail.content_type == 'tv' else 'film') ~ '/' ~ detail.tmdb_id)) }}?src=share">
+                    <i data-lucide="share-2"></i>
+                    <span class="cg-share-label">Condividi</span>
+                </button>
+            </div>
 
             {% if detail.original_title and detail.original_title != detail.title %}
             <div class="detail-original-title">{{ detail.original_title }}</div>

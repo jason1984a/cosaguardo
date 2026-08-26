@@ -345,6 +345,116 @@
             #cg-nav-progress { transition: opacity 0.15s linear; }
         }
     </style>
+    {# ── Tasto Condividi ────────────────────────────────────────────────
+       CSS e JS stanno qui una volta sola: il markup del pulsante vive nei
+       template delle schede (detail.html, dove_vedere.html). Per averlo su
+       una pagina futura basta la classe .cg-share con i suoi attributi
+       data-share-url e data-share-title. #}
+    <style>
+        .cg-share {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 7px 12px;
+            border: 1px solid rgba(255,255,255,0.18);
+            border-radius: 999px;
+            background: rgba(255,255,255,0.06);
+            color: #e8ecf4;
+            font-size: 0.82rem;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.18s ease, border-color 0.18s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .cg-share:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.3); }
+        .cg-share:active { transform: scale(0.97); }
+        .cg-share i, .cg-share svg { width: 15px; height: 15px; stroke: currentColor; stroke-width: 2.2; flex: none; }
+        /* Mobile: sola icona. Il gesto e' noto e lo spazio accanto al titolo
+           e' prezioso. Da 768px in su compare anche la parola. */
+        .cg-share-label { display: none; }
+        @media (min-width: 768px) { .cg-share-label { display: inline; } }
+        /* Stato "Link copiato": mostra il testo anche su mobile, altrimenti
+           il ripiego resterebbe muto sui telefoni senza navigator.share. */
+        .cg-share.cg-share-done { background: rgba(110,168,254,0.18); border-color: rgba(110,168,254,0.45); }
+        .cg-share.cg-share-done .cg-share-label { display: inline; }
+        @media (prefers-reduced-motion: reduce) { .cg-share:active { transform: none; } }
+    </style>
+    <script>
+    (function () {
+        // Delega sul document: nessuna inizializzazione nei template, e
+        // funziona anche per pulsanti inseriti dopo il caricamento.
+        document.addEventListener("click", async function (e) {
+            var btn = e.target.closest ? e.target.closest(".cg-share") : null;
+            if (!btn) return;
+
+            var url   = btn.getAttribute("data-share-url") || location.href;
+            var title = btn.getAttribute("data-share-title") || document.title;
+
+            // navigator.share apre il menu nativo del sistema: WhatsApp,
+            // Telegram, Messaggi, tutto cio' che l'utente ha installato.
+            // Richiede HTTPS e un gesto dell'utente: entrambi soddisfatti.
+            if (navigator.share) {
+                try {
+                    await navigator.share({ title: title, url: url });
+                    track("nativo");
+                    return;
+                } catch (err) {
+                    // Menu chiuso dall'utente: non e' un errore. Non si deve
+                    // ripiegare sulla copia ne' mostrare conferme.
+                    if (err && err.name === "AbortError") return;
+                }
+            }
+
+            // Ripiego: copia negli appunti. Su desktop navigator.share spesso
+            // non c'e', e su Firefox non c'e' affatto.
+            var ok = false;
+            try {
+                await navigator.clipboard.writeText(url);
+                ok = true;
+            } catch (err) {
+                // Ripiego del ripiego, dove l'API appunti e' negata.
+                try {
+                    var ta = document.createElement("textarea");
+                    ta.value = url;
+                    ta.setAttribute("readonly", "");
+                    ta.style.cssText = "position:absolute;left:-9999px;top:0;";
+                    document.body.appendChild(ta);
+                    ta.select();
+                    ok = document.execCommand("copy");
+                    document.body.removeChild(ta);
+                } catch (err2) { ok = false; }
+            }
+
+            feedback(btn, ok ? "Link copiato" : "Copia non riuscita");
+            if (ok) track("copia");
+        });
+
+        function feedback(btn, testo) {
+            var span = btn.querySelector(".cg-share-label");
+            if (!span) return;
+            if (btn.dataset.cgBusy === "1") return;   // click ripetuti
+            btn.dataset.cgBusy = "1";
+            var originale = span.textContent;
+            span.textContent = testo;
+            btn.classList.add("cg-share-done");
+            setTimeout(function () {
+                span.textContent = originale;
+                btn.classList.remove("cg-share-done");
+                btn.dataset.cgBusy = "0";
+            }, 2000);
+        }
+
+        function track(metodo) {
+            // GA4 se presente; il pulsante deve funzionare anche senza.
+            try {
+                if (typeof gtag === "function") {
+                    gtag("event", "share", { method: metodo, content_type: "scheda" });
+                }
+            } catch (err) { /* la condivisione e' gia' avvenuta: non disturbare */ }
+        }
+    })();
+    </script>
     <script>window.__CG_LOGGED_IN = {% if is_logged_in %}true{% else %}false{% endif %};</script>
     <script src="{{ url_for('static', path='js/base.js') }}?v=4" defer></script>
     {# ─── /NAVIGATION PROGRESS BAR ──────────────────────────────────────── #}
