@@ -591,49 +591,108 @@ async def _is_verified_googlebot(request: Request, ip: str) -> bool:
 # tag Open Graph in detail.html erano corretti da sempre. Confermato col
 # Sharing Debugger di Meta: Response Code 403.
 #
+# ATTENZIONE AL METODO DI VERIFICA. Per Googlebot il DNS inverso e' la
+# procedura ufficiale documentata da Google. Per Meta NON lo e': molti IP dei
+# suoi crawler non hanno un PTR utile, e un primo tentativo basato sul DNS
+# inverso ha lasciato il 403 dov'era. La procedura che Meta documenta e'
+# un'altra: user-agent facebookexternalhit/facebookcatalog COME PRE-FILTRO,
+# piu' la verifica che l'IP appartenga all'AS32934 (Meta Platforms).
+# Gli intervalli si leggono dal registro RADB e cambiano spesso, quindi vanno
+# riletti periodicamente e non scritti a mano nel codice.
+#
 # Il passaggio e' tenuto STRETTO di proposito, tre paletti:
 #   1. solo /film/ e /serie/  (NON /persona/: nessuno condivide un attore, e
 #      ogni prefisso in piu' e' superficie in piu')
 #   2. solo GET e HEAD  (niente POST: fuori ricerca, login, motore consigli)
-#   3. IP verificato in DNS inverso + diretto, mai lo user-agent da solo
+#   3. IP dentro AS32934, mai lo user-agent da solo
 # Il risultato e' una superficie PIU' PICCOLA di quella gia' concessa a
-# Googlebot, che invece passa su tutti i prefissi protetti.
+# Googlebot, che passa su tutti i prefissi protetti e senza limiti di metodo.
 _META_SHARE_PREFIXES = ("/film/", "/serie/")
-_META_UA_HINTS       = ("facebookexternalhit", "whatsapp")
-_META_DNS_CACHE: dict = {}          # ip -> (esito bool, timestamp)
-_META_DNS_TTL = 60 * 60 * 24
-# Gli IP dei crawler Meta risolvono a hostname sotto questi domini.
-_META_HOST_SUFFIXES = (".fbsv.net", ".facebook.com", ".fbcdn.net")
+_META_UA_HINTS       = ("facebookexternalhit", "facebookcatalog")
+_META_ASN            = "AS32934"
+_META_WHOIS_HOST     = "whois.radb.net"
+_META_WHOIS_PORT     = 43
+_META_TTL            = 60 * 60 * 24
+_meta_nets: list = []
+_meta_ts: float = 0.0
+_meta_lock = _asyncio_seo.Lock()
 
 
-def _verify_meta_dns(ip: str) -> bool:
+def _fetch_meta_nets() -> list:
     """
-    Reverse DNS -> l'hostname deve finire in un dominio Meta -> forward DNS
-    -> deve tornare allo stesso IP.
-
-    La conferma IN AVANTI e' la parte che conta: senza di essa chiunque
-    controlli il reverse DNS del proprio IP potrebbe dichiararsi Meta.
-    Stesso schema gia' usato per Googlebot.
+    Legge gli intervalli IP dell'AS32934 dal registro RADB.
+    Bloccante: va chiamata in thread. Protocollo whois: si apre una socket
+    sulla porta 43, si manda la query terminata da newline e si legge fino
+    alla chiusura. Nessuna dipendenza esterna.
     """
     import socket
-    cached = _META_DNS_CACHE.get(ip)
-    now = _time.time()
-    if cached and (now - cached[1]) < _META_DNS_TTL:
-        return cached[0]
-    ok = False
     try:
-        host = socket.gethostbyaddr(ip)[0].lower().rstrip(".")
-        if host.endswith(_META_HOST_SUFFIXES):
-            _, _, addrs = socket.gethostbyname_ex(host)
-            ok = ip in addrs
-    except Exception:
-        ok = False
-    # Cache anche i "no": una botnet con migliaia di IP non deve poter
-    # innescare una risoluzione DNS a ogni richiesta.
-    if len(_META_DNS_CACHE) > 5000:
-        _META_DNS_CACHE.clear()
-    _META_DNS_CACHE[ip] = (ok, now)
-    return ok
+        with socket.create_connection((_META_WHOIS_HOST, _META_WHOIS_PORT), timeout=8) as s:
+            s.sendall(f"-i origin {_META_ASN}\r\n".encode())
+            chunks = []
+            while True:
+                buf = s.recv(8192)
+                if not buf:
+                    break
+                chunks.append(buf)
+        testo = b"".join(chunks).decode("utf-8", "ignore")
+    except Exception as e:
+        log.warning("Meta AS32934: lettura RADB fallita (%s)", e)
+        return []
+
+    nets = []
+    for riga in testo.splitlines():
+        campo, _, valore = riga.partition(":")
+        if campo.strip().lower() not in ("route", "route6"):
+            continue
+        try:
+            nets.append(_ipaddress.ip_network(valore.strip(), strict=False))
+        except ValueError:
+            continue
+
+    # Difesa contro risposte troncate o malformate: se il registro restituisce
+    # una manciata di prefissi rispetto alle centinaia attese, meglio non
+    # fidarsi e riprovare al giro dopo che consolidare una lista parziale.
+    if len(nets) < 20:
+        log.warning("Meta AS32934: solo %d prefissi, risposta ignorata", len(nets))
+        return []
+    return nets
+
+
+async def _ensure_meta_nets() -> None:
+    """Rinfresca la lista se scaduta, senza mai bloccare l'event loop."""
+    global _meta_ts
+    now = _time.time()
+    if _meta_nets and (now - _meta_ts) < _META_TTL:
+        return
+    if _meta_lock.locked():
+        return                      # un altro task sta gia' aggiornando
+    async with _meta_lock:
+        nets = await _asyncio_seo.to_thread(_fetch_meta_nets)
+        if nets:
+            _meta_nets[:] = nets
+            _meta_ts = now
+            log.info("Meta AS32934: caricati %d intervalli", len(nets))
+
+
+def _is_meta_ip(ip: str) -> bool:
+    """
+    True se l'IP e' dentro AS32934.
+
+    FALLISCE CHIUSO: se la lista non e' disponibile (registro irraggiungibile,
+    risposta malformata) restituisce False e il crawler viene bloccato come
+    prima. Le anteprime smettono di funzionare per qualche ora, ma non si apre
+    nessun varco. E' una scelta deliberata: l'alternativa — una lista di
+    prefissi scritta a mano — invecchia in silenzio e un prefisso sbagliato
+    aprirebbe l'accesso alla rete di qualcun altro.
+    """
+    if not ip or not _meta_nets:
+        return False
+    try:
+        addr = _ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _meta_nets)
 
 
 async def _is_verified_meta_crawler(request: Request, ip: str) -> bool:
@@ -643,11 +702,12 @@ async def _is_verified_meta_crawler(request: Request, ip: str) -> bool:
     if not request.url.path.startswith(_META_SHARE_PREFIXES):
         return False
     ua = (request.headers.get("user-agent") or "").lower()
-    # Lo user-agent NON autorizza niente: e' solo un pre-filtro economico per
-    # decidere se vale la pena pagare una risoluzione DNS.
+    # Lo user-agent NON autorizza niente: e' solo un pre-filtro economico, che
+    # evita di tenere in memoria una lista di reti per il traffico normale.
     if not any(h in ua for h in _META_UA_HINTS):
         return False
-    return await _asyncio_seo.to_thread(_verify_meta_dns, ip)
+    await _ensure_meta_nets()
+    return _is_meta_ip(ip)
 
 
 # ── ACCESSO RISERVATO PER COLLABORATORI ─────────────────────────────────────
@@ -717,6 +777,8 @@ async def block_direct_origin(request: Request, call_next):
         #        Instagram). Stesso principio di Googlebot — verifica per IP,
         #        non per user-agent — ma con paletti piu' stretti: solo le
         #        schede, solo in lettura. Vedi _is_verified_meta_crawler.
+        #        NB: deve stare PRIMA del filtro datacenter, perche' gli IP
+        #        Meta sono a tutti gli effetti IP di datacenter.
         if await _is_verified_meta_crawler(request, _ip):
             return await call_next(request)
 
