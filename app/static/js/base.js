@@ -359,6 +359,26 @@
         var INITIAL_DELAY_MS = 5000;   // primo check ritardato di 5s (LCP safe)
         var EXCLUDED_PATHS   = ['/register', '/login', '/recommend'];
 
+        // ─── APP ANDROID SU GOOGLE PLAY (online dal 26/08/2026) ─────────
+        // Su Android non proponiamo piu' la PWA ma l'app vera dello Store:
+        // la PWA non passa dal Play Store, non compare nelle statistiche di
+        // Play Console e non riceverebbe le notifiche push native.
+        // iOS e desktop restano sulla PWA, dove un'app nativa non c'e'.
+        var PLAY_PACKAGE  = 'com.cosaguardo.app';
+        // referrer= viene letto dal Play Install Referrer: serve a distinguere
+        // le installazioni che arrivano dal sito da quelle organiche o dagli
+        // annunci. Utile soprattutto dopo l'integrazione dell'SDK Meta.
+        var PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=' + PLAY_PACKAGE +
+                             '&referrer=' + encodeURIComponent('utm_source=sito&utm_medium=banner&utm_campaign=install');
+
+        // Soglie piu' basse su Android: l'offerta ora e' un'app vera sullo
+        // Store, non un "aggiungi a schermata Home", quindi vale prima. Non
+        // azzerate pero': chi arriva da Google deve comunque aver capito a
+        // cosa serve il sito, altrimenti la fascia interrompe e basta.
+        var ANDROID_MIN_DELAY_SEC = 15;    // invece di 30
+        var ANDROID_MIN_TIME_SEC  = 60;    // invece di 120
+        var ANDROID_MIN_PAGEVIEWS = 2;     // invece di 3
+
         // Flag utente loggato (da Jinja, valutato server-side a render time)
         var IS_LOGGED_IN = (window.__CG_LOGGED_IN === true);
 
@@ -381,6 +401,34 @@
         }
         function isAndroid() {
             return /Android/.test(navigator.userAgent);
+        }
+        function isTwa() {
+            // App Android (wrapper PWABuilder = Trusted Web Activity): NON
+            // deve mai vedere la fascia, sta gia' usando l'app.
+            // Il segnale documentato e' document.referrer = "android-app://".
+            // ⚠️ Compare SOLO alla prima navigazione della sessione: dopo un
+            // click interno il referrer diventa la pagina precedente. Per
+            // questo lo si memorizza in sessionStorage appena lo si vede.
+            try {
+                if (sessionStorage.getItem('cg_is_twa') === '1') return true;
+                var ref = document.referrer || '';
+                if (ref.indexOf('android-app://') === 0) {
+                    sessionStorage.setItem('cg_is_twa', '1');
+                    return true;
+                }
+                // Secondo segnale, disponibile dopo la ricompilazione di
+                // settembre che aggiunge ?src=app in start_url.
+                if (window.location.search.indexOf('src=app') !== -1) {
+                    sessionStorage.setItem('cg_is_twa', '1');
+                    return true;
+                }
+            } catch (e) {}
+            return false;
+        }
+        function usePlayStore() {
+            // Android fuori dall'app e fuori dai browser interni delle app
+            // social (da li' il Play Store si apre male o per niente).
+            return isAndroid() && !isTwa() && !isInAppBrowser();
         }
         function isInAppBrowser() {
             // Webview interni delle app social (dove atterra il traffico da
@@ -480,6 +528,7 @@
         function shouldShow() {
             // Esclusioni "hard" (mai mostrare in nessun caso)
             if (isStandalone()) return false;
+            if (isTwa()) return false;               // gia' dentro l'app Android
             if (!isMobile()) return false;           // solo mobile
             if (isExcludedPath()) return false;      // pagine escluse
             if (isIOS() && isChromeIOS()) return false; // Chrome iOS non può installare
@@ -488,9 +537,15 @@
             if (s.installed) return false;
             if (s.dismissed) return false;           // dismiss permanente
 
-            // Tempo minimo SU QUESTA pagina (30s) — sempre richiesto
+            // Tempo minimo SU QUESTA pagina — sempre richiesto, piu' basso
+            // su Android dove l'offerta e' l'app dello Store.
+            var play = usePlayStore();
+            var minDelay = play ? ANDROID_MIN_DELAY_SEC : MIN_DELAY_SEC;
+            var minTime  = play ? ANDROID_MIN_TIME_SEC  : MIN_TIME_SEC;
+            var minViews = play ? ANDROID_MIN_PAGEVIEWS : MIN_PAGEVIEWS;
+
             var eng = getEngagement();
-            if (eng.timeSec < MIN_DELAY_SEC) return false;
+            if (eng.timeSec < minDelay) return false;
 
             // ── Trigger: basta UNO dei 3 ─────────────────────────────────
             // T3: loggato
@@ -499,8 +554,8 @@
             // T1: ≥2 giorni distinti
             if (getDistinctVisitDays() >= MIN_VISIT_DAYS) return true;
 
-            // T2: sessione lunga (≥3 pageview + ≥2 min)
-            if (eng.pageviews >= MIN_PAGEVIEWS && eng.timeSec >= MIN_TIME_SEC) return true;
+            // T2: sessione lunga (soglie ridotte su Android)
+            if (eng.pageviews >= minViews && eng.timeSec >= minTime) return true;
 
             return false;
         }
@@ -560,6 +615,18 @@
             }
             var b = document.getElementById('install-banner');
             if (!b) return;
+
+            // Su Android il testo cambia: si scarica un'app vera, non si
+            // aggiunge una scorciatoia alla schermata Home.
+            if (usePlayStore()) {
+                var strong = b.querySelector('.install-banner-text strong');
+                var span   = b.querySelector('.install-banner-text span');
+                var azione = document.getElementById('install-btn-action');
+                if (strong) strong.textContent = '📲 Scarica CosaGuardo su Google Play';
+                if (span)   span.textContent   = 'gratis, senza pubblicità';
+                if (azione) azione.textContent = 'Scarica';
+            }
+
             b.classList.add('show');
             bannerShown = true;
 
@@ -699,6 +766,23 @@
                         return;
                     }
 
+                    // Android fuori dall'app → Play Store, PRIMA di qualunque
+                    // logica PWA: anche se deferredPrompt fosse disponibile,
+                    // l'app vera e' l'offerta migliore.
+                    if (usePlayStore()) {
+                        track('play_store_redirect', { source: 'install_banner' });
+                        // Il click sullo Store chiude la fascia in modo
+                        // definitivo, come gia' avviene per il rifiuto del
+                        // prompt nativo: l'offerta e' stata fatta e accolta.
+                        // ⚠️ L'evento appinstalled NON scatta per le
+                        // installazioni dal Play Store, quindi non si puo'
+                        // sapere da qui se l'installazione e' avvenuta: il
+                        // dato sta in Play Console.
+                        dismissBanner('store_click');
+                        window.open(PLAY_STORE_URL, '_blank', 'noopener');
+                        return;
+                    }
+
                     // Android/Desktop con prompt nativo disponibile (caso ideale)
                     if (deferredPrompt) {
                         deferredPrompt.prompt();
@@ -808,6 +892,12 @@
 
         // Esponi una funzione globale per forzare il banner da pagina /installa
         window.cgShowInstallPrompt = function() {
+            // Stessa regola della fascia: su Android si va allo Store.
+            if (usePlayStore()) {
+                track('play_store_redirect', { source: 'installa_page' });
+                window.open(PLAY_STORE_URL, '_blank', 'noopener');
+                return;
+            }
             if (isStandalone()) {
                 alert('CosaGuardo è già installata!');
                 return;

@@ -114,6 +114,29 @@
         font-weight: bold;
     }
 
+    .install-platform--store {
+        background: linear-gradient(135deg, rgba(110,168,254,0.12), rgba(167,139,250,0.10));
+        border-color: rgba(110,168,254,0.35);
+    }
+    .install-store-text {
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.6;
+    }
+    .install-store-btn {
+        display: inline-block;
+        padding: 11px 22px;
+        font-size: 0.98rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #6ea8fe, #a78bfa);
+        color: #08101f;
+        border-radius: 12px;
+        text-decoration: none;
+        transition: transform 0.18s, filter 0.18s;
+    }
+    .install-store-btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+
     .install-benefits {
         background: linear-gradient(135deg, rgba(110,168,254,0.07), rgba(167,139,250,0.07));
         border: 1px solid rgba(110,168,254,0.15);
@@ -157,7 +180,7 @@
 
     <div class="install-cta">
         <button class="install-cta-btn" onclick="cgShowInstallPrompt()">📲 Installa ora</button>
-        <div class="install-cta-hint">Su iPhone segui i passi qui sotto</div>
+        <div class="install-cta-hint">Su Android si apre il Play Store · su iPhone segui i passi qui sotto</div>
     </div>
 
     <div class="install-platforms">
@@ -171,13 +194,15 @@
             </ol>
         </div>
 
-        <div class="install-platform">
-            <h2><span class="install-platform-emoji">🤖</span> Android (Chrome)</h2>
-            <ol>
-                <li>Tocca il bottone <strong>📲 Installa ora</strong> qui sopra</li>
-                <li>Oppure tocca i <strong>3 puntini</strong> in alto a destra di Chrome</li>
-                <li>Seleziona <strong>"Installa app"</strong> o <strong>"Aggiungi a schermata Home"</strong></li>
-            </ol>
+        {# Android ha un'app vera sul Play Store dal 26/08/2026: la PWA qui
+           non si propone piu'. Sta per prima perche' e' l'unica piattaforma
+           con un'app nativa, ed e' l'opzione migliore fra tutte. #}
+        <div class="install-platform install-platform--store">
+            <h2><span class="install-platform-emoji">🤖</span> Android — app ufficiale</h2>
+            <p class="install-store-text">Su Android c'è l'app vera, scaricabile dal Play Store.</p>
+            <a class="install-store-btn"
+               href="https://play.google.com/store/apps/details?id=com.cosaguardo.app&amp;referrer=utm_source%3Dsito%26utm_medium%3Dpagina_installa%26utm_campaign%3Dinstall"
+               target="_blank" rel="noopener">Scarica su Google Play</a>
         </div>
 
         <div class="install-platform">
