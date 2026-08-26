@@ -67,7 +67,6 @@ from core.recommendation_api import (
     get_person_detail,
     get_scopri_results,
     get_scopri_strips,
-    normalize_voto,
     get_similar_movies_tmdb,
     get_popular_by_genre_tmdb,
     get_franchise_key,
@@ -584,6 +583,73 @@ async def _is_verified_googlebot(request: Request, ip: str) -> bool:
     # Lista non disponibile: si ripiega sulla verifica DNS.
     return await _asyncio_seo.to_thread(_verify_googlebot_dns, ip)
 
+# ── PASSAGGIO PER LE ANTEPRIME SOCIAL (Meta) ────────────────────────────────
+# Quando un utente incolla il link di una scheda su WhatsApp, Messenger,
+# Facebook o Instagram, la pagina NON viene letta dal suo telefono: la legge un
+# server di Meta, che sta negli Stati Uniti. La geo-restrizione gli rispondeva
+# 403 e l'anteprima usciva come URL nudo, senza locandina ne' titolo — mentre i
+# tag Open Graph in detail.html erano corretti da sempre. Confermato col
+# Sharing Debugger di Meta: Response Code 403.
+#
+# Il passaggio e' tenuto STRETTO di proposito, tre paletti:
+#   1. solo /film/ e /serie/  (NON /persona/: nessuno condivide un attore, e
+#      ogni prefisso in piu' e' superficie in piu')
+#   2. solo GET e HEAD  (niente POST: fuori ricerca, login, motore consigli)
+#   3. IP verificato in DNS inverso + diretto, mai lo user-agent da solo
+# Il risultato e' una superficie PIU' PICCOLA di quella gia' concessa a
+# Googlebot, che invece passa su tutti i prefissi protetti.
+_META_SHARE_PREFIXES = ("/film/", "/serie/")
+_META_UA_HINTS       = ("facebookexternalhit", "whatsapp")
+_META_DNS_CACHE: dict = {}          # ip -> (esito bool, timestamp)
+_META_DNS_TTL = 60 * 60 * 24
+# Gli IP dei crawler Meta risolvono a hostname sotto questi domini.
+_META_HOST_SUFFIXES = (".fbsv.net", ".facebook.com", ".fbcdn.net")
+
+
+def _verify_meta_dns(ip: str) -> bool:
+    """
+    Reverse DNS -> l'hostname deve finire in un dominio Meta -> forward DNS
+    -> deve tornare allo stesso IP.
+
+    La conferma IN AVANTI e' la parte che conta: senza di essa chiunque
+    controlli il reverse DNS del proprio IP potrebbe dichiararsi Meta.
+    Stesso schema gia' usato per Googlebot.
+    """
+    import socket
+    cached = _META_DNS_CACHE.get(ip)
+    now = _time.time()
+    if cached and (now - cached[1]) < _META_DNS_TTL:
+        return cached[0]
+    ok = False
+    try:
+        host = socket.gethostbyaddr(ip)[0].lower().rstrip(".")
+        if host.endswith(_META_HOST_SUFFIXES):
+            _, _, addrs = socket.gethostbyname_ex(host)
+            ok = ip in addrs
+    except Exception:
+        ok = False
+    # Cache anche i "no": una botnet con migliaia di IP non deve poter
+    # innescare una risoluzione DNS a ogni richiesta.
+    if len(_META_DNS_CACHE) > 5000:
+        _META_DNS_CACHE.clear()
+    _META_DNS_CACHE[ip] = (ok, now)
+    return ok
+
+
+async def _is_verified_meta_crawler(request: Request, ip: str) -> bool:
+    """True solo per il crawler anteprime di Meta, su una scheda, in lettura."""
+    if request.method not in ("GET", "HEAD"):
+        return False
+    if not request.url.path.startswith(_META_SHARE_PREFIXES):
+        return False
+    ua = (request.headers.get("user-agent") or "").lower()
+    # Lo user-agent NON autorizza niente: e' solo un pre-filtro economico per
+    # decidere se vale la pena pagare una risoluzione DNS.
+    if not any(h in ua for h in _META_UA_HINTS):
+        return False
+    return await _asyncio_seo.to_thread(_verify_meta_dns, ip)
+
+
 # ── ACCESSO RISERVATO PER COLLABORATORI ─────────────────────────────────────
 # Serve a chi lavora al progetto dall'estero (es. il freelance che produce le
 # creativita' per gli annunci): la geo-restrizione sopra gli restituirebbe 403
@@ -645,6 +711,13 @@ async def block_direct_origin(request: Request, call_next):
         #    che non vogliamo. Verifica per intervalli IP ufficiali, non per
         #    user-agent. (Vedi la nota storica su _EDGE_ALLOWED_COUNTRIES.)
         if await _is_verified_googlebot(request, _ip):
+            return await call_next(request)
+
+        # 0-bis) Crawler anteprime Meta (WhatsApp, Messenger, Facebook,
+        #        Instagram). Stesso principio di Googlebot — verifica per IP,
+        #        non per user-agent — ma con paletti piu' stretti: solo le
+        #        schede, solo in lettura. Vedi _is_verified_meta_crawler.
+        if await _is_verified_meta_crawler(request, _ip):
             return await call_next(request)
 
         # 1) IP di datacenter noto → blocca
@@ -4261,10 +4334,7 @@ def _scopri_seo(tipo, genere, mood, piattaforma, anno, voto=""):
     if piattaforma: parts.append(piattaforma.capitalize())
     if anno == "recenti": parts.append("recenti")
     elif anno == "classici": parts.append("classici")
-    # Il valore che gira nell'URL usa il PUNTO ("7.5"); la virgola compare
-    # solo nell'etichetta mostrata. Vedi normalize_voto in recommendation_api.
     if voto == "7": parts.append("7+")
-    elif voto == "7.5": parts.append("7,5+")
     elif voto == "8": parts.append("8+")
 
     tipo_label = "serie TV" if tipo == "serie" else "film"
@@ -4421,11 +4491,6 @@ def platform_page(
     # Filtri opzionali: gli stessi di /scopri, MENO "piattaforma" (già fissa
     # dall'URL). Con un filtro attivo Film e Serie restano sempre separati:
     # niente "Tutti" misto. Se l'utente filtra stando su "Tutti", si ripiega su Film.
-    # Stessa regola di /scopri: mood e genere si escludono (vedi commento la').
-    if mood:
-        genere = ""
-    voto = normalize_voto(voto)
-
     has_filters = any([genere, mood, anno, voto])
     if has_filters:
         eff_tipo = "serie" if tipo == "serie" else "film"
@@ -4554,19 +4619,6 @@ def scopri(
     voto:        str = "",
     page:        int = 1,
 ):
-    # Genere e Mood agiscono sullo stesso parametro TMDb (with_genres): sono
-    # due modi di fare la stessa domanda. Nell'interfaccia si escludono a
-    # vicenda; qui si applica la stessa regola lato server, per i link vecchi
-    # o salvati che portano ancora entrambi. Senza questo il motore ignorerebbe
-    # il genere (fa gia' "if genere and not mood") ma il template mostrerebbe
-    # ATTIVE due chip, di cui una che non filtra niente.
-    if mood:
-        genere = ""
-    # Accetta 7,5 oltre a 7.5 e riporta alla forma canonica: il confronto e'
-    # per stringa, quindi un link con la virgola non filtrerebbe nulla in
-    # silenzio, senza errore visibile.
-    voto = normalize_voto(voto)
-
     has_filters = any([genere, mood, piattaforma, anno, voto])
 
     if has_filters:
@@ -4629,8 +4681,6 @@ def scopri_json(
     piattaforma: str = "", anno: str = "", voto: str = "", page: int = 1,
 ):
     """AJAX endpoint per caricamento pagine successive."""
-    if mood:
-        genere = ""
     return get_scopri_results(
         tipo=tipo, genere=genere, mood=mood,
         piattaforma=piattaforma, anno=anno, voto=voto, page=page
