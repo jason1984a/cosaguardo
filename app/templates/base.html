@@ -240,8 +240,17 @@
     <meta property="og:title" content="{% block og_title %}CosaGuardo — Scopri cosa guardare{% endblock %}">
     <meta property="og:description" content="{% block og_description %}Consigli personalizzati su film e serie TV in base ai tuoi gusti.{% endblock %}">
     <meta property="og:image" content="{% block og_image %}https://cosaguardo.com/static/og-default.jpg{% endblock %}">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
+    {# Le dimensioni erano fisse a 1200x630, giuste per og-default.jpg ma
+     sbagliate sulle schede, dove l'immagine e' un poster TMDb verticale.
+     WhatsApp e Facebook si fidano dei numeri DICHIARATI per riservare lo
+     spazio: dichiararne di sbagliati fa uscire l'anteprima ritagliata male.
+     Ora sono blocchi, cosi' ogni pagina dichiara le sue. #}
+    <meta property="og:image:width" content="{% block og_image_width %}1200{% endblock %}">
+    <meta property="og:image:height" content="{% block og_image_height %}630{% endblock %}">
+    {# Senza og:image:alt, Meta se lo ricava dai metadati del file immagine.
+     Sui poster TMDb, che sono caricati dalla comunita', puo' venirne fuori il
+     titolo del sito da cui la locandina era stata presa. Meglio dettarlo noi. #}
+    <meta property="og:image:alt" content="{% block og_image_alt %}CosaGuardo — Scopri cosa guardare{% endblock %}">
     <meta property="og:type" content="{% block og_type %}website{% endblock %}">
     <meta property="og:url" content="{% block og_url %}https://cosaguardo.com{% endblock %}">
     <meta property="og:locale" content="it_IT">

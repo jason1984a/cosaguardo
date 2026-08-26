@@ -11,6 +11,21 @@
 {% block og_title %}Dove vedere {{ item.title }} in streaming{% endblock %}
 {% block og_description %}Tutte le piattaforme streaming italiane su cui guardare {{ item.title }}.{% endblock %}
 {% block og_image %}{% if detail.poster_url %}{{ detail.poster_url }}{% else %}https://cosaguardo.com/static/og-default.jpg{% endif %}{% endblock %}
+{# Poster TMDb w500 = 500x750 (rapporto 2:3). Nel fallback l'immagine e'
+   og-default.jpg, che invece e' 1200x630: le dimensioni seguono l'immagine. #}
+{% block og_image_width %}{% if detail.poster_url %}500{% else %}1200{% endif %}{% endblock %}
+{% block og_image_height %}{% if detail.poster_url %}750{% else %}630{% endif %}{% endblock %}
+{% block og_image_alt %}Locandina di {{ item.title }}{% if item.year %} ({{ item.year }}){% endif %} — CosaGuardo{% endblock %}
+{# MANCAVA: senza questo blocco la pagina ereditava la homepage da base.html,
+   e ogni condivisione di una scheda /dove-vedere/ veniva attribuita a
+   cosaguardo.com invece che al titolo. Confermato dal Sharing Debugger, che
+   mostrava la catena og:url -> /dove-vedere/fight-club -> cosaguardo.com/ #}
+{% block og_url %}https://cosaguardo.com/dove-vedere/{{ item.slug }}{% endblock %}
+{# Mancavano anche questi: i tag twitter: restavano quelli predefiniti, con
+   "CosaGuardo" e il logo al posto del titolo e della locandina. #}
+{% block tw_title %}Dove vedere {{ item.title }} in streaming{% endblock %}
+{% block tw_description %}Tutte le piattaforme streaming italiane su cui guardare {{ item.title }}.{% endblock %}
+{% block tw_image %}{% if detail.poster_url %}{{ detail.poster_url }}{% else %}https://cosaguardo.com/static/og-default.jpg{% endif %}{% endblock %}
 
 {% block content %}
 <style>

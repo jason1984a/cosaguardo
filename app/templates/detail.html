@@ -5,6 +5,10 @@
 {% block og_title %}{{ detail.title }} {% if detail.release_date %}({{ detail.release_date[:4] }}){% endif %} — CosaGuardo{% endblock %}
 {% block og_description %}{% if detail.tagline %}"{{ detail.tagline }}" — {% endif %}{{ detail.overview[:200] if detail.overview else "Scopri dove guardarlo, cast e trailer su CosaGuardo." }}{% endblock %}
 {% block og_image %}{{ detail.poster_url or "https://cosaguardo.com/static/og-default.jpg" }}{% endblock %}
+{# Poster TMDb w500 = 500x750; nel fallback og-default.jpg e' 1200x630. #}
+{% block og_image_width %}{% if detail.poster_url %}500{% else %}1200{% endif %}{% endblock %}
+{% block og_image_height %}{% if detail.poster_url %}750{% else %}630{% endif %}{% endblock %}
+{% block og_image_alt %}Locandina di {{ detail.title }}{% if detail.release_date %} ({{ detail.release_date[:4] }}){% endif %} — CosaGuardo{% endblock %}
 {% block og_type %}video.movie{% endblock %}
 {% block og_url %}{{ canonical_url or "https://cosaguardo.com/" ~ ("serie" if detail.content_type == "tv" else "film") ~ "/" ~ detail.tmdb_id }}{% endblock %}
 {% block tw_title %}{{ detail.title }} — CosaGuardo{% endblock %}
