@@ -1598,17 +1598,20 @@ a.detail-genre-tag--link:focus-visible {
     .episode-modal { transition: none; }
     .episode-item { transition: none; }
 }
-        /* Titolo e pulsante Condividi sulla stessa riga. Il titolo occupa
-           lo spazio disponibile, il pulsante non si comprime mai. */
+        /* Titolo e pulsante Condividi sulla stessa riga, il pulsante
+           SUBITO DOPO il titolo. Niente space-between: spingeva il pulsante
+           contro il bordo opposto, staccandolo dal titolo di mezza schermata.
+           Il titolo non si allarga oltre il suo contenuto (flex 0 1 auto), e
+           su schermi stretti il pulsante va a capo invece di comprimerlo. */
         .detail-title-row {
             display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
+            align-items: center;
+            justify-content: flex-start;
             gap: 12px;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
         }
-        .detail-title-row .detail-title { flex: 1 1 auto; min-width: 0; }
-        .detail-title-row .cg-share { flex: 0 0 auto; margin-top: 4px; }
+        .detail-title-row .detail-title { flex: 0 1 auto; min-width: 0; margin-bottom: 0; }
+        .detail-title-row .cg-share { flex: 0 0 auto; }
 </style>
 {% endblock %}
 

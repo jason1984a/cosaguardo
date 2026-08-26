@@ -273,16 +273,16 @@
         margin: 0 auto;
     }
 }
-        /* Titolo e pulsante Condividi sulla stessa riga. */
+        /* Titolo e pulsante Condividi sulla stessa riga, accostati. */
         .dv-title-row {
             display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
+            align-items: center;
+            justify-content: flex-start;
             gap: 12px;
-            flex-wrap: nowrap;
+            flex-wrap: wrap;
         }
-        .dv-title-row h1 { flex: 1 1 auto; min-width: 0; }
-        .dv-title-row .cg-share { flex: 0 0 auto; margin-top: 4px; }
+        .dv-title-row h1 { flex: 0 1 auto; min-width: 0; margin-bottom: 0; }
+        .dv-title-row .cg-share { flex: 0 0 auto; }
 </style>
 
 <div class="dv-page">
