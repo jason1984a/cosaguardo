@@ -2,7 +2,7 @@
   "name": "CosaGuardo",
   "short_name": "CosaGuardo",
   "description": "Scopri film e serie TV perfetti per te. Consigli personalizzati basati sui tuoi gusti.",
-  "start_url": "/",
+  "start_url": "/?src=app",
   "scope": "/",
   "id": "/",
   "display": "standalone",
@@ -46,7 +46,7 @@
       "name": "Scopri",
       "short_name": "Scopri",
       "description": "Esplora film e serie",
-      "url": "/scopri",
+      "url": "/scopri?src=app",
       "icons": [
         {
           "src": "/static/icons/icon-192.png",
@@ -58,7 +58,7 @@
       "name": "Profilo",
       "short_name": "Profilo",
       "description": "Il tuo profilo e consigli",
-      "url": "/profilo",
+      "url": "/profilo?src=app",
       "icons": [
         {
           "src": "/static/icons/icon-192.png",
