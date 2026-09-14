@@ -1,15 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Registrati | CosaGuardo{% endblock %}
-{# User page: nessun valore SEO #}
-{% block meta_robots %}noindex, follow{% endblock %}
+{% block title %}Completa il profilo | CosaGuardo{% endblock %}
+{# Pagina utente: nessun valore SEO, e non deve finire indicizzata #}
+{% block meta_robots %}noindex, nofollow{% endblock %}
 
 {% block content %}
+{#
+  Percorso Google. L'account esiste gia' (creato dal callback OAuth con la sola
+  email verificata) ma senza consensi registrati ne' data di nascita, che il
+  modulo /register raccoglie contestualmente.
+
+  Qui si chiede SOLO cio' che manca e che e' obbligatorio, piu' le due
+  preferenze che alimentano i consigli. Nome e cognome arrivano da Google
+  precompilati: l'utente conferma invece di digitare.
+#}
 <div style="max-width:480px;margin:0 auto;padding-bottom:48px;">
     <div class="page-card" style="padding:28px 28px 32px;">
 
-        <h1 style="font-size:1.6rem;font-weight:900;margin-bottom:6px;">Crea il tuo account ✨</h1>
+        <h1 style="font-size:1.6rem;font-weight:900;margin-bottom:6px;">Ci siamo quasi 👋</h1>
         <p style="color:var(--muted);font-size:0.88rem;margin-bottom:24px;">
-            Salva i tuoi gusti e ricevi consigli sempre più precisi.
+            Mancano due cose e poi sei dentro.
         </p>
 
         {% if error %}
@@ -18,31 +27,9 @@
         </div>
         {% endif %}
 
-        {# Google in cima: e' il percorso piu' breve (due tap contro un modulo
-           da dieci campi) e chi arriva da un annuncio ha poca pazienza.
-           ⚠️ Questo percorso NON raccoglie consensi ne' data di nascita: chi
-           lo usa viene fermato su /completa-profilo al primo accesso. Spostare
-           il pulsante senza quella pagina significherebbe rendere principale
-           un percorso che registra utenti senza consenso. #}
-        <a href="/auth/google" style="display:flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:12px 16px;border-radius:12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text);font-weight:700;font-size:0.9rem;text-decoration:none;transition:background 0.18s ease;" onmouseover="this.style.background='rgba(255,255,255,0.10)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'">
-            <svg width="18" height="18" viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg">
-                <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-                <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/>
-                <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
-                <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/>
-            </svg>
-            Continua con Google
-        </a>
+        <form method="post" action="/completa-profilo" style="display:grid;gap:14px;">
 
-        <div style="display:flex;align-items:center;gap:12px;margin:20px 0 16px;">
-            <div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>
-            <span style="color:var(--muted);font-size:0.8rem;font-weight:600;">OPPURE CON EMAIL</span>
-            <div style="flex:1;height:1px;background:rgba(255,255,255,0.1);"></div>
-        </div>
-
-        <form method="post" action="/register" style="display:grid;gap:14px;">
-
-            <!-- NOME + COGNOME -->
+            <!-- NOME + COGNOME (precompilati da Google) -->
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
                 <div>
                     <label class="reg-label">Nome</label>
@@ -66,33 +53,6 @@
                     max="{{ now[:10] if now else '2009-12-31' }}"
                     class="reg-input" autocomplete="bday"
                     style="color-scheme:dark;">
-            </div>
-
-            <!-- EMAIL -->
-            <div>
-                <label class="reg-label">Email</label>
-                <input type="email" name="email" required placeholder="es. nome@email.com"
-                    value="{{ email if email else '' }}" class="reg-input"
-                    autocomplete="email">
-            </div>
-
-            <!-- PASSWORD -->
-            <div>
-                <label class="reg-label">Password</label>
-                <input type="password" name="password" required minlength="8"
-                    placeholder="Min. 8 caratteri + 1 numero" class="reg-input"
-                    oninput="checkPassword(this)">
-                <div id="pwd-hint" style="font-size:0.75rem;margin-top:5px;color:var(--muted);display:none;">
-                    <span id="pwd-len">✗ Almeno 8 caratteri</span><br>
-                    <span id="pwd-num">✗ Almeno un numero o simbolo</span>
-                </div>
-            </div>
-
-            <!-- CONFERMA PASSWORD -->
-            <div>
-                <label class="reg-label">Conferma password</label>
-                <input type="password" name="confirm_password" required minlength="8"
-                    placeholder="Ripeti la password" class="reg-input">
             </div>
 
             <!-- DIVISORE PROFILAZIONE -->
@@ -135,7 +95,10 @@
                 </div>
             </div>
 
-            <!-- SPUNTE LEGALI -->
+            {# I link a privacy e termini aprono in una scheda nuova ED entrambi
+               i percorsi sono esenti dalla guardia di completamento: un
+               consenso che non si puo' leggere prima di darlo non e' un
+               consenso. #}
             <div style="display:grid;gap:10px;margin-top:4px;padding:14px;border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);">
 
                 <label class="check-label">
@@ -156,14 +119,13 @@
             </div>
 
             <button type="submit" class="btn btn-primary" style="margin-top:4px;">
-                Crea account
+                Entra in CosaGuardo
             </button>
 
         </form>
 
-        <div style="margin-top:18px;text-align:center;color:var(--muted);font-size:0.88rem;">
-            Hai già un account?
-            <a href="/login" style="color:var(--primary);font-weight:600;">Accedi</a>
+        <div style="margin-top:18px;text-align:center;color:var(--muted);font-size:0.82rem;">
+            Hai cambiato idea? <a href="/logout" style="color:var(--primary);font-weight:600;">Esci</a>
         </div>
 
     </div>
@@ -190,7 +152,6 @@
 }
 .reg-input:focus { border-color: rgba(110,168,254,0.5); }
 
-/* Preferenza chip */
 .pref-chip { cursor: pointer; }
 .pref-chip span {
     display: inline-block;
@@ -209,7 +170,6 @@
     color: #93c5fd;
 }
 
-/* Platform chip */
 .platform-chip { cursor: pointer; }
 .platform-chip span {
     display: inline-block;
@@ -228,7 +188,6 @@
     color: #93c5fd;
 }
 
-/* Legal checkboxes */
 .check-label {
     display: flex;
     align-items: flex-start;
@@ -252,24 +211,4 @@
 }
 .check-link:hover { text-decoration: underline; }
 </style>
-
-{% block scripts %}
-<script>
-function checkPassword(input) {
-    const hint = document.getElementById('pwd-hint');
-    const lenEl = document.getElementById('pwd-len');
-    const numEl = document.getElementById('pwd-num');
-    hint.style.display = input.value.length > 0 ? 'block' : 'none';
-
-    const okLen = input.value.length >= 8;
-    const okNum = /[0-9!@#$%^&*()+_=;:,.<>?@]/.test(input.value);
-
-    lenEl.textContent = (okLen ? '✓' : '✗') + ' Almeno 8 caratteri';
-    lenEl.style.color = okLen ? '#4ade80' : 'var(--muted)';
-    numEl.textContent = (okNum ? '✓' : '✗') + ' Almeno un numero o simbolo';
-    numEl.style.color = okNum ? '#4ade80' : 'var(--muted)';
-}
-</script>
-{% endblock %}
-
 {% endblock %}

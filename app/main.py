@@ -48,6 +48,8 @@ from app.db import (
     top_requested_titles,
     get_series_episodes_cache,
     upsert_series_episodes_cache,
+    needs_onboarding,
+    complete_onboarding,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -1706,6 +1708,11 @@ def register_page(request: Request):
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request):
     """Legacy redirect — ora tutto è in /profilo."""
+    # Onboarding pendente (account Google senza consensi): niente area
+    # utente finche' non passa da /completa-profilo.
+    _r = _redirect_se_onboarding_pendente(request)
+    if _r:
+        return _r
     user_id = request.session.get("user_id")
     if not user_id:
         return RedirectResponse(url="/login", status_code=303)
@@ -1810,6 +1817,137 @@ def register_submit(
     # conversione su GA4 + Meta Pixel. Il JS rimuove il flag dalla URL dopo
     # il trigger così non spara di nuovo se l'utente ricarica.
     return RedirectResponse(url="/profilo?registered=1", status_code=303)
+
+# ── COMPLETAMENTO PROFILO (percorso Google) ───────────────────────────────
+# Il modulo /register raccoglie consensi, data di nascita e preferenze nello
+# stesso invio. Il login Google no: crea l'account con la sola email verificata.
+# Finche' l'utente non passa di qui, l'account esiste ma e' senza consensi
+# registrati — situazione che non va lasciata aperta, tanto meno da quando il
+# pulsante Google sta in cima alla pagina di registrazione.
+_ONBOARDING_ESENTI = (
+    "/completa-profilo", "/logout", "/privacy", "/termini",
+    "/static/", "/auth/", "/favicon", "/sw.js", "/manifest",
+)
+
+
+def _redirect_se_onboarding_pendente(request: Request):
+    """
+    Restituisce un RedirectResponse a /completa-profilo se l'utente in sessione
+    ha l'onboarding pendente, altrimenti None.
+
+    ⚠️ NON usare un @app.middleware("http") per questo. I middleware dichiarati
+    con quel decoratore vengono aggiunti DOPO SessionMiddleware e quindi girano
+    FUORI da esso: request.session solleva AssertionError. Verificato: un
+    middleware dichiarato in fondo al file non vede la sessione, e con un
+    try/except attorno il controllo fallirebbe in silenzio senza mai scattare.
+
+    Le pagine esenti servono perche' privacy e termini devono restare leggibili
+    PRIMA di accettarli: chiedere un consenso senza poterlo leggere non e' un
+    consenso.
+    """
+    path = request.url.path
+    if path.startswith(_ONBOARDING_ESENTI):
+        return None
+    user_id = request.session.get("user_id")
+    if user_id and needs_onboarding(user_id):
+        return RedirectResponse(url="/completa-profilo", status_code=302)
+    return None
+
+
+@app.get("/completa-profilo", response_class=HTMLResponse)
+def completa_profilo_page(request: Request):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse(url="/login", status_code=302)
+    if not needs_onboarding(user_id):
+        return RedirectResponse(url="/profilo", status_code=302)
+
+    user = get_user_by_id(user_id) or {}
+    return templates.TemplateResponse(
+        request=request, name="completa_profilo.html",
+        context={
+            "request": request,
+            # Precompilati da Google: l'utente conferma invece di digitare.
+            "first_name": user["first_name"] if "first_name" in user.keys() else "",
+            "last_name":  user["last_name"] if "last_name" in user.keys() else "",
+            "now": datetime.now().isoformat(),
+        },
+    )
+
+
+@app.post("/completa-profilo", response_class=HTMLResponse)
+def completa_profilo_submit(
+    request: Request,
+    first_name: str = Form(default=""),
+    last_name: str = Form(default=""),
+    birth_date: str = Form(default=""),
+    accept_privacy: str = Form(default=""),
+    accept_terms: str = Form(default=""),
+    accept_age: str = Form(default=""),
+    content_pref: str = Form(default="both"),
+    platforms: list = Form(default=[]),
+):
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return RedirectResponse(url="/login", status_code=302)
+
+    def err(msg):
+        return templates.TemplateResponse(
+            request=request, name="completa_profilo.html",
+            context={"request": request, "error": msg,
+                     "first_name": first_name, "last_name": last_name,
+                     "birth_date": birth_date, "content_pref": content_pref,
+                     "platforms": platforms, "now": datetime.now().isoformat()},
+        )
+
+    if not first_name.strip():
+        return err("Inserisci il tuo nome.")
+    if not last_name.strip():
+        return err("Inserisci il tuo cognome.")
+
+    # Stesse identiche regole del modulo /register: il percorso piu' rapido
+    # non deve essere anche quello con meno garanzie.
+    if not birth_date.strip():
+        return err("Inserisci la data di nascita.")
+    from datetime import date
+    try:
+        bd = date.fromisoformat(birth_date.strip())
+        today = date.today()
+        age = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+        if age < 16:
+            return err("Devi avere almeno 16 anni per usare CosaGuardo.")
+    except ValueError:
+        return err("Data di nascita non valida.")
+
+    if not accept_privacy:
+        return err("Devi accettare la Privacy Policy per continuare.")
+    if not accept_terms:
+        return err("Devi accettare i Termini di Servizio per continuare.")
+    if not accept_age:
+        return err("Devi dichiarare di avere almeno 16 anni.")
+
+    complete_onboarding(user_id, first_name, last_name, birth_date)
+
+    if content_pref or platforms:
+        try:
+            save_user_onboarding(
+                user_id, content_pref,
+                platforms if isinstance(platforms, list) else [platforms]
+            )
+        except Exception as e:
+            log.debug("completa-profilo: onboarding prefs fallite uid=%s: %s", user_id, e)
+
+    try:
+        _prefetch_daily_recs_async(user_id)
+    except Exception as e:
+        log.debug("completa-profilo: prefetch daily_recs fallita uid=%s: %s", user_id, e)
+
+    # ?registered=1 fa scattare le conversioni GA4 + Meta Pixel. E' QUI il
+    # momento giusto per il percorso Google: prima l'account esiste ma e' a
+    # meta'. Senza questo, le registrazioni via Google non venivano contate
+    # come conversioni da nessuna delle due piattaforme.
+    return RedirectResponse(url="/profilo?registered=1", status_code=303)
+
 
 @app.post("/feedback")
 def save_feedback(request: Request, data: dict = Body(...)):
@@ -2299,6 +2437,11 @@ def le_mie_serie_redirect():
 
 @app.get("/la-mia-raccolta", response_class=HTMLResponse)
 def la_mia_raccolta(request: Request):
+    # Onboarding pendente (account Google senza consensi): niente area
+    # utente finche' non passa da /completa-profilo.
+    _r = _redirect_se_onboarding_pendente(request)
+    if _r:
+        return _r
     user_id = request.session.get("user_id")
 
     # Guest: render la pagina con CTA registrazione (no login redirect, più
@@ -3118,6 +3261,11 @@ def news_endpoint():
 
 @app.get("/profilo", response_class=HTMLResponse)
 def profilo(request: Request):
+    # Onboarding pendente (account Google senza consensi): niente area
+    # utente finche' non passa da /completa-profilo.
+    _r = _redirect_se_onboarding_pendente(request)
+    if _r:
+        return _r
     user_id = request.session.get("user_id")
     if not user_id:
         return RedirectResponse(url="/login", status_code=303)
@@ -3314,8 +3462,19 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
         # 3. Crea o recupera l'utente
         user = get_user_by_email(email)
         if not user:
-            # Nuovo utente — crea con password casuale (non usata per login Google)
-            user_id = create_user(email, secrets.token_hex(32))
+            # Nuovo utente — password casuale, non usata per il login Google.
+            # onboarding_done=False: questo percorso NON raccoglie i consensi
+            # (privacy, termini, 16 anni) ne' la data di nascita, che il modulo
+            # /register invece impone. L'utente viene fermato su
+            # /completa-profilo finche' non li fornisce.
+            # Nome e cognome arrivano da Google: si salvano subito, cosi' nella
+            # pagina di completamento l'utente li conferma invece di digitarli.
+            user_id = create_user(
+                email, secrets.token_hex(32),
+                first_name=(userinfo.get("given_name") or "").strip(),
+                last_name=(userinfo.get("family_name") or "").strip(),
+                onboarding_done=False,
+            )
         else:
             user_id = user["id"]
 
@@ -3323,6 +3482,8 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
         request.session["user_id"]    = user_id
         request.session["user_email"] = email
 
+        if needs_onboarding(user_id):
+            return RedirectResponse(url="/completa-profilo", status_code=302)
         return RedirectResponse(url="/profilo", status_code=302)
 
     except Exception as e:

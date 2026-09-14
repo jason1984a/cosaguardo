@@ -148,19 +148,28 @@ def get_user_by_id(user_id: int):
 
 
 def create_user(email: str, password: str,
-                first_name: str = "", last_name: str = "", birth_date: str = ""):
+                first_name: str = "", last_name: str = "", birth_date: str = "",
+                onboarding_done: bool = True):
+    """
+    onboarding_done=False solo per gli account creati via Google: quel percorso
+    non raccoglie consensi ne' data di nascita, quindi l'utente va fermato su
+    /completa-profilo finche' non li fornisce. Il modulo /register li raccoglie
+    contestualmente e resta a True.
+    """
     password_hash = generate_password_hash(password)
 
     conn = get_connection()
     try:
         cur = conn.cursor()
         cur.execute(
-            """INSERT INTO users (email, password_hash, first_name, last_name, birth_date)
-               VALUES (?, ?, ?, ?, ?)""",
+            """INSERT INTO users (email, password_hash, first_name, last_name, birth_date,
+                                  onboarding_done)
+               VALUES (?, ?, ?, ?, ?, ?)""",
             (email, password_hash,
              first_name.strip() or None,
              last_name.strip() or None,
-             birth_date.strip() or None)
+             birth_date.strip() or None,
+             1 if onboarding_done else 0)
         )
         conn.commit()
         user_id = cur.lastrowid
@@ -168,6 +177,53 @@ def create_user(email: str, password: str,
         conn.close()
 
     return user_id
+
+
+def needs_onboarding(user_id: int) -> bool:
+    """
+    True se l'utente deve ancora passare da /completa-profilo.
+
+    Tollerante per costruzione: se la colonna non esiste ancora (istanza non
+    migrata) o la query fallisce, restituisce False. Meglio non mostrare la
+    pagina che bloccare tutti fuori dal sito per un errore di lettura.
+    """
+    if not user_id:
+        return False
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        row = cur.execute(
+            "SELECT onboarding_done FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        if row is None:
+            return False
+        valore = row[0] if not hasattr(row, "keys") else row["onboarding_done"]
+        # NULL = riga creata prima della migrazione -> considerata completa
+        return valore == 0
+    except Exception:
+        return False
+    finally:
+        conn.close()
+
+
+def complete_onboarding(user_id: int, first_name: str = "", last_name: str = "",
+                        birth_date: str = "") -> None:
+    """Salva i dati mancanti e sblocca l'account."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """UPDATE users
+                  SET first_name      = COALESCE(NULLIF(?, ''), first_name),
+                      last_name       = COALESCE(NULLIF(?, ''), last_name),
+                      birth_date      = COALESCE(NULLIF(?, ''), birth_date),
+                      onboarding_done = 1
+                WHERE id = ?""",
+            (first_name.strip(), last_name.strip(), birth_date.strip(), user_id)
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def verify_user(email: str, password: str):
@@ -229,7 +285,14 @@ def init_db():
 
         # Migrazione sicura — aggiunge colonne se non esistono già
         existing_cols = {row[1] for row in cur.execute("PRAGMA table_info(users)").fetchall()}
-        for col, typedef in [("first_name","TEXT"), ("last_name","TEXT"), ("birth_date","TEXT"), ("last_seen","TIMESTAMP")]:
+        # onboarding_done: 1 = l'utente ha dato i consensi (privacy, termini,
+        # 16 anni). Chi si registra dal modulo li da' contestualmente ed e' gia'
+        # a 1; chi entra con Google no, e viene mandato a /completa-profilo.
+        # DEFAULT 1 non e' un refuso: serve a NON far ricomparire la pagina di
+        # completamento ai 205 utenti gia' registrati col modulo, che i consensi
+        # li avevano dati. Solo il percorso Google scrive esplicitamente 0.
+        for col, typedef in [("first_name","TEXT"), ("last_name","TEXT"), ("birth_date","TEXT"),
+                             ("last_seen","TIMESTAMP"), ("onboarding_done","INTEGER DEFAULT 1")]:
             if col not in existing_cols:
                 cur.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
 
