@@ -4831,6 +4831,117 @@ def admin_utenti(request: Request):
     )
 
 
+# Giorni in italiano: datetime.strftime("%A") segue il locale del server, che
+# su Render e' inglese. Mappa esplicita per non dipendere dalla configurazione.
+_GIORNI_IT = ("lunedì", "martedì", "mercoledì", "giovedì",
+              "venerdì", "sabato", "domenica")
+
+# Campi esportati, nell'ordine. (chiave nel dict utente, intestazione CSV)
+_EXPORT_COLONNE = [
+    ("id",                "id"),
+    ("email",             "email"),
+    ("first_name",        "nome"),
+    ("last_name",         "cognome"),
+    ("created_at",        "registrato_il"),
+    ("last_seen",         "ultimo_accesso"),
+    ("active_days_total", "giorni_attivi"),
+    ("active_days_30d",   "giorni_attivi_30gg"),
+    ("n_searches",        "ricerche"),
+    ("n_liked",           "preferiti"),
+    ("n_seen",            "visti"),
+    ("content_pref",      "preferenza_contenuto"),
+]
+
+
+def _csv_safe(valore) -> str:
+    """
+    Neutralizza l'iniezione di formule in Excel.
+
+    Un campo che inizia con = + - @ viene interpretato da Excel come formula,
+    non come testo: un indirizzo tipo =cmd|... diventerebbe eseguibile
+    all'apertura del file. Il carattere di tabulazione iniziale forza il
+    testo senza sporcare il valore mostrato.
+    """
+    s = "" if valore is None else str(valore)
+    return "\t" + s if s[:1] in ("=", "+", "-", "@") else s
+
+
+def _riga_csv(campi) -> str:
+    """Una riga CSV con separatore ; e virgolette raddoppiate."""
+    fuori = []
+    for c in campi:
+        s = _csv_safe(c)
+        if any(ch in s for ch in (';', '"', '\n', '\r')):
+            s = '"' + s.replace('"', '""') + '"'
+        fuori.append(s)
+    return ";".join(fuori)
+
+
+def _export_utenti_csv(solo_date: bool = False) -> str:
+    """
+    Costruisce il CSV dalla stessa sorgente della pagina (get_admin_stats),
+    cosi' non ci sono query nuove ne' ipotesi sullo schema: quello che vedi
+    nella tabella e' quello che esporti.
+
+    solo_date=True esporta soltanto le date di registrazione, che bastano
+    all'analisi per giorno della settimana e non mettono in giro un file
+    con gli indirizzi di tutti gli iscritti.
+    """
+    utenti = (get_admin_stats() or {}).get("users", []) or []
+
+    if solo_date:
+        colonne = [("created_at", "registrato_il")]
+    else:
+        colonne = _EXPORT_COLONNE
+
+    righe = [_riga_csv([h for _, h in colonne] + ["giorno_settimana"])]
+    for u in utenti:
+        valori = [u.get(k) for k, _ in colonne]
+        # Colonna calcolata: e' esattamente il taglio per cui serve l'export,
+        # meglio darla pronta che farla ricostruire a mano in Excel.
+        giorno = ""
+        grezza = (u.get("created_at") or "")[:10]
+        try:
+            d = datetime.strptime(grezza, "%Y-%m-%d")
+            giorno = _GIORNI_IT[d.weekday()]
+        except (ValueError, TypeError):
+            pass
+        righe.append(_riga_csv(valori + [giorno]))
+    return "\r\n".join(righe) + "\r\n"
+
+
+@app.get("/admin/utenti/export")
+def admin_utenti_export(request: Request, campi: str = "completo"):
+    """
+    Scarica la lista utenti in CSV. Solo admin.
+
+    campi=completo (default) | date
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    solo_date = (campi == "date")
+    try:
+        corpo = _export_utenti_csv(solo_date=solo_date)
+    except Exception as e:
+        log.exception("admin_utenti_export fallita: %s", e)
+        raise HTTPException(status_code=500, detail="export non riuscita")
+
+    oggi = datetime.now().date().isoformat()
+    nome = f"cosaguardo_utenti_{'date_' if solo_date else ''}{oggi}.csv"
+
+    # Il BOM serve a Excel in italiano: senza, le lettere accentate escono
+    # sbagliate e il file si apre tutto incolonnato nella colonna A.
+    return _PlainTextResponse(
+        content="\ufeff" + corpo,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{nome}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 @app.get("/admin/streaming-alerts", response_class=HTMLResponse)
 def admin_streaming_alerts(request: Request):
     """
