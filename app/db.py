@@ -1490,6 +1490,20 @@ def get_admin_stats() -> dict:
         total_liked    = count("SELECT COUNT(*) FROM user_title_state WHERE preference = 'liked'")
         total_seen     = count("SELECT COUNT(*) FROM user_title_state WHERE seen = 1")
 
+        # Account fermi su /completa-profilo: creati via Google ma senza
+        # consensi. Serve a misurare quanto costa lo step aggiuntivo: se
+        # questo numero cresce, l'attrito e' reale; se resta basso, un calo
+        # delle registrazioni via Google viene da altro.
+        # count() restituisce 0 se la colonna non esiste ancora (istanza non
+        # migrata), quindi la pagina non si rompe mai.
+        onboarding_pendenti = count(
+            "SELECT COUNT(*) FROM users WHERE onboarding_done = 0")
+        # Denominatore: account creati DA QUANDO la colonna esiste. Senza
+        # questo, la percentuale sarebbe calcolata sui 205 utenti storici e
+        # risulterebbe sempre vicina a zero, cioe' inutile.
+        onboarding_recenti = count(
+            "SELECT COUNT(*) FROM users WHERE created_at >= datetime('now', '-30 days')")
+
         try:
             cur.execute("""
                 SELECT
@@ -1518,6 +1532,8 @@ def get_admin_stats() -> dict:
     return {
         "total_users":    total_users,
         "new_users_7d":   new_users_7d,
+        "onboarding_pendenti": onboarding_pendenti,
+        "onboarding_recenti":  onboarding_recenti,
         "total_searches": total_searches,
         "total_liked":    total_liked,
         "total_seen":     total_seen,
