@@ -425,6 +425,20 @@
             } catch (e) {}
             return false;
         }
+        function useRegisterPrompt() {
+            // iOS NON registrato: invece di proporre "Aggiungi a Home" — che
+            // su iPhone e' un percorso manuale e macchinoso per ottenere una
+            // scorciatoia a un sito gia' aperto — si propone la registrazione,
+            // che e' il vero collo di bottiglia del prodotto.
+            //
+            // ⚠️ Chi e' GIA' registrato continua a vedere la guida "Aggiungi a
+            // Home", e non e' un ripiego: su iOS le notifiche push funzionano
+            // SOLO se il sito sta nella schermata Home. Per un utente loggato
+            // che segue dei titoli, quel passaggio e' cio' che gli fa arrivare
+            // gli avvisi di uscita in streaming. Beneficio concreto, non estetica.
+            return isIOS() && !IS_LOGGED_IN && !isStandalone();
+        }
+
         function usePlayStore() {
             // Android fuori dall'app e fuori dai browser interni delle app
             // social (da li' il Play Store si apre male o per niente).
@@ -616,15 +630,26 @@
             var b = document.getElementById('install-banner');
             if (!b) return;
 
+            var strong = b.querySelector('.install-banner-text strong');
+            var span   = b.querySelector('.install-banner-text span');
+            var azione = document.getElementById('install-btn-action');
+
             // Su Android il testo cambia: si scarica un'app vera, non si
             // aggiunge una scorciatoia alla schermata Home.
             if (usePlayStore()) {
-                var strong = b.querySelector('.install-banner-text strong');
-                var span   = b.querySelector('.install-banner-text span');
-                var azione = document.getElementById('install-btn-action');
                 if (strong) strong.textContent = '📲 Scarica CosaGuardo su Google Play';
                 if (span)   span.textContent   = 'gratis, senza pubblicità';
                 if (azione) azione.textContent = 'Scarica';
+            } else if (useRegisterPrompt()) {
+                // ⚠️ "TROVI", non "ricevi": i consigli giornalieri vengono
+                // calcolati e mostrati su /profilo, non recapitati. Le push
+                // esistono ma servono agli avvisi di uscita in streaming, e su
+                // iOS arrivano solo a sito installato — cioe' mai, per chi sta
+                // leggendo questo banner. Promettere un invio sarebbe una
+                // promessa impossibile da mantenere.
+                if (strong) strong.textContent = '✨ Trova film e serie scelti per te';
+                if (span)   span.textContent   = 'registrati, è gratis';
+                if (azione) azione.textContent = 'Registrati';
             }
 
             b.classList.add('show');
@@ -754,6 +779,16 @@
             if (btnInstall) {
                 btnInstall.addEventListener('click', function() {
                     track('install_banner_clicked', {});
+
+                    // iOS non registrato → registrazione, non installazione.
+                    // Va PRIMA del ramo iOS generico, altrimenti finirebbe
+                    // nella guida "Aggiungi a Home".
+                    if (useRegisterPrompt()) {
+                        track('register_prompt_clicked', { source: 'install_banner', platform: 'ios' });
+                        dismissBanner('register_click');
+                        window.location.href = '/register?src=banner-ios';
+                        return;
+                    }
 
                     // iOS: l'install passa sempre per Safari.
                     if (isIOS()) {
