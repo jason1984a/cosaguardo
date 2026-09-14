@@ -226,6 +226,64 @@ def complete_onboarding(user_id: int, first_name: str = "", last_name: str = "",
         conn.close()
 
 
+def delete_user_completely(user_id: int) -> dict:
+    """
+    Cancella un utente e TUTTE le sue righe collegate, in una transazione.
+
+    Le tabelle non sono scritte a mano ma ricavate dallo schema: si cercano
+    tutte quelle che hanno una colonna user_id. Cosi' una tabella aggiunta in
+    futuro viene inclusa da sola, invece di lasciare righe orfane che nessuno
+    si ricorda di ripulire — righe che continuerebbero a pesare sulle
+    statistiche admin.
+
+    Restituisce il conteggio delle righe rimosse per tabella, utile per sapere
+    cosa e' stato toccato senza doverlo andare a verificare.
+
+    ⚠️ Operazione irreversibile: non esiste cestino.
+    """
+    if not user_id:
+        return {}
+
+    conn = get_connection()
+    eliminate = {}
+    try:
+        cur = conn.cursor()
+
+        # Tutte le tabelle che hanno una colonna user_id
+        tabelle = [r[0] for r in cur.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        ).fetchall()]
+
+        collegate = []
+        for t in tabelle:
+            if t == "users":
+                continue
+            try:
+                cols = {r[1] for r in cur.execute(f"PRAGMA table_info({t})").fetchall()}
+                if "user_id" in cols:
+                    collegate.append(t)
+            except Exception:
+                continue
+
+        # Transazione unica: o sparisce tutto o non sparisce niente. Senza,
+        # un errore a meta' lascerebbe un utente cancellato con i suoi dati
+        # ancora in giro, che e' lo scenario peggiore dei due.
+        cur.execute("BEGIN")
+        for t in collegate:
+            cur.execute(f"DELETE FROM {t} WHERE user_id = ?", (user_id,))
+            if cur.rowcount:
+                eliminate[t] = cur.rowcount
+        cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        eliminate["users"] = cur.rowcount
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+    return eliminate
+
+
 def verify_user(email: str, password: str):
     user = get_user_by_email(email)
     if not user:

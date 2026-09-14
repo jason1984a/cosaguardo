@@ -25,6 +25,19 @@
         </div>
     </div>
 
+    {# Esito dell'eliminazione, passato come query string dalla rotta. #}
+    {% set _ok = request.query_params.get('ok') %}
+    {% set _err = request.query_params.get('err') %}
+    {% if _ok == 'deleted' %}
+    <div class="admin-flash admin-flash--ok">Utente eliminato, con tutti i dati collegati.</div>
+    {% elif _err == 'self' %}
+    <div class="admin-flash admin-flash--err">Non puoi eliminare l'account con cui sei connesso.</div>
+    {% elif _err == 'notfound' %}
+    <div class="admin-flash admin-flash--err">Utente non trovato: forse era già stato eliminato.</div>
+    {% elif _err == 'fail' %}
+    <div class="admin-flash admin-flash--err">Eliminazione non riuscita. Nessun dato è stato rimosso.</div>
+    {% endif %}
+
     <!-- STATISTICHE -->
     <div class="admin-stats-grid">
         <div class="admin-stat">
@@ -95,6 +108,7 @@
                     <th>Preferiti</th>
                     <th>Visti</th>
                     <th>Preferenze</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody id="adminTableBody">
@@ -136,6 +150,16 @@
                         {% set plats = u.platforms | replace('[','') | replace(']','') | replace('"','') %}
                         <span style="font-size:0.7rem;color:var(--muted);">{{ plats[:30] }}</span>
                         {% endif %}
+                    </td>
+                    <td>
+                        {# POST e non link: un GET si puo' cliccare per sbaglio
+                           o farsi precaricare dal browser. La conferma chiede
+                           di digitare l'email, non un semplice OK: per un
+                           gesto irreversibile un clic distratto non basta. #}
+                        <form method="post" action="/admin/utenti/elimina/{{ u.id }}"
+                              class="admin-del-form" data-email="{{ u.email }}" style="margin:0;">
+                            <button type="submit" class="admin-del" title="Elimina utente e tutti i suoi dati">✕</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
@@ -224,6 +248,33 @@
 .admin-pagebtn:disabled { opacity: 0.35; cursor: default; }
 .admin-pageinfo { font-size: 0.78rem; color: var(--muted); padding: 0 4px; white-space: nowrap; }
 .admin-count { font-size: 0.75rem; color: var(--muted); margin-left: auto; white-space: nowrap; }
+
+/* Flash */
+.admin-flash {
+    padding: 11px 14px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+}
+.admin-flash--ok  { background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.3); color: #a7f3c0; }
+.admin-flash--err { background: rgba(255,107,107,0.12); border: 1px solid rgba(255,107,107,0.28); color: #ffd1d1; }
+
+/* Elimina */
+.admin-del {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,107,107,0.25);
+    background: transparent;
+    color: rgba(255,107,107,0.75);
+    font-family: inherit;
+    font-size: 0.8rem;
+    font-weight: 800;
+    cursor: pointer;
+    line-height: 1;
+}
+.admin-del:hover { background: rgba(255,107,107,0.15); color: #ffd1d1; }
 
 /* Table */
 .admin-table-wrap {
@@ -395,5 +446,24 @@
 
     render();
 })();
+
+/* Conferma di eliminazione: chiede di DIGITARE l'email, non un semplice OK.
+   E' irreversibile e cancella anche ricerche, preferiti e cronologia: un
+   "sei sicuro?" si clicca distrattamente, un'email no. */
+document.addEventListener('submit', function (e) {
+    var form = e.target.closest ? e.target.closest('.admin-del-form') : null;
+    if (!form) return;
+    var email = form.getAttribute('data-email') || '';
+    var scritto = window.prompt(
+        'Eliminazione DEFINITIVA di ' + email + '.\n\n' +
+        'Verranno rimossi anche ricerche, preferiti, titoli visti e cronologia.\n' +
+        'Per confermare, scrivi l\'email esatta:'
+    );
+    if (scritto === null) { e.preventDefault(); return; }
+    if (scritto.trim().toLowerCase() !== email.trim().toLowerCase()) {
+        e.preventDefault();
+        alert('Email non corrispondente: eliminazione annullata.');
+    }
+});
 </script>
 {% endblock %}

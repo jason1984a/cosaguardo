@@ -50,6 +50,7 @@ from app.db import (
     upsert_series_episodes_cache,
     needs_onboarding,
     complete_onboarding,
+    delete_user_completely,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -5069,6 +5070,39 @@ def _export_utenti_csv(solo_date: bool = False) -> str:
             pass
         righe.append(_riga_csv(valori + [giorno]))
     return "\r\n".join(righe) + "\r\n"
+
+
+@app.post("/admin/utenti/elimina/{user_id}")
+def admin_utenti_elimina(request: Request, user_id: int):
+    """
+    Cancella un utente e tutte le sue righe collegate. Solo admin.
+
+    POST e non GET di proposito: un link cliccabile per sbaglio, o precaricato
+    dal browser, cancellerebbe un account senza che nessuno l'abbia chiesto.
+    La conferma vera e' nel dialogo lato client, questa e' la rete di sicurezza.
+    """
+    if not _check_admin(request):
+        raise HTTPException(status_code=403, detail="non autorizzato")
+
+    # ⚠️ L'admin non deve poter cancellare se stesso restando poi loggato con
+    # un user_id che non esiste piu': sessione incoerente e pagine che
+    # esplodono in punti imprevedibili.
+    if request.session.get("user_id") == user_id:
+        return RedirectResponse(url="/admin/utenti?err=self", status_code=303)
+
+    utente = get_user_by_id(user_id)
+    if not utente:
+        return RedirectResponse(url="/admin/utenti?err=notfound", status_code=303)
+
+    try:
+        eliminate = delete_user_completely(user_id)
+        log.warning("admin: eliminato utente id=%s email=%s righe=%s",
+                    user_id, utente["email"], eliminate)
+    except Exception as e:
+        log.exception("admin: eliminazione utente %s fallita: %s", user_id, e)
+        return RedirectResponse(url="/admin/utenti?err=fail", status_code=303)
+
+    return RedirectResponse(url="/admin/utenti?ok=deleted", status_code=303)
 
 
 @app.get("/admin/utenti/export")
