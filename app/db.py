@@ -149,7 +149,7 @@ def get_user_by_id(user_id: int):
 
 def create_user(email: str, password: str,
                 first_name: str = "", last_name: str = "", birth_date: str = "",
-                onboarding_done: bool = True):
+                onboarding_done: bool = True, signup_source: str = ""):
     """
     onboarding_done=False solo per gli account creati via Google: quel percorso
     non raccoglie consensi ne' data di nascita, quindi l'utente va fermato su
@@ -163,13 +163,14 @@ def create_user(email: str, password: str,
         cur = conn.cursor()
         cur.execute(
             """INSERT INTO users (email, password_hash, first_name, last_name, birth_date,
-                                  onboarding_done)
-               VALUES (?, ?, ?, ?, ?, ?)""",
+                                  onboarding_done, signup_source)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (email, password_hash,
              first_name.strip() or None,
              last_name.strip() or None,
              birth_date.strip() or None,
-             1 if onboarding_done else 0)
+             1 if onboarding_done else 0,
+             (signup_source or "").strip()[:60] or None)
         )
         conn.commit()
         user_id = cur.lastrowid
@@ -350,7 +351,8 @@ def init_db():
         # completamento ai 205 utenti gia' registrati col modulo, che i consensi
         # li avevano dati. Solo il percorso Google scrive esplicitamente 0.
         for col, typedef in [("first_name","TEXT"), ("last_name","TEXT"), ("birth_date","TEXT"),
-                             ("last_seen","TIMESTAMP"), ("onboarding_done","INTEGER DEFAULT 1")]:
+                             ("last_seen","TIMESTAMP"), ("onboarding_done","INTEGER DEFAULT 1"),
+                             ("signup_source","TEXT")]:
             if col not in existing_cols:
                 cur.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
 
@@ -1566,7 +1568,7 @@ def get_admin_stats() -> dict:
             cur.execute("""
                 SELECT
                     u.id, u.email, u.first_name, u.last_name,
-                    u.birth_date, u.created_at, u.last_seen,
+                    u.birth_date, u.created_at, u.last_seen, u.signup_source,
                     COUNT(DISTINCT s.id) as n_searches,
                     COUNT(DISTINCT CASE WHEN ts.preference = 'liked' THEN ts.id END) as n_liked,
                     COUNT(DISTINCT CASE WHEN ts.seen = 1 THEN ts.id END) as n_seen,

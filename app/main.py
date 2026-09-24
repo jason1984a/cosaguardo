@@ -1114,6 +1114,23 @@ def _patched_TemplateResponse(*args, **kwargs):
     # asset/API) e al massimo 1 volta al giorno per sessione: il DB viene toccato
     # ~1 volta/giorno per utente, non a ogni richiesta. Silenzioso: non deve mai
     # rompere una render.
+    # Origine della visita, da attribuire alla registrazione quando arrivera'.
+    # Va catturata QUI e tenuta in sessione: fra il primo accesso e la
+    # registrazione possono passare giorni, e al momento dell'iscrizione il
+    # parametro nell'URL non c'e' piu'.
+    # ⚠️ Si scrive solo se il campo e' ancora vuoto: conta la PRIMA origine,
+    # quella che ha portato la persona. Se uno arriva dall'app, torna dal sito
+    # e poi si registra, il merito e' dell'app.
+    if request:
+        try:
+            if not request.session.get("cg_signup_source"):
+                _q = request.query_params
+                _src = (_q.get("src") or _q.get("utm_source") or "").strip().lower()[:60]
+                if _src:
+                    request.session["cg_signup_source"] = _src
+        except Exception:
+            pass
+
     if request:
         try:
             _uid = request.session.get("user_id")
@@ -1795,7 +1812,9 @@ def register_submit(
         email, password,
         first_name=first_name.strip(),
         last_name=last_name.strip(),
-        birth_date=birth_date.strip()
+        birth_date=birth_date.strip(),
+        # Origine catturata al primo accesso, anche giorni fa.
+        signup_source=request.session.get("cg_signup_source", "") or "sito",
     )
     request.session["user_id"]    = user_id
     request.session["user_email"] = email
@@ -3475,6 +3494,11 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
                 first_name=(userinfo.get("given_name") or "").strip(),
                 last_name=(userinfo.get("family_name") or "").strip(),
                 onboarding_done=False,
+                # ⚠️ La sessione sopravvive al giro su Google e torna qui:
+                # l'origine e' quella dell'accesso al sito, non "google".
+                # Il METODO di registrazione e' un'altra cosa e si legge
+                # altrove; qui interessa da dove e' arrivata la persona.
+                signup_source=request.session.get("cg_signup_source", "") or "sito",
             )
         else:
             user_id = user["id"]
@@ -5005,6 +5029,7 @@ _EXPORT_COLONNE = [
     ("first_name",        "nome"),
     ("last_name",         "cognome"),
     ("created_at",        "registrato_il"),
+    ("signup_source",     "origine"),
     ("last_seen",         "ultimo_accesso"),
     ("active_days_total", "giorni_attivi"),
     ("active_days_30d",   "giorni_attivi_30gg"),
@@ -5052,7 +5077,9 @@ def _export_utenti_csv(solo_date: bool = False) -> str:
     utenti = (get_admin_stats() or {}).get("users", []) or []
 
     if solo_date:
-        colonne = [("created_at", "registrato_il")]
+        # L'origine non identifica nessuno, quindi sta bene anche nell'export
+        # ridotto: serve proprio a capire quale canale porta registrazioni.
+        colonne = [("created_at", "registrato_il"), ("signup_source", "origine")]
     else:
         colonne = _EXPORT_COLONNE
 
