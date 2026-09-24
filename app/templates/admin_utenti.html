@@ -17,6 +17,16 @@
             <a href="/admin/home" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);">
                 ← Home Admin
             </a>
+            {# Due export separate: quella "solo date" basta alle analisi sui
+               canali e non mette in giro un file con gli indirizzi di tutti. #}
+            <a href="/admin/utenti/export?campi=date" class="admin-export admin-export--ghost"
+               title="Solo data di registrazione, origine e giorno della settimana">
+                ⬇ Solo date
+            </a>
+            <a href="/admin/utenti/export" class="admin-export"
+               title="Tutte le colonne della tabella, email comprese">
+                ⬇ Esporta CSV
+            </a>
             <form action="/admin/logout" method="post" style="display:inline;">
                 <button type="submit" class="pact-btn pact-btn--ghost" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);font-family:inherit;">
                     Esci dall'admin
@@ -101,6 +111,7 @@
                     <th>Nome</th>
                     <th>Nato</th>
                     <th>Registrato</th>
+                    <th>Origine</th>
                     <th>Ultimo accesso</th>
                     <th>Giorni attivi</th>
                     <th>Attivo 30gg</th>
@@ -130,6 +141,15 @@
                     </td>
                     <td style="font-size:0.78rem;color:var(--muted);white-space:nowrap;">
                         {{ u.created_at[:10] if u.created_at else '—' }}
+                    </td>
+                    <td>
+                        {# Vuota per gli utenti precedenti alla colonna: da dove
+                           siano arrivati non e' ricostruibile. #}
+                        {% if u.signup_source %}
+                        <span class="admin-badge">{{ u.signup_source }}</span>
+                        {% else %}
+                        <span style="color:var(--muted);font-size:0.75rem;">—</span>
+                        {% endif %}
                     </td>
                     <td style="font-size:0.78rem;white-space:nowrap;{% if not u.last_seen %}color:var(--muted);{% endif %}">
                         {{ u.last_seen[:10] if u.last_seen else '—' }}
@@ -275,6 +295,29 @@
     line-height: 1;
 }
 .admin-del:hover { background: rgba(255,107,107,0.15); color: #ffd1d1; }
+
+/* Export */
+.admin-export {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-decoration: none;
+    border: 1px solid rgba(110,168,254,0.35);
+    background: rgba(110,168,254,0.14);
+    color: #93c5fd;
+    white-space: nowrap;
+}
+.admin-export:hover { background: rgba(110,168,254,0.22); }
+.admin-export--ghost {
+    border-color: rgba(255,255,255,0.1);
+    background: transparent;
+    color: var(--muted);
+}
+.admin-export--ghost:hover { background: rgba(255,255,255,0.06); color: #93c5fd; }
 
 /* Table */
 .admin-table-wrap {

@@ -550,6 +550,63 @@ a.detail-genre-tag--link:focus-visible {
 }
 .cast-grid::-webkit-scrollbar { display: none; }
 
+/* ── Frecce di scorrimento del cast ──────────────────────────────────
+   Su mobile la lista si scorre col dito e le frecce non servono. Su
+   desktop non c'e' niente da trascinare, e la barra di scorrimento e'
+   nascosta dalle due regole qui sopra: senza frecce la lista risulta
+   bloccata e sembra che il cast finisca al quinto attore.
+   Restano nascoste sotto i 900px e quando non c'e' nulla da scorrere. */
+.cast-wrap {
+    position: relative;
+    margin-bottom: 36px;
+}
+/* Il margine passa all'involucro, altrimenti le frecce si posizionano
+   rispetto a un'area piu' alta del contenuto e finiscono troppo in basso. */
+.cast-wrap .cast-grid { margin-bottom: 0; }
+
+.cast-arrow {
+    position: absolute;
+    top: 40px;                 /* all'altezza delle foto, non del testo sotto */
+    z-index: 2;
+    display: none;             /* attivate dalla media query desktop */
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(11,16,32,0.92);
+    color: #e8ecf4;
+    cursor: pointer;
+    padding: 0;
+    font-family: inherit;
+    transition: background 0.18s ease, opacity 0.18s ease;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+}
+.cast-arrow:hover { background: rgba(110,168,254,0.25); }
+.cast-arrow i, .cast-arrow svg { width: 18px; height: 18px; stroke: currentColor; }
+.cast-arrow--prev { left: -8px; }
+.cast-arrow--next { right: -8px; }
+/* [hidden] va rispettato anche quando la media query imposta display:flex */
+.cast-arrow[hidden] { display: none !important; }
+
+@media (min-width: 900px) {
+    .cast-arrow:not([hidden]) { display: flex; }
+    /* Sfumature ai bordi: suggeriscono che la lista continua. */
+    .cast-wrap::before,
+    .cast-wrap::after {
+        content: "";
+        position: absolute;
+        top: 0;
+        bottom: 8px;
+        width: 40px;
+        pointer-events: none;
+        z-index: 1;
+    }
+    .cast-wrap::before { left: 0;  background: linear-gradient(90deg, var(--bg, #0b1020), transparent); }
+    .cast-wrap::after  { right: 0; background: linear-gradient(270deg, var(--bg, #0b1020), transparent); }
+}
+
 .cast-card {
     flex-shrink: 0;
     width: 80px;
@@ -1932,6 +1989,12 @@ a.detail-genre-tag--link:focus-visible {
         {# CAST #}
         {% if detail.cast %}
         <div class="detail-section-title">Cast principale</div>
+        {# L'involucro serve solo ad ancorare le frecce: .cast-grid resta
+           identico e continua a scorrere col dito su mobile. #}
+        <div class="cast-wrap">
+            <button type="button" class="cast-arrow cast-arrow--prev" aria-label="Scorri il cast indietro" hidden>
+                <i data-lucide="chevron-left"></i>
+            </button>
         <div class="cast-grid">
             {% for actor in detail.cast %}
             <a href="/persona/{{ actor.person_id }}"
@@ -1949,6 +2012,10 @@ a.detail-genre-tag--link:focus-visible {
                 <div class="cast-character">{{ actor.character }}</div>
             </a>
             {% endfor %}
+        </div>
+            <button type="button" class="cast-arrow cast-arrow--next" aria-label="Scorri il cast avanti" hidden>
+                <i data-lucide="chevron-right"></i>
+            </button>
         </div>
         {% endif %}
 
@@ -3214,5 +3281,46 @@ function cgShowLoginToast(message) {
         if (toast.parentNode) toast.remove();
     }, 8000);
 }
+
+/* ── Frecce di scorrimento del cast ──────────────────────────────────
+   Le frecce nascono con [hidden] e restano tali se non c'e' nulla da
+   scorrere: su un film con tre attori non devono comparire.
+   Tutto il resto del comportamento (scorrimento col dito, tastiera)
+   e' gia' nativo del contenitore con overflow-x. */
+(function () {
+    var wrap = document.querySelector('.cast-wrap');
+    if (!wrap) return;
+    var grid = wrap.querySelector('.cast-grid');
+    var prev = wrap.querySelector('.cast-arrow--prev');
+    var next = wrap.querySelector('.cast-arrow--next');
+    if (!grid || !prev || !next) return;
+
+    function aggiorna() {
+        // 2px di tolleranza: i browser arrotondano scrollLeft e senza
+        // margine la freccia destra resta accesa a fondo corsa.
+        var scorrevole = grid.scrollWidth - grid.clientWidth > 2;
+        var aInizio = grid.scrollLeft <= 2;
+        var aFine   = grid.scrollLeft >= grid.scrollWidth - grid.clientWidth - 2;
+        prev.hidden = !scorrevole || aInizio;
+        next.hidden = !scorrevole || aFine;
+    }
+
+    function scorri(verso) {
+        // Un po' meno della larghezza visibile: resta in vista una card
+        // del gruppo precedente, cosi' si capisce che è lo stesso elenco.
+        var passo = Math.max(grid.clientWidth * 0.8, 160);
+        grid.scrollBy({ left: verso * passo, behavior: 'smooth' });
+    }
+
+    prev.addEventListener('click', function () { scorri(-1); });
+    next.addEventListener('click', function () { scorri(1); });
+    grid.addEventListener('scroll', aggiorna, { passive: true });
+    window.addEventListener('resize', aggiorna);
+
+    // Le foto arrivano con loading="lazy": finche' non sono caricate
+    // scrollWidth e' sbagliato e le frecce resterebbero nascoste.
+    window.addEventListener('load', aggiorna);
+    aggiorna();
+})();
 </script>
 {% endblock %}
