@@ -1505,6 +1505,11 @@ def get_trending_tmdb(limit: int = 12):
                 continue
 
             results.append({
+                # tmdb_id: TMDb lo fornisce e finora veniva scartato. Serve al
+                # widget iOS per aprire la scheda del titolo mostrato; chi
+                # usava gia' questa funzione ignora semplicemente il campo in
+                # piu', quindi l'aggiunta non rompe niente.
+                "tmdb_id": item.get("id"),
                 "title": title,
                 "content_type": media_type,
                 "poster_url": poster_url,

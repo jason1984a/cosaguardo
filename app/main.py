@@ -3256,6 +3256,46 @@ def api_recommend(
     }
 
 
+@app.get("/api/v1/daily", response_class=JSONResponse)
+def api_daily(request: Request):
+    """
+    Il titolo del giorno per il widget iOS.
+
+    ⚠️ Non usa /home-picks: quello richiede il login e risponde 401 senza.
+    Il widget gira anche prima che l'utente abbia un account — anzi, e' la
+    prima cosa che vede chi installa l'app — quindi la fonte deve funzionare
+    per chiunque. get_trending_cached ha gia' la sua cache e non tocca il DB.
+
+    LO STESSO PER TUTTI, LO STESSO PER TUTTO IL GIORNO. La scelta e' derivata
+    dalla data, non casuale: se cambiasse a ogni aggiornamento del widget
+    l'utente vedrebbe il titolo saltare piu' volte al giorno senza motivo, e
+    non potrebbe tornare a cercare quello che aveva visto la mattina.
+    """
+    titoli = get_trending_cached(limit=20) or []
+    # Solo quelli con locandina e id: un widget senza immagine non ha senso,
+    # e senza id non si potrebbe aprire la scheda al tocco.
+    validi = [t for t in titoli if t.get("poster_url") and t.get("tmdb_id")]
+    if not validi:
+        raise HTTPException(status_code=503, detail="nessun titolo disponibile")
+
+    # Indice dal giorno dell'anno: deterministico, ruota ogni 24 ore e non
+    # richiede di memorizzare nulla lato server.
+    giorno = datetime.now().timetuple().tm_yday
+    scelto = validi[giorno % len(validi)]
+
+    return {
+        "tmdb_id":      scelto.get("tmdb_id"),
+        "title":        scelto.get("title") or "",
+        "content_type": scelto.get("content_type") or "movie",
+        "poster_url":   scelto.get("poster_url") or "",
+        "overview":     scelto.get("overview") or "",
+        "label":        scelto.get("label") or "",
+        # Data di validita': il widget la usa per sapere quando il contenuto
+        # e' da considerarsi vecchio, senza doverlo dedurre.
+        "data":         datetime.now().strftime("%Y-%m-%d"),
+    }
+
+
 @app.get("/api/v1/detail/{content_type}/{tmdb_id}", response_class=JSONResponse)
 def api_detail(request: Request, content_type: str, tmdb_id: int):
     """Scheda completa in una sola chiamata."""
