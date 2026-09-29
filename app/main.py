@@ -3123,13 +3123,12 @@ def _cached_similar_tv(tmdb_id: int, title: str) -> list:
 #
 # ⚠️ PERCHE' IL PREFISSO DI VERSIONE. Una volta che l'app e' sull'App Store non
 # si puo' obbligare nessuno ad aggiornarla: cambiare la forma di una risposta
-# romperebbe le versioni gia' installate, in mano a utenti che non possono
-# farci niente. Con /api/v1/ si aggiunge una v2 e si lascia la v1 in piedi.
-# REGOLA: non cambiare mai la forma di una risposta v1. Aggiungere campi si',
-# rinominarli o toglierli no.
+# romperebbe le versioni gia' installate. Con /api/v1/ si aggiunge una v2 e si
+# lascia la v1 in piedi.
+# REGOLA: in v1 si aggiungono campi, non si rinominano ne' si tolgono.
 #
-# ⚠️ Queste rotte sono sotto _EDGE_PROTECTED_PREFIXES (vedi sopra): stessi dati
-# delle schede, stessa protezione.
+# ⚠️ Queste rotte sono sotto _EDGE_PROTECTED_PREFIXES: stessi dati delle
+# schede, stessa protezione.
 # ═══════════════════════════════════════════════════════════════════════════
 
 @app.get("/api/v1/health", response_class=JSONResponse)
@@ -3143,21 +3142,68 @@ def _api_titolo_snello(rec: dict) -> dict:
     Riduce un titolo ai campi che servono all'app.
 
     Non si rimanda il dict grezzo del motore: contiene campi interni che
-    cambiano con l'algoritmo, e la regola sopra dice che la forma di una
-    risposta v1 non deve cambiare. Questa funzione e' il contratto.
+    cambiano con l'algoritmo, e la forma di una risposta v1 non deve cambiare.
+    Questa funzione e' il contratto.
     """
+    # ⚠️ Il motore restituisce poster_path (il frammento TMDb, es. "/abc.jpg"),
+    # non un URL completo: senza ricomporlo l'app mostra solo segnaposto grigi.
+    # Stessa larghezza w500 delle schede.
+    poster = rec.get("poster_url") or ""
+    if not poster:
+        fr = rec.get("poster_path") or ""
+        if fr:
+            poster = f"https://image.tmdb.org/t/p/w500{fr}"
+
+    backdrop = rec.get("backdrop_url") or ""
+    if not backdrop:
+        fr = rec.get("backdrop_path") or ""
+        if fr:
+            backdrop = f"https://image.tmdb.org/t/p/w780{fr}"
+
+    # L'anno puo' arrivare da release_date (film) o first_air_date (serie).
+    data = rec.get("release_date") or rec.get("first_air_date") or ""
+    anno = data[:4] if len(data) >= 4 else None
+
+    # I generi arrivano gia' come nomi da movie_genre_ids_to_names; se per
+    # qualche percorso arrivassero come id numerici, meglio ometterli che
+    # mostrare "28, 878" all'utente.
+    generi = rec.get("genres") or []
+    if generi and not isinstance(generi[0], str):
+        generi = []
+
     return {
         "tmdb_id":      rec.get("tmdb_id"),
         "title":        rec.get("title") or "",
-        "year":         (rec.get("release_date") or "")[:4] or None,
-        "poster_url":   rec.get("poster_url") or "",
-        "backdrop_url": rec.get("backdrop_url") or "",
+        "year":         anno,
+        "poster_url":   poster,
+        "backdrop_url": backdrop,
         "vote_average": rec.get("vote_average"),
         "overview":     rec.get("overview") or "",
         "content_type": rec.get("content_type") or "movie",
+        "genres":       generi,
         "platforms":    rec.get("platforms") or [],
         "why":          rec.get("why") or rec.get("explanation") or "",
     }
+
+
+def _api_semi_riconosciuti(semi) -> list:
+    """
+    I titoli-seme riconosciuti, come semplici stringhe.
+
+    ⚠️ Il motore li restituisce come oggetti con tmdb_id, generi e decine di
+    keyword: roba interna, pesante da trasmettere e soggetta a cambiare con
+    l'algoritmo. All'app serve solo sapere QUALI titoli sono stati capiti.
+    """
+    fuori = []
+    for s in semi or []:
+        if isinstance(s, str):
+            if s.strip():
+                fuori.append(s.strip())
+        elif isinstance(s, dict):
+            t = (s.get("title") or s.get("original_title") or "").strip()
+            if t:
+                fuori.append(t)
+    return fuori
 
 
 @app.get("/api/v1/recommend", response_class=JSONResponse)
@@ -3169,13 +3215,9 @@ def api_recommend(
     """
     Consigli a partire da 2-3 titoli. Equivalente JSON di GET /recommend.
 
-    I titoli arrivano in un solo parametro separati da | invece che in movie1..6:
-    dal lato app e' una lista, e sei parametri posizionali sarebbero scomodi.
-
-    ⚠️ LENTA SENZA CACHE: il motore impiega ~4-5s per una combinazione mai
-    vista. La cache (search_cache) e' la stessa del sito, quindi le
-    combinazioni gia' richieste dal web tornano istantanee. L'app deve
-    mostrare un'attesa esplicita, non una rotella muta.
+    ⚠️ LENTA SENZA CACHE: ~4-5s per una combinazione mai vista. La cache e' la
+    stessa del sito, quindi le combinazioni gia' richieste dal web tornano
+    istantanee. L'app deve mostrare un'attesa esplicita.
     """
     seed_titles = [t.strip() for t in titles.split("|") if t.strip()][:6]
     if not seed_titles:
@@ -3183,8 +3225,6 @@ def api_recommend(
                 "error": "nessun titolo fornito"}
 
     import hashlib as _hl
-    # Stessa chiave del sito: l'app riusa la cache gia' calda invece di
-    # ricalcolare le stesse combinazioni.
     _ALGO_VERSION = "movie-tmdb-v7"
     _cache_key = _hl.md5(
         ("|".join(sorted(t.lower() for t in seed_titles)) + content_type + _ALGO_VERSION).encode()
@@ -3194,7 +3234,7 @@ def api_recommend(
     if cached:
         return {
             "recommendations": [_api_titolo_snello(r) for r in cached.get("recommendations", [])],
-            "resolved_seeds":  cached.get("resolved_seeds", []),
+            "resolved_seeds":  _api_semi_riconosciuti(cached.get("resolved_seeds", [])),
             "missing_titles":  cached.get("missing_titles", []),
             "cached": True,
         }
@@ -3210,7 +3250,7 @@ def api_recommend(
 
     return {
         "recommendations": [_api_titolo_snello(r) for r in result.get("recommendations", [])],
-        "resolved_seeds":  result.get("resolved_seeds", []),
+        "resolved_seeds":  _api_semi_riconosciuti(result.get("resolved_seeds", [])),
         "missing_titles":  result.get("missing_titles", []),
         "cached": False,
     }
@@ -3218,11 +3258,7 @@ def api_recommend(
 
 @app.get("/api/v1/detail/{content_type}/{tmdb_id}", response_class=JSONResponse)
 def api_detail(request: Request, content_type: str, tmdb_id: int):
-    """
-    Scheda completa in una sola chiamata: trama, cast, trailer, piattaforme,
-    titoli simili. Per la v1 dell'app e' piu' semplice una chiamata sola che
-    quattro parziali.
-    """
+    """Scheda completa in una sola chiamata."""
     if content_type not in ("movie", "tv"):
         raise HTTPException(status_code=400, detail="content_type deve essere movie o tv")
 
@@ -3241,7 +3277,6 @@ def api_detail(request: Request, content_type: str, tmdb_id: int):
     except Exception as e:
         log.warning("api_detail: controllo adulti fallito su %s: %s", tmdb_id, e)
 
-    # I simili passano dalla cache gia' esistente delle pagine HTML.
     simili = []
     try:
         if detail.get("title"):
@@ -3252,27 +3287,26 @@ def api_detail(request: Request, content_type: str, tmdb_id: int):
         log.warning("api_detail: simili falliti su %s: %s", tmdb_id, e)
 
     return {
-        "tmdb_id":       tmdb_id,
-        "content_type":  content_type,
-        "title":         detail.get("title") or "",
+        "tmdb_id":        tmdb_id,
+        "content_type":   content_type,
+        "title":          detail.get("title") or "",
         "original_title": detail.get("original_title") or "",
-        "tagline":       detail.get("tagline") or "",
-        "overview":      detail.get("overview") or "",
-        "poster_url":    detail.get("poster_url") or "",
-        "backdrop_url":  detail.get("backdrop_url") or "",
-        "release_date":  detail.get("release_date") or detail.get("first_air_date") or "",
-        "runtime":       detail.get("runtime"),
-        "vote_average":  detail.get("vote_average"),
-        "vote_count":    detail.get("vote_count"),
-        "genres":        detail.get("genres") or [],
-        "director":      detail.get("director") or "",
-        "cast":          detail.get("cast") or [],
-        "trailer_key":   detail.get("trailer_key") or "",
-        "providers":     detail.get("providers") or detail.get("watch_providers") or [],
-        "similar":       [_api_titolo_snello(s) for s in simili],
-        # L'app non ha login: il link porta alla registrazione sul sito, con
-        # l'origine tracciata nella colonna signup_source.
-        "web_url":       f"https://cosaguardo.com/{'serie' if content_type == 'tv' else 'film'}/{tmdb_id}?src=ios",
+        "tagline":        detail.get("tagline") or "",
+        "overview":       detail.get("overview") or "",
+        "poster_url":     detail.get("poster_url") or "",
+        "backdrop_url":   detail.get("backdrop_url") or "",
+        "release_date":   detail.get("release_date") or detail.get("first_air_date") or "",
+        "runtime":        detail.get("runtime"),
+        "vote_average":   detail.get("vote_average"),
+        "vote_count":     detail.get("vote_count"),
+        "genres":         detail.get("genres") or [],
+        "director":       detail.get("director") or "",
+        "cast":           detail.get("cast") or [],
+        "trailer_key":    detail.get("trailer_key") or "",
+        "providers":      detail.get("providers") or detail.get("watch_providers") or [],
+        "similar":        [_api_titolo_snello(s) for s in simili],
+        # L'app non ha login: il link porta al sito, con l'origine tracciata.
+        "web_url":        f"https://cosaguardo.com/{'serie' if content_type == 'tv' else 'film'}/{tmdb_id}?src=ios",
     }
 
 
