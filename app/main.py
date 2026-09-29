@@ -3328,8 +3328,14 @@ _FILTRI_PIATTAFORME = [
     ("apple", "Apple TV+"), ("paramount", "Paramount+"), ("now", "NOW"),
 ]
 
+# ⚠️ I VALORI devono essere esattamente quelli che get_scopri_results
+# confronta: "recenti", "anno", "classici". Valori inventati (6m, 1y...) non
+# corrispondono a nessun ramo e il filtro viene ignorato IN SILENZIO — nessun
+# errore, solo risultati non filtrati. E' successo davvero.
 _FILTRI_PERIODI = [
-    ("6m", "Ultimi 6 mesi"), ("1y", "Ultimo anno"), ("classic", "Classici"),
+    ("recenti",  "Ultimi 6 mesi"),
+    ("anno",     "Ultimo anno"),
+    ("classici", "Classici"),
 ]
 
 # Punto e non virgola nei valori: la virgola sta solo nell'etichetta mostrata.
