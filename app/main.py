@@ -452,7 +452,10 @@ _DATACENTER_CIDRS = [
 ]
 _DATACENTER_NETS = [_ipaddress.ip_network(c) for c in _DATACENTER_CIDRS]
 _EDGE_GUARD = os.environ.get("EDGE_GUARD", "1") == "1"
-_EDGE_PROTECTED_PREFIXES = ("/film/", "/serie/", "/persona/")
+# /api/v1/ espone in JSON gli STESSI dati delle schede: senza aggiungerlo qui
+# offrirebbe agli scraper una porta piu' comoda di quella che abbiamo chiuso.
+# Gli utenti dell'app sono in Italia, quindi per loro non cambia nulla.
+_EDGE_PROTECTED_PREFIXES = ("/film/", "/serie/", "/persona/", "/api/v1/")
 
 # Geo-restrizione delle pagine profonde: CosaGuardo serve l'Italia. Su /film,
 # /serie, /persona il traffico NON italiano è ~100% scraper (la 2ª ondata
@@ -3113,6 +3116,164 @@ def _cached_similar_tv(tmdb_id: int, title: str) -> list:
         return out
 
     return cached_call(f"detail:similar:tv:{tmdb_id}", _build)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# API v1 — usata dall'app iOS nativa
+#
+# ⚠️ PERCHE' IL PREFISSO DI VERSIONE. Una volta che l'app e' sull'App Store non
+# si puo' obbligare nessuno ad aggiornarla: cambiare la forma di una risposta
+# romperebbe le versioni gia' installate, in mano a utenti che non possono
+# farci niente. Con /api/v1/ si aggiunge una v2 e si lascia la v1 in piedi.
+# REGOLA: non cambiare mai la forma di una risposta v1. Aggiungere campi si',
+# rinominarli o toglierli no.
+#
+# ⚠️ Queste rotte sono sotto _EDGE_PROTECTED_PREFIXES (vedi sopra): stessi dati
+# delle schede, stessa protezione.
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/health", response_class=JSONResponse)
+def api_health():
+    """Verifica che il server risponda. Usata dall'app all'avvio."""
+    return {"ok": True, "version": "v1"}
+
+
+def _api_titolo_snello(rec: dict) -> dict:
+    """
+    Riduce un titolo ai campi che servono all'app.
+
+    Non si rimanda il dict grezzo del motore: contiene campi interni che
+    cambiano con l'algoritmo, e la regola sopra dice che la forma di una
+    risposta v1 non deve cambiare. Questa funzione e' il contratto.
+    """
+    return {
+        "tmdb_id":      rec.get("tmdb_id"),
+        "title":        rec.get("title") or "",
+        "year":         (rec.get("release_date") or "")[:4] or None,
+        "poster_url":   rec.get("poster_url") or "",
+        "backdrop_url": rec.get("backdrop_url") or "",
+        "vote_average": rec.get("vote_average"),
+        "overview":     rec.get("overview") or "",
+        "content_type": rec.get("content_type") or "movie",
+        "platforms":    rec.get("platforms") or [],
+        "why":          rec.get("why") or rec.get("explanation") or "",
+    }
+
+
+@app.get("/api/v1/recommend", response_class=JSONResponse)
+def api_recommend(
+    request: Request,
+    content_type: str = Query("movie"),
+    titles: str = Query("", description="Titoli separati da |"),
+):
+    """
+    Consigli a partire da 2-3 titoli. Equivalente JSON di GET /recommend.
+
+    I titoli arrivano in un solo parametro separati da | invece che in movie1..6:
+    dal lato app e' una lista, e sei parametri posizionali sarebbero scomodi.
+
+    ⚠️ LENTA SENZA CACHE: il motore impiega ~4-5s per una combinazione mai
+    vista. La cache (search_cache) e' la stessa del sito, quindi le
+    combinazioni gia' richieste dal web tornano istantanee. L'app deve
+    mostrare un'attesa esplicita, non una rotella muta.
+    """
+    seed_titles = [t.strip() for t in titles.split("|") if t.strip()][:6]
+    if not seed_titles:
+        return {"recommendations": [], "resolved_seeds": [], "missing_titles": [],
+                "error": "nessun titolo fornito"}
+
+    import hashlib as _hl
+    # Stessa chiave del sito: l'app riusa la cache gia' calda invece di
+    # ricalcolare le stesse combinazioni.
+    _ALGO_VERSION = "movie-tmdb-v7"
+    _cache_key = _hl.md5(
+        ("|".join(sorted(t.lower() for t in seed_titles)) + content_type + _ALGO_VERSION).encode()
+    ).hexdigest()
+
+    cached = get_search_cache(_cache_key)
+    if cached:
+        return {
+            "recommendations": [_api_titolo_snello(r) for r in cached.get("recommendations", [])],
+            "resolved_seeds":  cached.get("resolved_seeds", []),
+            "missing_titles":  cached.get("missing_titles", []),
+            "cached": True,
+        }
+
+    try:
+        if content_type == "tv":
+            result = recommend_tv_from_seed_titles(seed_titles)
+        else:
+            result = recommend_from_seed_titles(seed_titles, top_k=10, per_seed_limit=30)
+    except Exception as e:
+        log.exception("api_recommend fallita: %s", e)
+        raise HTTPException(status_code=500, detail="motore consigli non disponibile")
+
+    return {
+        "recommendations": [_api_titolo_snello(r) for r in result.get("recommendations", [])],
+        "resolved_seeds":  result.get("resolved_seeds", []),
+        "missing_titles":  result.get("missing_titles", []),
+        "cached": False,
+    }
+
+
+@app.get("/api/v1/detail/{content_type}/{tmdb_id}", response_class=JSONResponse)
+def api_detail(request: Request, content_type: str, tmdb_id: int):
+    """
+    Scheda completa in una sola chiamata: trama, cast, trailer, piattaforme,
+    titoli simili. Per la v1 dell'app e' piu' semplice una chiamata sola che
+    quattro parziali.
+    """
+    if content_type not in ("movie", "tv"):
+        raise HTTPException(status_code=400, detail="content_type deve essere movie o tv")
+
+    detail = get_detail_movie(tmdb_id) if content_type == "movie" else get_detail_tv(tmdb_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="titolo non trovato")
+
+    # Stesso filtro adulti delle pagine HTML: l'API non deve essere una
+    # scorciatoia per raggiungere cio' che il sito blocca.
+    try:
+        from core.recommendation_api import _is_adult_content
+        if _is_adult_content(detail):
+            raise HTTPException(status_code=404, detail="titolo non trovato")
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.warning("api_detail: controllo adulti fallito su %s: %s", tmdb_id, e)
+
+    # I simili passano dalla cache gia' esistente delle pagine HTML.
+    simili = []
+    try:
+        if detail.get("title"):
+            simili = (_cached_similar_movies(tmdb_id, detail["title"])
+                      if content_type == "movie"
+                      else _cached_similar_tv(tmdb_id, detail["title"]))
+    except Exception as e:
+        log.warning("api_detail: simili falliti su %s: %s", tmdb_id, e)
+
+    return {
+        "tmdb_id":       tmdb_id,
+        "content_type":  content_type,
+        "title":         detail.get("title") or "",
+        "original_title": detail.get("original_title") or "",
+        "tagline":       detail.get("tagline") or "",
+        "overview":      detail.get("overview") or "",
+        "poster_url":    detail.get("poster_url") or "",
+        "backdrop_url":  detail.get("backdrop_url") or "",
+        "release_date":  detail.get("release_date") or detail.get("first_air_date") or "",
+        "runtime":       detail.get("runtime"),
+        "vote_average":  detail.get("vote_average"),
+        "vote_count":    detail.get("vote_count"),
+        "genres":        detail.get("genres") or [],
+        "director":      detail.get("director") or "",
+        "cast":          detail.get("cast") or [],
+        "trailer_key":   detail.get("trailer_key") or "",
+        "providers":     detail.get("providers") or detail.get("watch_providers") or [],
+        "similar":       [_api_titolo_snello(s) for s in simili],
+        # L'app non ha login: il link porta alla registrazione sul sito, con
+        # l'origine tracciata nella colonna signup_source.
+        "web_url":       f"https://cosaguardo.com/{'serie' if content_type == 'tv' else 'film'}/{tmdb_id}?src=ios",
+    }
 
 
 @app.get("/film/{tmdb_id}", response_class=HTMLResponse)
