@@ -3296,6 +3296,115 @@ def api_daily(request: Request):
     }
 
 
+# ── Opzioni dei filtri, servite dal server ─────────────────────────────────
+# ⚠️ Le etichette NON stanno scritte in Swift. Se un domani aggiungi un mood o
+# ne rinomini uno — come e' gia' successo con "Da innamorarsi" e "Da brividi" —
+# l'app si adegua da sola alla prossima apertura, senza dover pubblicare una
+# versione nuova sull'App Store e aspettare che tutti aggiornino.
+#
+# Le CHIAVI devono restare quelle che get_scopri_results si aspetta: sono le
+# stesse dei link del sito, e cambiarle romperebbe entrambi.
+_FILTRI_GENERI = [
+    ("azione", "Azione"), ("thriller", "Thriller"), ("horror", "Horror"),
+    ("commedia", "Commedia"), ("dramma", "Dramma"), ("fantascienza", "Fantascienza"),
+    ("romantico", "Romantico"), ("animazione", "Animazione"), ("crimine", "Crimine"),
+    ("documentario", "Documentario"), ("mistero", "Mistero"), ("western", "Western"),
+]
+
+# Etichette allineate a scopri.html: nessuna parola in comune con la riga
+# Genere, altrimenti "Romantico" comparirebbe due volte e "Spaventoso" sarebbe
+# l'Horror con un altro nome.
+_FILTRI_MOOD = [
+    ("leggero", "Leggero", "\U0001F604"),
+    ("intenso", "Intenso", "\U0001F624"),
+    ("romantico", "Da innamorarsi", "\u2764\uFE0F"),
+    ("adrenalinico", "Adrenalinico", "\u26A1"),
+    ("riflessivo", "Riflessivo", "\U0001F914"),
+    ("spaventoso", "Da brividi", "\U0001F47B"),
+]
+
+_FILTRI_PIATTAFORME = [
+    ("netflix", "Netflix"), ("prime", "Prime Video"), ("disney", "Disney+"),
+    ("apple", "Apple TV+"), ("paramount", "Paramount+"), ("now", "NOW"),
+]
+
+_FILTRI_PERIODI = [
+    ("6m", "Ultimi 6 mesi"), ("1y", "Ultimo anno"), ("classic", "Classici"),
+]
+
+# Punto e non virgola nei valori: la virgola sta solo nell'etichetta mostrata.
+_FILTRI_VOTI = [
+    ("7", "7+ Buoni"), ("7.5", "7,5+ Ottimi"), ("8", "8+ Eccellenti"),
+]
+
+
+@app.get("/api/v1/filtri", response_class=JSONResponse)
+def api_filtri(request: Request):
+    """Opzioni disponibili per la schermata Scopri dell'app."""
+    return {
+        "tipi": [
+            {"valore": "film",  "etichetta": "Film"},
+            {"valore": "serie", "etichetta": "Serie TV"},
+        ],
+        "generi":      [{"valore": v, "etichetta": e} for v, e in _FILTRI_GENERI],
+        "mood":        [{"valore": v, "etichetta": e, "emoji": m} for v, e, m in _FILTRI_MOOD],
+        "piattaforme": [{"valore": v, "etichetta": e} for v, e in _FILTRI_PIATTAFORME],
+        "periodi":     [{"valore": v, "etichetta": e} for v, e in _FILTRI_PERIODI],
+        "voti":        [{"valore": v, "etichetta": e} for v, e in _FILTRI_VOTI],
+        # L'app deve sapere che i due si escludono, senza doverlo indovinare:
+        # agiscono sullo stesso parametro TMDb (with_genres) e insieme
+        # produrrebbero combinazioni impossibili, tipo Horror + Da innamorarsi.
+        "genere_e_mood_esclusivi": True,
+    }
+
+
+@app.get("/api/v1/scopri", response_class=JSONResponse)
+def api_scopri(
+    request: Request,
+    tipo: str = Query("film"),
+    genere: str = Query(""),
+    mood: str = Query(""),
+    piattaforma: str = Query(""),
+    anno: str = Query(""),
+    voto: str = Query(""),
+    page: int = Query(1),
+):
+    """
+    Griglia filtrata, equivalente v1 di /scopri/json.
+
+    ⚠️ Non si fa chiamare all'app direttamente /scopri/json: quello e' un
+    endpoint del SITO, non segue il contratto v1, e la sua forma cambia quando
+    si tocca la paginazione o i filtri del web. Un'app gia' pubblicata si
+    romperebbe in mano agli utenti. Qui la risposta ha una forma stabile e i
+    titoli sono nella stessa struttura degli altri endpoint v1.
+    """
+    # Stessa regola del sito: mood e genere si escludono, il mood vince.
+    if mood:
+        genere = ""
+
+    try:
+        dati = get_scopri_results(
+            tipo=tipo, genere=genere, mood=mood,
+            piattaforma=piattaforma, anno=anno, voto=voto, page=page
+        )
+    except Exception as e:
+        log.exception("api_scopri fallita: %s", e)
+        raise HTTPException(status_code=500, detail="ricerca non disponibile")
+
+    risultati = dati.get("results", []) or []
+    totale = dati.get("total", 0) or 0
+
+    return {
+        "risultati": [_api_titolo_snello(r) for r in risultati],
+        "pagina": page,
+        "totale": totale,
+        # Calcolato qui e non lasciato all'app: la regola (20 per pagina, e il
+        # totale gia' diviso per le pagine TMDb consumate quando e' attivo il
+        # filtro voto) sta nel motore, ed e' li' che deve restare.
+        "altre_pagine": (page * 20) < totale,
+    }
+
+
 @app.get("/api/v1/detail/{content_type}/{tmdb_id}", response_class=JSONResponse)
 def api_detail(request: Request, content_type: str, tmdb_id: int):
     """Scheda completa in una sola chiamata."""
