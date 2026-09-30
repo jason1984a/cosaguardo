@@ -3441,6 +3441,153 @@ def api_elimina_account(request: Request):
     return {"ok": True}
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Raccolta personale — /api/v1/raccolta
+#
+# ⚠️ user_title_state e' indicizzata per TITOLO, non per tmdb_id: e' come
+# nasce il sito e non la si cambia qui. Quindi l'app manda titolo E tipo, non
+# solo l'id. In lettura si usa _enrich_titles_with_posters, la stessa funzione
+# di /la-mia-raccolta, che risale a locandina e tmdb_id partendo dal titolo:
+# duplicare quella logica porterebbe a due raccolte che col tempo divergono.
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/v1/raccolta", response_class=JSONResponse)
+def api_raccolta(request: Request):
+    """Visti e preferiti dell'utente, con locandine."""
+    utente = _richiedi_utente(request)
+    uid = utente["id"]
+
+    try:
+        visti = _enrich_titles_with_posters(get_seen_titles_full(uid))
+    except Exception as e:
+        log.warning("api_raccolta: visti falliti uid=%s: %s", uid, e)
+        visti = []
+
+    try:
+        preferiti = _enrich_titles_with_posters(get_liked_states_by_user(uid))
+    except Exception as e:
+        log.warning("api_raccolta: preferiti falliti uid=%s: %s", uid, e)
+        preferiti = []
+
+    def voce(d):
+        return {
+            "tmdb_id":      d.get("tmdb_id"),
+            "title":        d.get("title") or "",
+            "content_type": d.get("content_type") or "movie",
+            "poster_url":   d.get("poster_url") or "",
+        }
+
+    return {
+        "visti":     [voce(d) for d in visti],
+        "preferiti": [voce(d) for d in preferiti],
+    }
+
+
+@app.post("/api/v1/raccolta", response_class=JSONResponse)
+def api_raccolta_segna(
+    request: Request,
+    titolo: str = Body(..., embed=True),
+    content_type: str = Body("movie", embed=True),
+    visto: bool = Body(None, embed=True),
+    preferito: bool = Body(None, embed=True),
+):
+    """
+    Segna o toglie visto e preferito.
+
+    Un endpoint solo e non quattro: nell'app i due stati si toccano spesso
+    insieme, e i campi lasciati a null restano invariati — cosi' si puo'
+    cambiare solo "visto" senza sapere lo stato di "preferito".
+    """
+    utente = _richiedi_utente(request)
+    titolo = (titolo or "").strip()
+    if not titolo:
+        raise HTTPException(status_code=400, detail="titolo mancante")
+    if content_type not in ("movie", "tv"):
+        raise HTTPException(status_code=400, detail="content_type deve essere movie o tv")
+    if visto is None and preferito is None:
+        raise HTTPException(status_code=400, detail="niente da modificare")
+
+    # ⚠️ upsert_title_state tratta None come "non toccare", ed e' cio' che
+    # serve per i campi non inviati. Ma significa che per TOGLIERE un
+    # preferito non si puo' passare None: si finirebbe per lasciarlo dov'e'.
+    # Si passa la stringa vuota, che non e' None (quindi sovrascrive) e non e'
+    # "liked" (quindi esce dal filtro di get_liked_states_by_user).
+    preferenza = None
+    if preferito is not None:
+        preferenza = "liked" if preferito else ""
+
+    try:
+        upsert_title_state(
+            utente["id"], titolo, content_type,
+            seen=(None if visto is None else (1 if visto else 0)),
+            preference=preferenza,
+        )
+    except Exception as e:
+        log.exception("api_raccolta_segna fallita: %s", e)
+        raise HTTPException(status_code=500, detail="salvataggio non riuscito")
+
+    stato = get_title_state(utente["id"], titolo, content_type)
+    return {
+        "titolo": titolo,
+        "content_type": content_type,
+        "visto": bool(stato["seen"]) if stato else False,
+        "preferito": (stato["preference"] == "liked") if stato else False,
+    }
+
+
+@app.get("/api/v1/raccolta/stato", response_class=JSONResponse)
+def api_raccolta_stato(
+    request: Request,
+    titolo: str = Query(...),
+    content_type: str = Query("movie"),
+):
+    """
+    Stato di un singolo titolo, per mostrare i pulsanti gia' accesi quando si
+    apre una scheda. Senza, l'utente segnerebbe due volte lo stesso film.
+    """
+    utente = _richiedi_utente(request)
+    stato = get_title_state(utente["id"], (titolo or "").strip(), content_type)
+    return {
+        "visto":     bool(stato["seen"]) if stato else False,
+        "preferito": (stato["preference"] == "liked") if stato else False,
+    }
+
+
+@app.get("/api/v1/consigli-personali", response_class=JSONResponse)
+def api_consigli_personali(request: Request):
+    """
+    I consigli su misura, gli stessi della dashboard del sito.
+
+    ⚠️ NON si generano qui. Costruirli al volo richiede secondi, e in un'app
+    quell'attesa e' insostenibile. Si restituisce cio' che e' gia' in cache e
+    si dice se manca, cosi' l'app mostra un messaggio sensato invece di una
+    rotella che gira a vuoto. La generazione parte in sottofondo, come sul
+    sito dopo il login.
+    """
+    utente = _richiedi_utente(request)
+    uid = utente["id"]
+
+    try:
+        pronti = get_daily_recommendations(uid) or []
+    except Exception as e:
+        log.warning("api_consigli_personali: lettura fallita uid=%s: %s", uid, e)
+        pronti = []
+
+    if not pronti:
+        # Si avvia la generazione e si risponde subito: al prossimo giro
+        # saranno pronti.
+        try:
+            _prefetch_daily_recs_async(uid)
+        except Exception as e:
+            log.debug("api_consigli_personali: prefetch fallito uid=%s: %s", uid, e)
+        return {"risultati": [], "in_preparazione": True}
+
+    return {
+        "risultati": [_api_titolo_snello(r) for r in pronti],
+        "in_preparazione": False,
+    }
+
+
 @app.get("/api/v1/trending", response_class=JSONResponse)
 def api_trending(request: Request, limit: int = Query(12)):
     """
