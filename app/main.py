@@ -3256,6 +3256,44 @@ def api_recommend(
     }
 
 
+@app.get("/api/v1/trending", response_class=JSONResponse)
+def api_trending(request: Request, limit: int = Query(12)):
+    """
+    I titoli piu' visti del momento, per la striscia in cima all'app.
+
+    Stessa fonte di /api/v1/daily — get_trending_cached, che ha la sua cache e
+    non tocca il DB — ma restituisce la lista invece del singolo titolo del
+    giorno. Nessun login richiesto: e' la prima cosa che vede chi apre l'app.
+    """
+    limit = max(1, min(limit, 20))
+    titoli = get_trending_cached(limit=limit) or []
+
+    # Solo quelli con locandina e id: senza immagine la striscia mostrerebbe
+    # rettangoli vuoti, senza id il tocco non aprirebbe niente.
+    validi = [t for t in titoli if t.get("poster_url") and t.get("tmdb_id")]
+
+    return {
+        "risultati": [
+            {
+                "tmdb_id":      t.get("tmdb_id"),
+                "title":        t.get("title") or "",
+                # Stessa forma dei titoli negli altri endpoint v1, cosi' l'app
+                # riusa il modello Titolo invece di averne uno solo per questo.
+                "year":         None,
+                "poster_url":   t.get("poster_url") or "",
+                "backdrop_url": "",
+                "vote_average": t.get("vote_average"),
+                "overview":     t.get("overview") or "",
+                "content_type": t.get("content_type") or "movie",
+                "genres":       [],
+                "platforms":    [],
+                "why":          t.get("label") or "",
+            }
+            for t in validi
+        ],
+    }
+
+
 @app.get("/api/v1/daily", response_class=JSONResponse)
 def api_daily(request: Request):
     """
