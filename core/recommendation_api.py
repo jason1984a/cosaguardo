@@ -1514,6 +1514,10 @@ def get_trending_tmdb(limit: int = 12):
                 "content_type": media_type,
                 "poster_url": poster_url,
                 "label": label,
+                # Il voto serve alla striscia in cima all'app iOS, dove le
+                # stelline sono un criterio di scelta a colpo d'occhio. Chi
+                # usava gia' questa funzione ignora il campo in piu'.
+                "vote_average": round(item.get("vote_average") or 0, 1),
                 "overview": (item.get("overview") or "")[:120],
             })
 
