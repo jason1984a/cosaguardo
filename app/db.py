@@ -216,6 +216,45 @@ def init_api_tokens():
         conn.close()
 
 
+def get_user_by_apple_id(apple_user_id: str):
+    """L'utente collegato a questo identificativo Apple, o None."""
+    if not apple_user_id:
+        return None
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        riga = cur.execute(
+            "SELECT * FROM users WHERE apple_user_id = ?", (apple_user_id,)
+        ).fetchone()
+    except Exception:
+        # Colonna non ancora creata su un'istanza non migrata: meglio None
+        # che un errore che blocca l'accesso.
+        return None
+    finally:
+        conn.close()
+    return riga
+
+
+def collega_apple_id(user_id: int, apple_user_id: str) -> None:
+    """
+    Associa un identificativo Apple a un account esistente.
+
+    Serve quando qualcuno che si era registrato con l'email entra per la
+    prima volta con Apple: senza il collegamento si creerebbe un secondo
+    account con gli stessi dati.
+    """
+    if not user_id or not apple_user_id:
+        return
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET apple_user_id = ? WHERE id = ?",
+                    (apple_user_id, user_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def crea_api_token(user_id: int, dispositivo: str = "") -> str:
     """Genera un token nuovo per questo utente e lo restituisce."""
     import secrets
@@ -462,7 +501,13 @@ def init_db():
         # li avevano dati. Solo il percorso Google scrive esplicitamente 0.
         for col, typedef in [("first_name","TEXT"), ("last_name","TEXT"), ("birth_date","TEXT"),
                              ("last_seen","TIMESTAMP"), ("onboarding_done","INTEGER DEFAULT 1"),
-                             ("signup_source","TEXT")]:
+                             ("signup_source","TEXT"),
+                             # ⚠️ L'identificativo Apple e' l'UNICO dato stabile di
+                             # Sign in with Apple: l'email puo' essere un indirizzo di
+                             # inoltro privato, e cambia se l'utente revoca la
+                             # condivisione. Senza questa colonna, chi rientra dopo
+                             # una revoca si ritroverebbe un account nuovo.
+                             ("apple_user_id","TEXT")]:
             if col not in existing_cols:
                 cur.execute(f"ALTER TABLE users ADD COLUMN {col} {typedef}")
 

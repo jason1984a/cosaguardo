@@ -56,6 +56,8 @@ from app.db import (
     utente_da_api_token,
     revoca_api_token,
     revoca_token_utente,
+    get_user_by_apple_id,
+    collega_apple_id,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -3398,6 +3400,146 @@ def api_login(
     utente = verify_user(email, password or "")
     if not utente:
         raise HTTPException(status_code=401, detail="Email o password non corretti.")
+
+    return {"token": crea_api_token(utente["id"], dispositivo),
+            "utente": _dati_utente(utente)}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Sign in with Apple
+#
+# ⚠️ OBBLIGATORIO se l'app offre un altro accesso social (linea guida 4.8).
+# L'app manda l'identity_token firmato da Apple; qui si verifica la firma
+# contro le chiavi pubbliche di Apple e se ne estraggono identificativo ed
+# email. NON ci si fida del token senza verificarlo: chiunque potrebbe
+# costruirne uno e accedere come un altro utente.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_APPLE_CHIAVI_URL = "https://appleid.apple.com/auth/keys"
+_apple_chiavi_cache = {"dati": None, "scadenza": 0.0}
+
+
+def _apple_chiavi():
+    """
+    Le chiavi pubbliche di Apple, con cache di un'ora.
+
+    Apple le ruota: scaricarle a ogni accesso sarebbe uno spreco, tenerle per
+    sempre significherebbe rifiutare accessi legittimi dopo una rotazione.
+    """
+    import time
+    import requests
+    if _apple_chiavi_cache["dati"] and time.time() < _apple_chiavi_cache["scadenza"]:
+        return _apple_chiavi_cache["dati"]
+
+    r = requests.get(_APPLE_CHIAVI_URL, timeout=8)
+    r.raise_for_status()
+    dati = r.json()
+    _apple_chiavi_cache["dati"] = dati
+    _apple_chiavi_cache["scadenza"] = time.time() + 3600
+    return dati
+
+
+def _verifica_token_apple(identity_token: str) -> dict:
+    """
+    Verifica la firma e restituisce il contenuto del token.
+
+    Solleva HTTPException 401 se il token non e' valido: l'app non deve poter
+    distinguere fra token scaduto, firma sbagliata e destinatario errato,
+    perche' sono tutti casi in cui l'accesso non va concesso.
+    """
+    import jwt
+    from jwt import PyJWKClient
+
+    if not identity_token:
+        raise HTTPException(status_code=401, detail="Token Apple mancante.")
+
+    atteso = os.environ.get("APPLE_BUNDLE_ID", "com.cosaguardo.ios.CosaGuardo")
+
+    try:
+        intestazione = jwt.get_unverified_header(identity_token)
+        chiavi = _apple_chiavi()
+        chiave = next((k for k in chiavi.get("keys", [])
+                       if k.get("kid") == intestazione.get("kid")), None)
+        if not chiave:
+            raise HTTPException(status_code=401, detail="Accesso Apple non riuscito.")
+
+        from jwt.algorithms import RSAAlgorithm
+        import json as _json
+        pubblica = RSAAlgorithm.from_jwk(_json.dumps(chiave))
+
+        contenuto = jwt.decode(
+            identity_token,
+            key=pubblica,
+            algorithms=["RS256"],
+            # audience: il token deve essere stato emesso PER la nostra app.
+            # Senza questo controllo, un token valido di un'altra app
+            # permetterebbe di accedere qui.
+            audience=atteso,
+            issuer="https://appleid.apple.com",
+        )
+        return contenuto
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.warning("verifica token Apple fallita: %s", e)
+        raise HTTPException(status_code=401, detail="Accesso Apple non riuscito.")
+
+
+@app.post("/api/v1/auth/apple", response_class=JSONResponse)
+def api_auth_apple(
+    request: Request,
+    identity_token: str = Body(..., embed=True),
+    nome: str = Body("", embed=True),
+    cognome: str = Body("", embed=True),
+    dispositivo: str = Body("", embed=True),
+):
+    """
+    Accesso con Apple.
+
+    ⚠️ nome e cognome arrivano SOLO alla primissima autorizzazione: Apple non
+    li rimanda piu' agli accessi successivi. Vanno quindi salvati subito, e
+    agli accessi seguenti si usa quello che c'e' gia' sul record.
+    """
+    contenuto = _verifica_token_apple(identity_token)
+
+    apple_id = contenuto.get("sub") or ""
+    email = (contenuto.get("email") or "").strip().lower()
+    if not apple_id:
+        raise HTTPException(status_code=401, detail="Accesso Apple non riuscito.")
+
+    # 1. Gia' collegato a questo identificativo: e' l'unico dato stabile.
+    utente = get_user_by_apple_id(apple_id)
+
+    # 2. Altrimenti, se l'email corrisponde a un account esistente, si collega
+    #    invece di creare un doppione.
+    if not utente and email:
+        utente = get_user_by_email(email)
+        if utente:
+            collega_apple_id(utente["id"], apple_id)
+
+    # 3. Altrimenti si crea.
+    if not utente:
+        if not email:
+            # Senza email e senza account esistente non c'e' modo di creare
+            # un profilo utilizzabile.
+            raise HTTPException(status_code=400,
+                                detail="Apple non ha condiviso l'email. Riprova consentendo la condivisione.")
+        try:
+            uid = create_user(
+                email, secrets.token_hex(32),
+                first_name=nome.strip(),
+                last_name=cognome.strip(),
+                # ⚠️ Come il percorso Google sul sito: mancano consensi e data
+                # di nascita, quindi l'account resta da completare.
+                onboarding_done=False,
+                signup_source="ios-apple",
+            )
+            collega_apple_id(uid, apple_id)
+            utente = get_user_by_id(uid)
+        except Exception as e:
+            log.exception("creazione utente Apple fallita: %s", e)
+            raise HTTPException(status_code=500, detail="Registrazione non riuscita.")
 
     return {"token": crea_api_token(utente["id"], dispositivo),
             "utente": _dati_utente(utente)}

@@ -9,3 +9,6 @@ python-multipart
 feedparser
 httpx
 pywebpush
+# Verifica della firma dei token Sign in with Apple.
+# cryptography arriva gia' con pywebpush, quindi non va aggiunta.
+PyJWT>=2.8.0
