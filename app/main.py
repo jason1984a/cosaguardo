@@ -51,6 +51,10 @@ from app.db import (
     needs_onboarding,
     complete_onboarding,
     delete_user_completely,
+    crea_api_token,
+    utente_da_api_token,
+    revoca_api_token,
+    revoca_token_utente,
 )
 from datetime import datetime
 from core.recommendation_api import (
@@ -3254,6 +3258,187 @@ def api_recommend(
         "missing_titles":  result.get("missing_titles", []),
         "cached": False,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Autenticazione dell'app nativa — /api/v1/auth/
+#
+# L'app manda il token in ogni chiamata come "Authorization: Bearer <token>".
+# Non si usano i cookie di sessione del sito: in URLSession sono fragili, non
+# si controlla la scadenza e non c'e' modo di disconnettere un solo
+# dispositivo.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def _utente_da_richiesta(request: Request):
+    """
+    L'utente autenticato dal token, o None.
+
+    Legge solo l'intestazione Authorization: la sessione web non c'entra, e
+    accettarla anche qui renderebbe l'API raggiungibile da un browser con un
+    cookie valido — cioe' vulnerabile a richieste da altri siti.
+    """
+    intestazione = request.headers.get("authorization", "")
+    if not intestazione.lower().startswith("bearer "):
+        return None
+    return utente_da_api_token(intestazione[7:].strip())
+
+
+def _richiedi_utente(request: Request):
+    """Come sopra, ma solleva 401 se non autenticato."""
+    u = _utente_da_richiesta(request)
+    if not u:
+        raise HTTPException(status_code=401, detail="autenticazione richiesta")
+    return u
+
+
+def _dati_utente(u) -> dict:
+    """I dati dell'utente da restituire all'app. Mai la password."""
+    def campo(nome):
+        try:
+            return u[nome]
+        except (KeyError, IndexError, TypeError):
+            return None
+    return {
+        "id":            campo("id"),
+        "email":         campo("email"),
+        "nome":          campo("first_name") or "",
+        "cognome":       campo("last_name") or "",
+        "data_nascita":  campo("birth_date") or "",
+        # L'app deve sapere se mancano i consensi: un account creato altrove
+        # potrebbe essere in attesa di completamento.
+        "profilo_completo": not needs_onboarding(campo("id")),
+    }
+
+
+@app.post("/api/v1/auth/registrazione", response_class=JSONResponse)
+def api_registrazione(
+    request: Request,
+    email: str = Body(..., embed=True),
+    password: str = Body(..., embed=True),
+    nome: str = Body("", embed=True),
+    cognome: str = Body("", embed=True),
+    data_nascita: str = Body("", embed=True),
+    accetta_privacy: bool = Body(False, embed=True),
+    accetta_termini: bool = Body(False, embed=True),
+    accetta_eta: bool = Body(False, embed=True),
+    dispositivo: str = Body("", embed=True),
+):
+    """
+    Registrazione dall'app.
+
+    ⚠️ Le validazioni sono LE STESSE di /register, non una versione ridotta:
+    se l'app fosse piu' permissiva del sito, diventerebbe il percorso per
+    aggirare i controlli su eta' e consensi.
+    """
+    email = (email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Email non valida.")
+    if len(password or "") < 8:
+        raise HTTPException(status_code=400, detail="La password deve avere almeno 8 caratteri.")
+    if not nome.strip():
+        raise HTTPException(status_code=400, detail="Inserisci il tuo nome.")
+    if not cognome.strip():
+        raise HTTPException(status_code=400, detail="Inserisci il tuo cognome.")
+
+    from datetime import date
+    try:
+        bd = date.fromisoformat((data_nascita or "").strip())
+        oggi = date.today()
+        eta = oggi.year - bd.year - ((oggi.month, oggi.day) < (bd.month, bd.day))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Data di nascita non valida.")
+    if eta < 16:
+        raise HTTPException(status_code=400, detail="Devi avere almeno 16 anni per usare CosaGuardo.")
+
+    if not accetta_privacy:
+        raise HTTPException(status_code=400, detail="Devi accettare la Privacy Policy.")
+    if not accetta_termini:
+        raise HTTPException(status_code=400, detail="Devi accettare i Termini di Servizio.")
+    if not accetta_eta:
+        raise HTTPException(status_code=400, detail="Devi dichiarare di avere almeno 16 anni.")
+
+    if get_user_by_email(email):
+        raise HTTPException(status_code=409, detail="Esiste gia' un account con questa email.")
+
+    try:
+        user_id = create_user(
+            email, password,
+            first_name=nome.strip(),
+            last_name=cognome.strip(),
+            birth_date=data_nascita.strip(),
+            # L'origine di chi si registra dall'app: compare nella colonna
+            # origine dell'export, insieme a quelle del sito.
+            signup_source="ios",
+        )
+    except Exception as e:
+        log.exception("api_registrazione fallita: %s", e)
+        raise HTTPException(status_code=500, detail="Registrazione non riuscita. Riprova.")
+
+    utente = get_user_by_id(user_id)
+    return {"token": crea_api_token(user_id, dispositivo), "utente": _dati_utente(utente)}
+
+
+@app.post("/api/v1/auth/login", response_class=JSONResponse)
+def api_login(
+    request: Request,
+    email: str = Body(..., embed=True),
+    password: str = Body(..., embed=True),
+    dispositivo: str = Body("", embed=True),
+):
+    """
+    Accesso con email e password.
+
+    ⚠️ La risposta a credenziali sbagliate e' IDENTICA che l'email esista o
+    no. Distinguere i due casi trasformerebbe questo endpoint in un modo per
+    verificare quali indirizzi sono registrati, e un'API pubblica si
+    interroga in massa molto piu' facilmente di un modulo web.
+    """
+    email = (email or "").strip().lower()
+    utente = verify_user(email, password or "")
+    if not utente:
+        raise HTTPException(status_code=401, detail="Email o password non corretti.")
+
+    return {"token": crea_api_token(utente["id"], dispositivo),
+            "utente": _dati_utente(utente)}
+
+
+@app.get("/api/v1/auth/io", response_class=JSONResponse)
+def api_io(request: Request):
+    """Dati dell'utente corrente. L'app la usa all'avvio per sapere se il
+    token salvato nel portachiavi vale ancora."""
+    return {"utente": _dati_utente(_richiedi_utente(request))}
+
+
+@app.post("/api/v1/auth/esci", response_class=JSONResponse)
+def api_esci(request: Request):
+    """Disconnette QUESTO dispositivo. Gli altri restano collegati."""
+    intestazione = request.headers.get("authorization", "")
+    if intestazione.lower().startswith("bearer "):
+        revoca_api_token(intestazione[7:].strip())
+    # Si risponde ok comunque: un token gia' invalido non e' un errore da
+    # mostrare a chi sta uscendo.
+    return {"ok": True}
+
+
+@app.delete("/api/v1/auth/account", response_class=JSONResponse)
+def api_elimina_account(request: Request):
+    """
+    Cancella l'account e tutti i dati collegati.
+
+    ⚠️ OBBLIGATORIO. Apple richiede che un'app che permette di creare un
+    account permetta anche di cancellarlo dall'app stessa: una pagina che
+    spiega come fare richiesta non basta.
+    """
+    utente = _richiedi_utente(request)
+    uid = utente["id"]
+    try:
+        revoca_token_utente(uid)
+        eliminate = delete_user_completely(uid)
+        log.warning("app: eliminato account id=%s righe=%s", uid, eliminate)
+    except Exception as e:
+        log.exception("api_elimina_account fallita per %s: %s", uid, e)
+        raise HTTPException(status_code=500, detail="Eliminazione non riuscita.")
+    return {"ok": True}
 
 
 @app.get("/api/v1/trending", response_class=JSONResponse)

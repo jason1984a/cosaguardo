@@ -180,6 +180,113 @@ def create_user(email: str, password: str,
     return user_id
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Token API — come l'app nativa resta autenticata
+#
+# ⚠️ TOKEN OPACO IN TABELLA, NON JWT. Un JWT non si puo' revocare senza una
+# lista di revoche, che e' esattamente il database che si voleva evitare. Qui
+# cancellare la riga disconnette il dispositivo — e serve davvero, perche' la
+# cancellazione dell'account deve invalidare ogni accesso, e perche' l'utente
+# deve poter uscire da un telefono che non ha piu'.
+#
+# Il token non scade: un'app che chiede il login ogni trenta giorni e' un'app
+# che si smette di usare. Si tiene traccia dell'ultimo uso, cosi' una pulizia
+# periodica puo' togliere quelli abbandonati da oltre un anno.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def init_api_tokens():
+    """Crea la tabella dei token. Idempotente, chiamata da init_db()."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS api_tokens (
+                token       TEXT PRIMARY KEY,
+                user_id     INTEGER NOT NULL,
+                dispositivo TEXT,
+                created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_used   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Senza indice, revocare tutti i token di un utente scansionerebbe
+        # l'intera tabella.
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id)")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def crea_api_token(user_id: int, dispositivo: str = "") -> str:
+    """Genera un token nuovo per questo utente e lo restituisce."""
+    import secrets
+    token = secrets.token_urlsafe(48)
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO api_tokens (token, user_id, dispositivo) VALUES (?, ?, ?)",
+            (token, user_id, (dispositivo or "")[:80])
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return token
+
+
+def utente_da_api_token(token: str):
+    """
+    L'utente a cui appartiene il token, o None.
+
+    Aggiorna last_used a ogni chiamata: e' il dato che permette di ripulire i
+    token abbandonati senza disconnettere chi usa l'app regolarmente.
+    """
+    if not token or len(token) < 20:
+        return None
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        riga = cur.execute(
+            "SELECT user_id FROM api_tokens WHERE token = ?", (token,)
+        ).fetchone()
+        if not riga:
+            return None
+        uid = riga["user_id"] if hasattr(riga, "keys") else riga[0]
+        cur.execute(
+            "UPDATE api_tokens SET last_used = CURRENT_TIMESTAMP WHERE token = ?",
+            (token,)
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return get_user_by_id(uid)
+
+
+def revoca_api_token(token: str) -> bool:
+    """Disconnette un singolo dispositivo."""
+    if not token:
+        return False
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM api_tokens WHERE token = ?", (token,))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def revoca_token_utente(user_id: int) -> int:
+    """Disconnette tutti i dispositivi di un utente."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM api_tokens WHERE user_id = ?", (user_id,))
+        conn.commit()
+        return cur.rowcount
+    finally:
+        conn.close()
+
+
 def needs_onboarding(user_id: int) -> bool:
     """
     True se l'utente deve ancora passare da /completa-profilo.
@@ -274,6 +381,9 @@ def delete_user_completely(user_id: int) -> dict:
             cur.execute(f"DELETE FROM {t} WHERE user_id = ?", (user_id,))
             if cur.rowcount:
                 eliminate[t] = cur.rowcount
+        # ⚠️ api_tokens ha user_id, quindi la scoperta automatica delle
+        # tabelle collegate la include gia': i token di un utente cancellato
+        # spariscono con lui, e l'app su quel telefono si ritrova disconnessa.
         cur.execute("DELETE FROM users WHERE id = ?", (user_id,))
         eliminate["users"] = cur.rowcount
         conn.commit()
@@ -568,6 +678,11 @@ def init_db():
         conn.commit()
     finally:
         conn.close()
+
+    # Tabella dei token dell'app nativa. Chiamata qui e non inline perche'
+    # apre una connessione propria: init_db() ha gia' la sua aperta, e
+    # annidare due connessioni su SQLite e' una fonte di blocchi.
+    init_api_tokens()
 
 
 def add_streaming_alert(email: str, tmdb_id: int, content_type: str,
