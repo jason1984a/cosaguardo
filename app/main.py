@@ -3545,6 +3545,76 @@ def api_auth_apple(
             "utente": _dati_utente(utente)}
 
 
+@app.post("/api/v1/auth/completa-profilo", response_class=JSONResponse)
+def api_completa_profilo(
+    request: Request,
+    nome: str = Body("", embed=True),
+    cognome: str = Body("", embed=True),
+    data_nascita: str = Body("", embed=True),
+    accetta_privacy: bool = Body(False, embed=True),
+    accetta_termini: bool = Body(False, embed=True),
+    accetta_eta: bool = Body(False, embed=True),
+):
+    """
+    Completa un account creato con Apple (o con Google sul sito), che nasce
+    senza consensi ne' data di nascita.
+
+    ⚠️ Stesse identiche validazioni della pagina /completa-profilo. Se l'app
+    fosse piu' permissiva diventerebbe il percorso per aggirare i controlli
+    su eta' e consensi — e sono proprio quelli la ragione per cui la pagina
+    esiste.
+    """
+    utente = _richiedi_utente(request)
+    uid = utente["id"]
+
+    # Nome e cognome possono arrivare gia' da Apple: se il record li ha, non
+    # si obbliga a riscriverli.
+    def esistente(campo):
+        try:
+            return (utente[campo] or "").strip()
+        except (KeyError, IndexError, TypeError):
+            return ""
+
+    nome_finale = nome.strip() or esistente("first_name")
+    cognome_finale = cognome.strip() or esistente("last_name")
+
+    if not nome_finale:
+        raise HTTPException(status_code=400, detail="Inserisci il tuo nome.")
+    if not cognome_finale:
+        raise HTTPException(status_code=400, detail="Inserisci il tuo cognome.")
+
+    from datetime import date
+    try:
+        bd = date.fromisoformat((data_nascita or "").strip())
+        oggi = date.today()
+        eta = oggi.year - bd.year - ((oggi.month, oggi.day) < (bd.month, bd.day))
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Data di nascita non valida.")
+    if eta < 16:
+        raise HTTPException(status_code=400,
+                            detail="Devi avere almeno 16 anni per usare CosaGuardo.")
+
+    if not accetta_privacy:
+        raise HTTPException(status_code=400, detail="Devi accettare la Privacy Policy.")
+    if not accetta_termini:
+        raise HTTPException(status_code=400, detail="Devi accettare i Termini di Servizio.")
+    if not accetta_eta:
+        raise HTTPException(status_code=400, detail="Devi dichiarare di avere almeno 16 anni.")
+
+    try:
+        complete_onboarding(uid, nome_finale, cognome_finale, data_nascita.strip())
+    except Exception as e:
+        log.exception("api_completa_profilo fallita per %s: %s", uid, e)
+        raise HTTPException(status_code=500, detail="Salvataggio non riuscito.")
+
+    try:
+        _prefetch_daily_recs_async(uid)
+    except Exception as e:
+        log.debug("api_completa_profilo: prefetch fallito uid=%s: %s", uid, e)
+
+    return {"utente": _dati_utente(get_user_by_id(uid))}
+
+
 @app.get("/api/v1/auth/io", response_class=JSONResponse)
 def api_io(request: Request):
     """Dati dell'utente corrente. L'app la usa all'avvio per sapere se il
