@@ -3449,6 +3449,58 @@ def api_scopri(
     }
 
 
+def _api_piattaforme(providers) -> list:
+    """
+    Appiattisce i provider della scheda in una lista per l'app.
+
+    ⚠️ get_detail_* restituisce un DIZIONARIO con dentro flatrate / rent / buy
+    e un "link" generico, non una lista: passarlo cosi' com'e' all'app
+    significava consegnarle una struttura che non sapeva leggere. Qui diventa
+    una lista piatta con il tipo di accesso esplicito.
+
+    Ogni voce porta gia' il link affiliato quando c'e' (is_affiliate=True) e
+    quello JustWatch altrimenti: la logica sta nel motore, dove serve anche al
+    sito, e non va duplicata.
+    """
+    if not isinstance(providers, dict):
+        # Se un giorno il motore restituisse gia' una lista, la si passa.
+        return providers if isinstance(providers, list) else []
+
+    fuori = []
+    visti = set()
+    # L'ordine conta: l'abbonamento prima del noleggio e dell'acquisto, perche'
+    # e' quello che interessa a chi cerca "dove lo vedo".
+    for chiave, accesso in (("flatrate", "abbonamento"),
+                            ("rent", "noleggio"),
+                            ("buy", "acquisto")):
+        for p in providers.get(chiave) or []:
+            if not isinstance(p, dict):
+                continue
+            nome = (p.get("name") or "").strip()
+            if not nome:
+                continue
+            # Una piattaforma che offre lo stesso titolo in abbonamento e a
+            # noleggio comparirebbe due volte: si tiene la prima, cioe' la
+            # forma di accesso migliore per l'utente.
+            chiave_nome = nome.lower()
+            if chiave_nome in visti:
+                continue
+            visti.add(chiave_nome)
+
+            fuori.append({
+                "nome":      nome,
+                "accesso":   accesso,
+                "logo_url":  p.get("logo_url") or "",
+                "colore":    p.get("color") or "",
+                "link":      p.get("link") or "",
+                # L'app deve sapere quali link sono affiliati: serve a mostrare
+                # l'informativa, che e' un obbligo del programma Amazon e una
+                # richiesta esplicita delle linee guida App Store.
+                "affiliato": bool(p.get("is_affiliate")),
+            })
+    return fuori
+
+
 @app.get("/api/v1/detail/{content_type}/{tmdb_id}", response_class=JSONResponse)
 def api_detail(request: Request, content_type: str, tmdb_id: int):
     """Scheda completa in una sola chiamata."""
@@ -3496,7 +3548,10 @@ def api_detail(request: Request, content_type: str, tmdb_id: int):
         "director":       detail.get("director") or "",
         "cast":           detail.get("cast") or [],
         "trailer_key":    detail.get("trailer_key") or "",
-        "providers":      detail.get("providers") or detail.get("watch_providers") or [],
+        "piattaforme":    _api_piattaforme(detail.get("providers")),
+        # Manteniamo anche la chiave vecchia: un'app gia' pubblicata che
+        # leggesse "providers" non deve rompersi. Regola della v1.
+        "providers":      detail.get("providers") or [],
         "similar":        [_api_titolo_snello(s) for s in simili],
         # L'app non ha login: il link porta al sito, con l'origine tracciata.
         "web_url":        f"https://cosaguardo.com/{'serie' if content_type == 'tv' else 'film'}/{tmdb_id}?src=ios",
