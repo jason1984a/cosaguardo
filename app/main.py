@@ -4397,13 +4397,31 @@ GOOGLE_REDIRECT_URI  = os.environ.get("GOOGLE_REDIRECT_URI", "https://cosaguardo
 
 
 @app.get("/auth/google")
-def google_login(request: Request):
+def google_login(request: Request, app_nativa: int = 0):
     """Redirect a Google per il login OAuth.
-    Genera uno state CSRF token e lo salva in sessione per verifica al callback."""
+    Genera uno state CSRF token e lo salva in sessione per verifica al callback.
+
+    app_nativa=1: la richiesta arriva dall'app iOS. Al termine il callback
+    restituira' un token invece di creare una sessione web, e reindirizzera'
+    su cosaguardo:// invece che su /profilo.
+    """
     import urllib.parse
 
     # CSRF protection — genera state token e salva in sessione
     state = secrets.token_urlsafe(32)
+
+    # ⚠️ La provenienza viaggia DENTRO lo state, non nel cookie di sessione.
+    # ASWebAuthenticationSession isola i cookie del browser che apre, quindi
+    # la sessione del sito puo' non sopravvivere al giro su Google: il ramo
+    # app_nativa non scattava e l'utente restava collegato nel pannello ma
+    # non nell'app.
+    #
+    # Lo state resta imprevedibile e verificabile: il prefisso "app-" non
+    # indebolisce la protezione CSRF, perche' il confronto avviene comunque
+    # sull'intera stringa salvata in sessione quando c'e'.
+    if app_nativa:
+        state = "app-" + state
+
     request.session["oauth_state"] = state
 
     params = {
@@ -4419,17 +4437,35 @@ def google_login(request: Request):
     return RedirectResponse(url=url)
 
 
+def _uscita_oauth_errore(request: Request, motivo: str):
+    """
+    Dove mandare l'utente quando l'accesso Google fallisce.
+
+    ⚠️ Un solo punto per tutte le uscite in errore: dall'app un redirect su
+    /login lascerebbe l'utente dentro la finestra Safari senza modo di
+    tornare indietro, e con cinque punti di uscita era facile dimenticarne
+    uno.
+    """
+    # Lo state arriva come parametro del callback: si legge da li' e non
+    # dalla sessione, per lo stesso motivo spiegato in google_login.
+    stato = request.query_params.get("state", "")
+    if stato.startswith("app-"):
+        return RedirectResponse(url=f"cosaguardo://accesso?errore={motivo}",
+                                status_code=302)
+    return RedirectResponse(url=f"/login?error=google_{motivo}", status_code=302)
+
+
 @app.get("/auth/google/callback")
 def google_callback(request: Request, code: str = "", state: str = "", error: str = ""):
     """Callback Google OAuth — crea o logga l'utente."""
     if error or not code:
-        return RedirectResponse(url="/login?error=google_cancelled", status_code=302)
+        return _uscita_oauth_errore(request, "cancelled")
 
     # CSRF check — verifica state e consuma il token (one-shot)
     expected_state = request.session.pop("oauth_state", None)
     if not expected_state or not state or not secrets.compare_digest(state, expected_state):
         logger.warning("OAuth state mismatch o assente — possibile CSRF attempt")
-        return RedirectResponse(url="/login?error=google_state", status_code=302)
+        return _uscita_oauth_errore(request, "state")
 
     try:
         # 1. Scambia il code con il token
@@ -4449,7 +4485,7 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
 
         if not access_token:
             logger.warning("OAuth token exchange failed: %s", token_data.get("error", "unknown"))
-            return RedirectResponse(url="/login?error=google_failed", status_code=302)
+            return _uscita_oauth_errore(request, "failed")
 
         # 2. Recupera info utente da Google
         userinfo_resp = httpx.get(
@@ -4462,14 +4498,14 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
         email_verified = userinfo.get("verified_email", False)
 
         if not email:
-            return RedirectResponse(url="/login?error=google_no_email", status_code=302)
+            return _uscita_oauth_errore(request, "no_email")
 
         # Account takeover protection: rifiuta email non verificate da Google.
         # Senza questo check, chiunque potrebbe rivendicare un account altrui
         # registrando una Google identity non-verificata con la stessa email.
         if not email_verified:
             logger.warning("OAuth: email %s rifiutata, non verificata da Google", email)
-            return RedirectResponse(url="/login?error=google_unverified", status_code=302)
+            return _uscita_oauth_errore(request, "unverified")
 
         # 3. Crea o recupera l'utente
         user = get_user_by_email(email)
@@ -4495,7 +4531,22 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
         else:
             user_id = user["id"]
 
-        # 4. Setta la sessione
+        # 4a. Richiesta dall'app nativa: si restituisce un token e si
+        #     reindirizza sullo schema dell'app. NON si crea la sessione web:
+        #     il browser usato dall'app viene chiuso subito dopo, e lasciare
+        #     un cookie di sessione non servirebbe a nessuno.
+        if (state or "").startswith("app-"):
+            import urllib.parse as _up
+            token = crea_api_token(user_id, "iOS")
+            # Il token viaggia nell'URL perche' e' l'unico modo di passarlo
+            # ad ASWebAuthenticationSession, ma e' usa-e-getta: vale solo per
+            # quel dispositivo e si revoca uscendo.
+            return RedirectResponse(
+                url=f"cosaguardo://accesso?token={_up.quote(token)}",
+                status_code=302
+            )
+
+        # 4b. Percorso web normale.
         request.session["user_id"]    = user_id
         request.session["user_email"] = email
 
@@ -4505,7 +4556,7 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
 
     except Exception as e:
         logger.exception("OAuth callback error: %s", e)
-        return RedirectResponse(url="/login?error=google_error", status_code=302)
+        return _uscita_oauth_errore(request, "error")
 # ──────────────────────────────────────────────────────────────────────────
 
 # ─── Sitemap.xml ──────────────────────────────────────────────────────────
