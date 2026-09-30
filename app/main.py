@@ -25,6 +25,7 @@ from app.db import (
     get_disliked_titles_by_user,
     get_title_states_map,
     upsert_title_state,
+    get_title_state,
     get_user_stats,
     get_home_picks,
     save_home_picks,
@@ -3516,17 +3517,21 @@ def api_raccolta_segna(
     if preferito is not None:
         preferenza = "liked" if preferito else ""
 
+    # ⚠️ Tutto dentro il try, rilettura compresa. Prima la rilettura stava
+    # fuori: quando falliva (get_title_state non era importata, quindi
+    # NameError) il salvataggio era gia' avvenuto ma la risposta era un 500,
+    # e l'app tornava indietro su un dato che il server aveva invece scritto.
     try:
         upsert_title_state(
             utente["id"], titolo, content_type,
             seen=(None if visto is None else (1 if visto else 0)),
             preference=preferenza,
         )
+        stato = get_title_state(utente["id"], titolo, content_type)
     except Exception as e:
         log.exception("api_raccolta_segna fallita: %s", e)
         raise HTTPException(status_code=500, detail="salvataggio non riuscito")
 
-    stato = get_title_state(utente["id"], titolo, content_type)
     return {
         "titolo": titolo,
         "content_type": content_type,
