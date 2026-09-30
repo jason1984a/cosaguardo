@@ -1703,7 +1703,10 @@ def _build_movie_detail(tmdb_id: int, d: dict) -> dict:
                     "name":       prov_name,
                     "logo_url":   f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
                     "color":      prov_color,
-                    "link":       aff_link or jw_link,
+                    # Ordine: affiliato → link diretto alla piattaforma →
+                    # JustWatch. Quest'ultimo resta solo per le piattaforme
+                    # che non abbiamo in tabella.
+                    "link":       aff_link or _link_diretto_piattaforma(prov_name, title) or jw_link,
                     "is_affiliate": bool(aff_link),
                 })
             return out
@@ -1825,7 +1828,10 @@ def _build_tv_detail(tmdb_id: int, d: dict) -> dict:
                     "name":       prov_name,
                     "logo_url":   f"https://image.tmdb.org/t/p/w45{logo}" if logo else "",
                     "color":      prov_color,
-                    "link":       aff_link or jw_link,
+                    # Ordine: affiliato → link diretto alla piattaforma →
+                    # JustWatch. Quest'ultimo resta solo per le piattaforme
+                    # che non abbiamo in tabella.
+                    "link":       aff_link or _link_diretto_piattaforma(prov_name, title) or jw_link,
                     "is_affiliate": bool(aff_link),
                 })
             return out
@@ -2899,7 +2905,63 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
                 dest_enc = urllib.parse.quote_plus(dest_url)
                 return f"https://www.awin1.com/cread.php?awinmid={mid}&awinaffid={awin_id}&ued={dest_enc}"
 
-    return ""  # Nessun affiliato configurato → usa JustWatch
+    return ""  # Nessun affiliato configurato → si usa _link_diretto_piattaforma
+
+
+# ── Ripiego quando non c'e' affiliazione ───────────────────────────────────
+# ⚠️ Prima si cadeva sul link JustWatch di TMDb: l'utente toccava "Netflix" e
+# si ritrovava su themoviedb.org, in inglese, con un altro elenco di
+# piattaforme. Una promessa non mantenuta proprio nel punto in cui la scheda
+# deve rispondere a "dove lo vedo".
+#
+# RICERCA dove il formato e' noto e affidabile, HOME altrove. Meglio la home
+# della piattaforma giusta che una ricerca su un URL inventato che finisce in
+# pagina di errore o di login.
+_RICERCA_PIATTAFORMA = {
+    # Tutti e tre verificati a mano aprendo l'URL senza essere autenticati:
+    # la pagina di ricerca risponde e mostra risultati.
+    "Netflix":    "https://www.netflix.com/search?q={q}",
+    "Paramount+": "https://www.paramountplus.com/it/search/?query={q}",
+    "Apple TV+":  "https://tv.apple.com/it/search?term={q}",
+    # ⚠️ Disney+ NON va qui: /it-it/search?q= risponde "pagina non trovata".
+    # Resta sulla home, dove almeno l'utente atterra sulla piattaforma giusta.
+}
+
+_HOME_PIATTAFORMA = {
+    # Netflix c'e' anche qui, non solo nella ricerca: se il titolo mancasse,
+    # senza questa voce si ricadrebbe su JustWatch invece che su Netflix.
+    "Netflix":     "https://www.netflix.com/it/",
+    "Disney+":     "https://www.disneyplus.com/it-it",
+    "Paramount+":  "https://www.paramountplus.com/it/",
+    "Apple TV+":   "https://tv.apple.com/it",
+    "NOW":         "https://www.nowtv.it/",
+    "Rakuten TV":  "https://rakuten.tv/it",
+    "Chili":       "https://it.chili.com/",
+    "TIMVISION":   "https://www.timvision.it/",
+    "Canal+":      "https://www.canalplus.com/",
+    "Amazon Video": "https://www.primevideo.com/",
+    "Prime Video": "https://www.primevideo.com/",
+}
+
+
+def _link_diretto_piattaforma(provider_name: str, title: str = "") -> str:
+    """
+    Link alla piattaforma quando non c'e' un link affiliato.
+
+    Restituisce stringa vuota se la piattaforma non e' in tabella: in quel
+    caso il chiamante ricade su JustWatch, che resta meglio di niente.
+    """
+    import urllib.parse
+
+    nome = (provider_name or "").strip()
+    if not nome:
+        return ""
+
+    modello = _RICERCA_PIATTAFORMA.get(nome)
+    if modello and title:
+        return modello.format(q=urllib.parse.quote_plus(title))
+
+    return _HOME_PIATTAFORMA.get(nome, "")
 
 
 PROVIDER_META = {
@@ -3028,7 +3090,9 @@ def get_watch_providers(title: str, content_type: str = "movie", country: str = 
                     "name":         prov_name,
                     "logo_url":     f"https://image.tmdb.org/t/p/w45{logo_path}" if logo_path else "",
                     "color":        prov_color,
-                    "link":         aff_link or justwatch_link,
+                    # Stesso ordine delle schede: affiliato → link diretto
+                    # alla piattaforma → JustWatch.
+                    "link":         aff_link or _link_diretto_piattaforma(prov_name, title) or justwatch_link,
                     "is_affiliate": bool(aff_link),
                 })
             return out
