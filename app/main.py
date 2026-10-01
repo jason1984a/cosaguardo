@@ -3554,10 +3554,18 @@ def api_completa_profilo(
     accetta_privacy: bool = Body(False, embed=True),
     accetta_termini: bool = Body(False, embed=True),
     accetta_eta: bool = Body(False, embed=True),
+    content_pref: str = Body("", embed=True),
+    platforms: list = Body([], embed=True),
 ):
     """
-    Completa un account creato con Apple (o con Google sul sito), che nasce
-    senza consensi ne' data di nascita.
+    Completa un account creato con Apple o Google, che nasce senza consensi,
+    data di nascita e preferenze.
+
+    ⚠️ Raccoglie gli STESSI campi della pagina /completa-profilo del sito,
+    preferenza contenuto e piattaforme comprese: erano gia' li' e alimentano
+    i consigli personalizzati. Chiederli dopo, quando l'utente non capisce a
+    cosa servono, funziona molto peggio che nel momento in cui ha appena
+    scelto di entrare.
 
     ⚠️ Stesse identiche validazioni della pagina /completa-profilo. Se l'app
     fosse piu' permissiva diventerebbe il percorso per aggirare i controlli
@@ -3606,6 +3614,17 @@ def api_completa_profilo(
     except Exception as e:
         log.exception("api_completa_profilo fallita per %s: %s", uid, e)
         raise HTTPException(status_code=500, detail="Salvataggio non riuscito.")
+
+    # Preferenze: NON dentro il try sopra. Se fallisse il salvataggio delle
+    # piattaforme, l'account resterebbe senza consensi pur avendoli dati —
+    # e l'utente si ritroverebbe a rifare tutto. Qui invece il profilo e'
+    # gia' valido e si perde solo una personalizzazione.
+    if content_pref or platforms:
+        try:
+            scelte = [str(p) for p in (platforms or []) if str(p).strip()][:10]
+            save_user_onboarding(uid, (content_pref or "both").strip(), scelte)
+        except Exception as e:
+            log.warning("api_completa_profilo: preferenze non salvate uid=%s: %s", uid, e)
 
     try:
         _prefetch_daily_recs_async(uid)
