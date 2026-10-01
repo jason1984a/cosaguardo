@@ -4069,9 +4069,48 @@ def _api_piattaforme(providers) -> list:
     return fuori
 
 
+@app.get("/api/v1/detail/{content_type}/{tmdb_id}/simili", response_class=JSONResponse)
+def api_detail_simili(request: Request, content_type: str, tmdb_id: int):
+    """
+    I titoli simili, a parte dalla scheda.
+
+    E' la chiamata lenta: al primo accesso a un titolo fa girare il motore dei
+    consigli. Separandola, la scheda compare subito e questa sezione si
+    riempie dopo — che e' anche l'ordine in cui l'utente le guarda.
+    """
+    if content_type not in ("movie", "tv"):
+        raise HTTPException(status_code=400, detail="content_type deve essere movie o tv")
+
+    detail = get_detail_movie(tmdb_id) if content_type == "movie" else get_detail_tv(tmdb_id)
+    if not detail or not detail.get("title"):
+        return {"similar": []}
+
+    try:
+        simili = (_cached_similar_movies(tmdb_id, detail["title"])
+                  if content_type == "movie"
+                  else _cached_similar_tv(tmdb_id, detail["title"]))
+    except Exception as e:
+        log.warning("api_detail_simili fallita su %s: %s", tmdb_id, e)
+        simili = []
+
+    return {"similar": [_api_titolo_snello(s) for s in simili]}
+
+
 @app.get("/api/v1/detail/{content_type}/{tmdb_id}", response_class=JSONResponse)
-def api_detail(request: Request, content_type: str, tmdb_id: int):
-    """Scheda completa in una sola chiamata."""
+def api_detail(request: Request, content_type: str, tmdb_id: int,
+               con_simili: int = 0):
+    """
+    La scheda di un titolo.
+
+    ⚠️ I TITOLI SIMILI NON SI CALCOLANO QUI. _cached_similar_* e' in cache, ma
+    al primo accesso a un film lancia il motore dei consigli — 4-5 secondi —
+    piu' sei chiamate TMDb: tutta la scheda restava in attesa di una sezione
+    che sta in fondo e che l'utente vede solo scorrendo.
+    Ora la scheda torna subito e l'app chiede i simili a parte, con
+    /api/v1/detail/{tipo}/{id}/simili.
+
+    con_simili=1 li include comunque, per chi preferisce una chiamata sola.
+    """
     if content_type not in ("movie", "tv"):
         raise HTTPException(status_code=400, detail="content_type deve essere movie o tv")
 
@@ -4091,13 +4130,14 @@ def api_detail(request: Request, content_type: str, tmdb_id: int):
         log.warning("api_detail: controllo adulti fallito su %s: %s", tmdb_id, e)
 
     simili = []
-    try:
-        if detail.get("title"):
-            simili = (_cached_similar_movies(tmdb_id, detail["title"])
-                      if content_type == "movie"
-                      else _cached_similar_tv(tmdb_id, detail["title"]))
-    except Exception as e:
-        log.warning("api_detail: simili falliti su %s: %s", tmdb_id, e)
+    if con_simili:
+        try:
+            if detail.get("title"):
+                simili = (_cached_similar_movies(tmdb_id, detail["title"])
+                          if content_type == "movie"
+                          else _cached_similar_tv(tmdb_id, detail["title"]))
+        except Exception as e:
+            log.warning("api_detail: simili falliti su %s: %s", tmdb_id, e)
 
     return {
         "tmdb_id":        tmdb_id,
