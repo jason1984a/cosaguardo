@@ -3824,6 +3824,42 @@ def api_consigli_personali(request: Request):
     }
 
 
+@app.get("/api/v1/novita", response_class=JSONResponse)
+def api_novita(request: Request, tipo: str = "film", limite: int = 10):
+    """
+    Gli ultimi usciti, una striscia per piattaforma.
+
+    ⚠️ NON sono "le novità del catalogo": TMDb non sa quando un titolo è
+    ARRIVATO su una piattaforma, solo quando è uscito. Qui ci sono i titoli
+    usciti di recente che ora si trovano su quella piattaforma. È il limite
+    della fonte, ed è il motivo per cui la sezione si chiama "Usciti di
+    recente" — "Novità su Netflix" prometterebbe un'altra cosa.
+
+    Una chiamata sola per l'app, sei verso TMDb dietro le quinte, con cache
+    di 24 ore: le uscite non cambiano di ora in ora.
+    """
+    if tipo not in ("film", "serie"):
+        raise HTTPException(status_code=400, detail="tipo deve essere film o serie")
+
+    try:
+        from core.recommendation_api import get_novita_tutte
+        gruppi = get_novita_tutte(tipo=tipo, limit=max(1, min(limite, 20)))
+    except Exception as e:
+        log.exception("api_novita fallita: %s", e)
+        return {"piattaforme": []}
+
+    return {
+        "piattaforme": [
+            {
+                "slug":      g["slug"],
+                "etichetta": g["etichetta"],
+                "titoli":    [_api_titolo_snello(t) for t in g["titoli"]],
+            }
+            for g in gruppi
+        ]
+    }
+
+
 @app.get("/api/v1/trending", response_class=JSONResponse)
 def api_trending(request: Request, limit: int = Query(12)):
     """

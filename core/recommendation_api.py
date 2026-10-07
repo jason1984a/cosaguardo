@@ -2663,6 +2663,89 @@ def get_scopri_results(
 
 
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Usciti di recente, per piattaforma
+#
+# ⚠️ NON sono "le novità del catalogo". TMDb non sa QUANDO un titolo è
+# arrivato su una piattaforma, sa solo quando è uscito: quindi qui ci sono i
+# titoli usciti di recente che ORA si trovano su quella piattaforma. Un film
+# di gennaio arrivato su Netflix a ottobre risulta vecchio. È il limite della
+# fonte dati, ed è il motivo per cui la sezione si chiama "Usciti di recente"
+# e non "Novità su Netflix", che prometterebbe un'altra cosa.
+# ═══════════════════════════════════════════════════════════════════════════
+
+NOVITA_PIATTAFORME = [
+    ("netflix",   "Netflix"),
+    ("prime",     "Prime Video"),
+    ("disney",    "Disney+"),
+    ("apple",     "Apple TV+"),
+    ("now",       "NOW"),
+    ("paramount", "Paramount+"),
+]
+
+# Cache in memoria, una voce per piattaforma.
+# ⚠️ Per PIATTAFORMA e non per l'intera risposta: se una delle sei chiamate
+# fallisce, le altre cinque restano valide invece di invalidare tutto.
+_novita_cache: dict = {}
+
+
+def get_novita_piattaforma(slug: str, tipo: str = "film", limit: int = 10,
+                           ttl_ore: int = 24) -> list:
+    """
+    Gli ultimi usciti disponibili su una piattaforma.
+
+    Cache di 24 ore: le uscite non cambiano di ora in ora, e con sei
+    piattaforme per due tipi una cache corta significherebbe decine di
+    chiamate TMDb al giorno per nulla.
+    """
+    import time
+
+    chiave = f"{slug}:{tipo}"
+    voce = _novita_cache.get(chiave)
+    if voce and (time.time() - voce["quando"]) < ttl_ore * 3600:
+        return voce["dati"]
+
+    try:
+        r = get_scopri_results(
+            tipo=tipo,
+            piattaforma=slug,
+            # "recenti" è il valore che il motore riconosce per il periodo
+            # breve: inventarne uno nuovo darebbe zero risultati in silenzio.
+            anno="recenti",
+            page=1,
+            limit=max(limit, 20),
+        )
+        titoli = (r or {}).get("results") or []
+
+        # Ordinati per data di uscita, i più nuovi davanti. Il motore ordina
+        # per popolarità, che qui metterebbe in cima i titoli più vecchi e
+        # conosciuti — l'opposto di quello che la sezione promette.
+        titoli.sort(key=lambda t: (t.get("release_date") or ""), reverse=True)
+        titoli = titoli[:limit]
+
+    except Exception:
+        # Una piattaforma che fallisce non deve svuotare le altre: si
+        # restituisce l'ultima versione buona, se c'è.
+        return voce["dati"] if voce else []
+
+    _novita_cache[chiave] = {"dati": titoli, "quando": time.time()}
+    return titoli
+
+
+def get_novita_tutte(tipo: str = "film", limit: int = 10) -> list:
+    """Tutte le piattaforme, saltando quelle rimaste senza titoli."""
+    fuori = []
+    for slug, etichetta in NOVITA_PIATTAFORME:
+        titoli = get_novita_piattaforma(slug, tipo=tipo, limit=limit)
+        if titoli:
+            fuori.append({
+                "slug": slug,
+                "etichetta": etichetta,
+                "titoli": titoli,
+            })
+    return fuori
+
+
 # Configurazione strip per /scopri — ordinate per engagement
 SCOPRI_STRIPS = [
     {"id": "thriller",     "label": "Thriller",          "emoji": "🔪", "genre_movie": 53,    "genre_tv": 9648},
