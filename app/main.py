@@ -3803,8 +3803,14 @@ def api_consigli_personali(request: Request):
     utente = _richiedi_utente(request)
     uid = utente["id"]
 
+    # ⚠️ get_daily_recommendations vuole ANCHE la data: i consigli sono per
+    # giorno. Chiamandola col solo user_id sollevava TypeError, che l'except
+    # qui sotto trattava come "nessun consiglio" — e la sezione restava vuota
+    # per sempre, in silenzio, mentre sul sito funzionava.
+    oggi = datetime.now().strftime("%Y-%m-%d")
+
     try:
-        pronti = get_daily_recommendations(uid) or []
+        pronti = get_daily_recommendations(uid, oggi) or []
     except Exception as e:
         log.warning("api_consigli_personali: lettura fallita uid=%s: %s", uid, e)
         pronti = []
@@ -3818,8 +3824,33 @@ def api_consigli_personali(request: Request):
             log.debug("api_consigli_personali: prefetch fallito uid=%s: %s", uid, e)
         return {"risultati": [], "in_preparazione": True}
 
+    # ⚠️ Le righe di daily_recommendations NON hanno la forma di un titolo
+    # TMDb: contengono title, content_type, reason, score, poster_url — niente
+    # tmdb_id. Passarle a _api_titolo_snello darebbe card senza id, cioè non
+    # toccabili. Si costruisce la voce a mano e si risolve l'id con la stessa
+    # funzione che usa /la-mia-raccolta.
+    try:
+        arricchiti = _enrich_titles_with_posters([dict(r) for r in pronti])
+    except Exception as e:
+        log.warning("api_consigli_personali: arricchimento fallito uid=%s: %s", uid, e)
+        arricchiti = [dict(r) for r in pronti]
+
     return {
-        "risultati": [_api_titolo_snello(r) for r in pronti],
+        "risultati": [
+            {
+                "tmdb_id":      d.get("tmdb_id"),
+                "title":        d.get("title") or "",
+                "content_type": d.get("content_type") or "movie",
+                "poster_url":   d.get("poster_url") or "",
+                "year":         None,
+                "vote_average": None,
+                # "reason" è la spiegazione del motore: è il pezzo che
+                # distingue un consiglio da un elenco a caso, e l'app lo
+                # mostra già nel campo "why".
+                "why":          d.get("reason") or "",
+            }
+            for d in arricchiti
+        ],
         "in_preparazione": False,
     }
 
