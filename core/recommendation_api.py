@@ -2069,7 +2069,12 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
     q_norm = normalize(query)
 
     # Cache key (stabile, case-insensitive)
-    cache_key = f"search_movie_v2:{q_lower}:{limit}"
+    # ⚠️ v3 e non v2: la chiave va cambiata OGNI VOLTA che cambia la forma dei
+    # risultati. Quando sono stati aggiunti poster_url e year, la chiave e'
+    # rimasta v2: le voci salvate prima continuavano a essere servite senza i
+    # campi nuovi, e la ricerca mostrava titoli senza locandina ne' anno pur
+    # avendo il codice corretto in produzione.
+    cache_key = f"search_movie_v3:{q_lower}:{limit}"
 
     # L2 cache hit?
     try:
