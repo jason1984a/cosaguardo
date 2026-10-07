@@ -2688,6 +2688,10 @@ NOVITA_PIATTAFORME = [
 # fallisce, le altre cinque restano valide invece di invalidare tutto.
 _novita_cache: dict = {}
 
+# Sotto questa soglia la striscia sembra rotta invece che corta, e si allarga
+# il periodo per riempirla.
+_NOVITA_SOGLIA = 6
+
 
 def get_novita_piattaforma(slug: str, tipo: str = "film", limit: int = 10,
                            ttl_ore: int = 24) -> list:
@@ -2706,16 +2710,39 @@ def get_novita_piattaforma(slug: str, tipo: str = "film", limit: int = 10,
         return voce["dati"]
 
     try:
-        r = get_scopri_results(
-            tipo=tipo,
-            piattaforma=slug,
-            # "recenti" è il valore che il motore riconosce per il periodo
-            # breve: inventarne uno nuovo darebbe zero risultati in silenzio.
-            anno="recenti",
-            page=1,
-            limit=max(limit, 20),
-        )
-        titoli = (r or {}).get("results") or []
+        def _cerca(periodo: str) -> list:
+            r = get_scopri_results(
+                tipo=tipo,
+                piattaforma=slug,
+                # ⚠️ Solo valori che il motore riconosce — "recenti", "anno",
+                # "classici": inventarne uno nuovo darebbe zero risultati in
+                # silenzio, senza errore.
+                anno=periodo,
+                page=1,
+                limit=max(limit, 20),
+            )
+            return (r or {}).get("results") or []
+
+        titoli = _cerca("recenti")
+
+        # ⚠️ Piattaforme con cataloghi piccoli — Apple TV+ e Paramount+ —
+        # restituiscono due o tre titoli, e una striscia con due card sembra
+        # un errore invece di una lista corta. Si allarga il periodo finché
+        # non si riempie.
+        #
+        # NON si cambia l'etichetta: restano comunque "le uscite più recenti
+        # di quella piattaforma", che è vero anche risalendo indietro. Un
+        # "ultimi 12 mesi" accanto al nome aggiungerebbe rumore proprio sulle
+        # strisce che si guardano meno, in fondo alla pagina.
+        if len(titoli) < _NOVITA_SOGLIA:
+            visti = {t.get("tmdb_id") for t in titoli}
+            for periodo in ("anno", "classici"):
+                for t in _cerca(periodo):
+                    if t.get("tmdb_id") not in visti:
+                        visti.add(t.get("tmdb_id"))
+                        titoli.append(t)
+                if len(titoli) >= limit:
+                    break
 
         # Ordinati per data di uscita, i più nuovi davanti. Il motore ordina
         # per popolarità, che qui metterebbe in cima i titoli più vecchi e
