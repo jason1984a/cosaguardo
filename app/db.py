@@ -46,6 +46,18 @@ def ensure_daily_recommendations_table():
             ADD COLUMN poster_url TEXT
             """)
 
+        # ⚠️ Il motore restituisce gia' tmdb_id (normalize_movie_rec e
+        # normalize_tv_rec lo includono), ma si perdeva qui: la tabella non
+        # aveva la colonna e l'id veniva poi RICERCATO per titolo. Con nomi
+        # brevi la ricerca prende il risultato piu' popolare: "Power"
+        # apriva "Power Rangers", con la locandina giusta e la scheda
+        # sbagliata. Salvarlo elimina la ricerca e l'errore.
+        if "tmdb_id" not in columns:
+            cursor.execute("""
+            ALTER TABLE daily_recommendations
+            ADD COLUMN tmdb_id INTEGER
+            """)
+
         conn.commit()
     finally:
         conn.close()
@@ -59,7 +71,7 @@ def get_daily_recommendations(user_id, rec_date):
         cursor = conn.cursor()
 
         cursor.execute("""
-        SELECT title, content_type, reason, score, poster_url
+        SELECT title, content_type, reason, score, poster_url, tmdb_id
         FROM daily_recommendations
         WHERE user_id = ? AND rec_date = ?
         ORDER BY id ASC
@@ -92,9 +104,10 @@ def save_daily_recommendations(user_id, rec_date, recommendations):
                 content_type,
                 reason,
                 score,
-                poster_url
+                poster_url,
+                tmdb_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 user_id,
                 rec_date,
@@ -103,6 +116,7 @@ def save_daily_recommendations(user_id, rec_date, recommendations):
                 rec.get("reason", ""),
                 rec.get("score"),
                 rec.get("poster_url", ""),
+                rec.get("tmdb_id"),
             ))
 
         conn.commit()

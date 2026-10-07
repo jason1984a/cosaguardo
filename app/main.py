@@ -3824,16 +3824,30 @@ def api_consigli_personali(request: Request):
             log.debug("api_consigli_personali: prefetch fallito uid=%s: %s", uid, e)
         return {"risultati": [], "in_preparazione": True}
 
-    # ⚠️ Le righe di daily_recommendations NON hanno la forma di un titolo
-    # TMDb: contengono title, content_type, reason, score, poster_url — niente
-    # tmdb_id. Passarle a _api_titolo_snello darebbe card senza id, cioè non
-    # toccabili. Si costruisce la voce a mano e si risolve l'id con la stessa
-    # funzione che usa /la-mia-raccolta.
-    try:
-        arricchiti = _enrich_titles_with_posters([dict(r) for r in pronti])
-    except Exception as e:
-        log.warning("api_consigli_personali: arricchimento fallito uid=%s: %s", uid, e)
-        arricchiti = [dict(r) for r in pronti]
+    righe = [dict(r) for r in pronti]
+
+    # ⚠️ L'id arriva dalla tabella, NON da una ricerca per titolo. Il motore
+    # lo conosce quando genera il consiglio e ora viene salvato: ricercarlo
+    # dal titolo prendeva il risultato piu' popolare, e "Power" apriva
+    # "Power Rangers" con la locandina giusta e la scheda sbagliata.
+    #
+    # Solo le righe salvate PRIMA di questa correzione sono senza id: per
+    # quelle si ricade sulla ricerca, e si esauriscono da sole entro un
+    # giorno, quando i consigli vengono rigenerati.
+    senza_id = [r for r in righe if not r.get("tmdb_id")]
+    if senza_id:
+        try:
+            risolti = {
+                (d.get("title") or ""): d.get("tmdb_id")
+                for d in _enrich_titles_with_posters(senza_id)
+            }
+            for r in righe:
+                if not r.get("tmdb_id"):
+                    r["tmdb_id"] = risolti.get(r.get("title") or "")
+        except Exception as e:
+            log.warning("api_consigli_personali: risoluzione id fallita uid=%s: %s", uid, e)
+
+    arricchiti = righe
 
     return {
         "risultati": [
