@@ -2122,6 +2122,15 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
                     "tmdb_id":       item.get("id"),
                     "title":         base,
                     "display_title": display,
+                    # ⚠️ poster_path e release_date arrivano gia' nella stessa
+                    # risposta TMDb: non metterli significava una lista di
+                    # risultati senza locandine ne' anno — e con titoli come
+                    # "Titanic", che esistono in piu' versioni, senza anno non
+                    # si capisce quale si sta aprendo. Nessuna chiamata in piu'.
+                    "poster_url":    (f"https://image.tmdb.org/t/p/w185{item.get('poster_path')}"
+                                      if item.get("poster_path") else ""),
+                    "year":          (item.get("release_date")
+                                      or item.get("first_air_date") or "")[:4],
                     "_popularity":   pop,
                     "_vote_count":   vc,
                 })
