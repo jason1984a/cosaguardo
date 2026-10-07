@@ -2074,7 +2074,7 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
     # rimasta v2: le voci salvate prima continuavano a essere servite senza i
     # campi nuovi, e la ricerca mostrava titoli senza locandina ne' anno pur
     # avendo il codice corretto in produzione.
-    cache_key = f"search_movie_v3:{q_lower}:{limit}"
+    cache_key = f"search_movie_v4:{q_lower}:{limit}"
 
     # L2 cache hit?
     try:
@@ -2236,6 +2236,15 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
             "tmdb_id":       item.get("tmdb_id"),
             "title":         item.get("title"),
             "display_title": item.get("display_title"),
+            # ⚠️ ERA QUI il buco. poster_url e year venivano popolati piu'
+            # sopra dai dati TMDb, ma questo blocco ricostruisce ogni voce da
+            # zero con i soli campi elencati: tutto il resto spariva. Aggiungerli
+            # a monte non serviva a niente, e la ricerca mostrava titoli senza
+            # locandina ne' anno nonostante il codice sembrasse corretto.
+            # I risultati del DB locale non li hanno: restano stringhe vuote,
+            # che l'app gestisce gia' mostrando il segnaposto.
+            "poster_url":    item.get("poster_url") or "",
+            "year":          item.get("year") or "",
             "_score":        round(s, 1),  # esposto per merge client-side
         })
         if len(cleaned) >= limit:
