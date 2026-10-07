@@ -1,0 +1,202 @@
+{% extends "base.html" %}
+{% block title %}Admin Crescita — CosaGuardo{% endblock %}
+{% block meta_robots %}noindex, nofollow{% endblock %}
+
+{% macro delta_pct(d) %}
+    {% if d is none %}<span style="color:var(--muted);">—</span>
+    {% elif d > 0 %}<span style="color:#4ade80;">▲ {{ d }}%</span>
+    {% elif d < 0 %}<span style="color:#f87171;">▼ {{ d|abs }}%</span>
+    {% else %}<span style="color:var(--muted);">=</span>{% endif %}
+{% endmacro %}
+
+{% macro delta_punti(d) %}
+    {% if d is none %}<span style="color:var(--muted);">—</span>
+    {% elif d > 0 %}<span style="color:#4ade80;">▲ {{ d }} punti</span>
+    {% elif d < 0 %}<span style="color:#f87171;">▼ {{ d|abs }} punti</span>
+    {% else %}<span style="color:var(--muted);">=</span>{% endif %}
+{% endmacro %}
+
+{% macro pct(v) %}{% if v is none %}—{% else %}{{ v }}%{% endif %}{% endmacro %}
+
+{% block content %}
+<div style="padding-bottom:48px;">
+
+    <!-- HEADER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
+        <div>
+            <div style="font-size:0.72rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:#93c5fd;margin-bottom:4px;">
+                🔐 Area Admin
+            </div>
+            <h1 style="font-size:1.6rem;font-weight:900;margin:0;">Crescita</h1>
+            <p style="font-size:0.85rem;color:var(--muted);margin:6px 0 0;">
+                Registrati, utenti che lasciano segnali e utenti che tornano, entro {{ c.finestra if c and not c.error else 7 }} giorni dalla registrazione
+            </p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="/admin/home" style="padding:8px 14px;border-radius:10px;font-size:0.8rem;font-weight:700;text-decoration:none;border:1px solid rgba(255,255,255,0.1);background:transparent;color:var(--muted);">
+                ← Admin Home
+            </a>
+        </div>
+    </div>
+
+    {% if c.error %}
+    <div style="padding:14px 16px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.35);border-radius:10px;color:#fca5a5;">
+        ⚠️ Errore caricamento metriche: <code>{{ c.error }}</code>
+    </div>
+    {% else %}
+
+    <!-- FILTRO ORIGINE -->
+    <div class="cr-filtro">
+        {% for key, label in c.gruppi %}
+        <a href="/admin/crescita?gruppo={{ key }}" class="{% if c.gruppo == key %}cr-attivo{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </div>
+
+    <!-- COLPO D'OCCHIO -->
+    <div class="cr-stats">
+        <div class="cr-stat">
+            <div class="cr-stat-val" style="color:#4ade80;">{{ c.registrati.attuale }}</div>
+            <div class="cr-stat-label">Registrati 7gg</div>
+            <div class="cr-stat-delta">{{ delta_pct(c.registrati.delta_pct) }}
+                <span>vs {{ c.registrati.precedente }}</span></div>
+        </div>
+        <div class="cr-stat">
+            <div class="cr-stat-val" style="color:#fbbf24;">{{ pct(c.segnali.attuale) }}</div>
+            <div class="cr-stat-label">Con segnali</div>
+            <div class="cr-stat-sub">{{ c.segnali.conteggio }} su {{ c.segnali.su }}</div>
+            <div class="cr-stat-delta">{{ delta_punti(c.segnali.delta_punti) }}
+                <span>vs {{ pct(c.segnali.precedente) }}</span></div>
+        </div>
+        <div class="cr-stat">
+            <div class="cr-stat-val" style="color:#a78bfa;">{{ pct(c.tornati.attuale) }}</div>
+            <div class="cr-stat-label">Tornati</div>
+            <div class="cr-stat-sub">{{ c.tornati.conteggio }} su {{ c.tornati.su }}</div>
+            <div class="cr-stat-delta">{{ delta_punti(c.tornati.delta_punti) }}
+                <span>vs {{ pct(c.tornati.precedente) }}</span></div>
+        </div>
+    </div>
+    <p class="cr-nota">
+        Registrati: ultimi 7 giorni contro i 7 precedenti.
+        Segnali e tornati: ultima settimana maturata
+        ({{ c.settimana_matura.dal[8:10] }}/{{ c.settimana_matura.dal[5:7] }} –
+        {{ c.settimana_matura.al[8:10] }}/{{ c.settimana_matura.al[5:7] }})
+        contro quella prima. I giorni più recenti non hanno ancora avuto
+        {{ c.finestra }} giorni per tornare.
+    </p>
+
+    <!-- PER ORIGINE -->
+    {% if c.gruppo == 'tutti' and c.per_origine %}
+    <div class="cr-sezione">Per origine · settimana maturata</div>
+    <div class="cr-scroll">
+        <table class="cr-tab">
+            <thead><tr><th>Origine</th><th>Reg.</th><th>Segnali</th><th>Tornati</th></tr></thead>
+            <tbody>
+            {% for o in c.per_origine %}
+            <tr>
+                <td><a href="/admin/crescita?gruppo={{ o.chiave }}">{{ o.etichetta }}</a></td>
+                <td>{{ o.registrati }}</td>
+                <td>{{ o.segnali }} <span class="cr-pct">{{ pct(o.pct_segnali) }}</span></td>
+                <td>{{ o.tornati }} <span class="cr-pct">{{ pct(o.pct_tornati) }}</span></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- GIORNO PER GIORNO -->
+    <div class="cr-sezione">Giorno per giorno · ultimi {{ c.tabella|length }} giorni</div>
+    <div class="cr-scroll">
+        <table class="cr-tab">
+            <thead><tr><th>Giorno</th><th>Reg.</th><th>Segnali</th><th>Tornati</th></tr></thead>
+            <tbody>
+            {% for r in c.tabella %}
+            <tr class="{% if not r.maturo %}cr-acerbo{% endif %}{% if r.registrati == 0 %} cr-vuoto{% endif %}">
+                <td>{{ r.giorno[8:10] }}/{{ r.giorno[5:7] }}{% if not r.maturo %} <span class="cr-tag">in corso</span>{% endif %}</td>
+                <td>{{ r.registrati }}</td>
+                <td>{% if r.registrati %}{{ r.segnali }} <span class="cr-pct">{{ pct(r.pct_segnali) }}</span>{% else %}—{% endif %}</td>
+                <td>{% if r.registrati %}{{ r.tornati }} <span class="cr-pct">{{ pct(r.pct_tornati) }}</span>{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <p class="cr-nota">
+        <strong>Segnali</strong>: almeno una ricerca o un titolo segnato (visto, preferito, non mi piace).
+        <strong>Tornati</strong>: attivi in un giorno diverso da quello di registrazione.
+        Giorni in UTC.
+    </p>
+
+    {% endif %}
+</div>
+
+<style>
+.cr-filtro {
+    display: flex; gap: 4px; flex-wrap: wrap;
+    background: rgba(0,0,0,0.25); padding: 3px; border-radius: 10px;
+    margin-bottom: 18px; width: fit-content; max-width: 100%;
+}
+.cr-filtro a {
+    padding: 7px 12px; border-radius: 8px; font-size: 0.8rem; font-weight: 700;
+    text-decoration: none; color: var(--muted); white-space: nowrap;
+}
+.cr-filtro a.cr-attivo { background: linear-gradient(135deg,#6ea8fe,#a78bfa); color: #08101f; }
+
+.cr-stats {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+}
+.cr-stat {
+    background: rgba(22,31,61,0.7); border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px; padding: 16px 10px; text-align: center;
+}
+.cr-stat-val { font-size: 1.9rem; font-weight: 900; line-height: 1; margin-bottom: 6px; letter-spacing: -0.03em; }
+.cr-stat-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+.cr-stat-sub { font-size: 0.68rem; color: var(--muted); margin-top: 3px; opacity: 0.8; }
+.cr-stat-delta {
+    margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06);
+    font-size: 0.76rem; font-weight: 700; display: flex; justify-content: center;
+    gap: 6px; flex-wrap: wrap; align-items: baseline;
+}
+.cr-stat-delta > span:last-child { color: var(--muted); font-weight: 500; font-size: 0.7rem; }
+
+.cr-nota { font-size: 0.75rem; color: var(--muted); line-height: 1.5; margin: 10px 2px 0; }
+
+.cr-sezione {
+    font-size: 0.95rem; font-weight: 800; text-transform: uppercase;
+    letter-spacing: 0.04em; color: #cbd5e1; margin: 28px 0 10px; padding-left: 2px;
+}
+
+.cr-scroll {
+    overflow-x: auto; border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.06); background: rgba(22,31,61,0.5);
+}
+.cr-tab { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.cr-tab th {
+    text-align: right; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--muted); font-weight: 700; padding: 10px 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08); white-space: nowrap;
+}
+.cr-tab td {
+    text-align: right; padding: 9px 12px; color: #e2e8f0; white-space: nowrap;
+    border-bottom: 1px solid rgba(255,255,255,0.04); font-variant-numeric: tabular-nums;
+}
+.cr-tab th:first-child, .cr-tab td:first-child { text-align: left; }
+.cr-tab td a { color: #93c5fd; text-decoration: none; font-weight: 700; }
+.cr-tab tr:last-child td { border-bottom: none; }
+.cr-pct { color: var(--muted); font-size: 0.75rem; margin-left: 4px; }
+.cr-acerbo td { opacity: 0.55; }
+.cr-vuoto td { opacity: 0.35; }
+.cr-tag {
+    font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+    color: #fbbf24; background: rgba(251,191,36,0.12); padding: 2px 5px; border-radius: 5px;
+    margin-left: 4px;
+}
+
+@media (max-width: 720px) {
+    .cr-stat-val { font-size: 1.5rem; }
+    .cr-stat { padding: 14px 6px; }
+    .cr-tab td, .cr-tab th { padding: 8px 8px; }
+    .cr-pct { display: block; margin-left: 0; }
+}
+</style>
+{% endblock %}
