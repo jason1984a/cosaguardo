@@ -1356,7 +1356,7 @@ def home(request: Request):
         except Exception as e:
             log.debug("home: prefetch daily_recs fallita uid=%s: %s", user_id, e)
 
-    return templates.TemplateResponse(
+    risposta = templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
@@ -1370,6 +1370,14 @@ def home(request: Request):
             "new_seasons_alert":   new_seasons_alert,
         },
     )
+    # ⚠️ SEO (08/10/2026): la home con parametri (?prefill=..., ?src=app,
+    # utm_...) e' la STESSA pagina, ma Google trattava ogni URL come pagina a
+    # se': Search Console ne contava ~1.600 come "duplicate senza canonico",
+    # quasi tutte ?prefill= con titoli esteri. Header e non meta tag: vale a
+    # prescindere dal template e non tocca la home pulita.
+    if request.query_params:
+        risposta.headers["X-Robots-Tag"] = "noindex, follow"
+    return risposta
 
 
 # ─── Phase 2: detection nuove stagioni ──────────────────────────────────
@@ -4747,10 +4755,13 @@ def dove_vedere_hub(request: Request, tipo: str = "", p: int = 1):
     items, total = list_seo_titles(content_type=content_type, page=page, per_page=per_page)
     total_pages = max(1, (total + per_page - 1) // per_page)
 
-    # SEO: paginate (p>1) = noindex (thin duplicate del page 1).
-    # page=1 con qualsiasi 'tipo' resta index: sono 3 viste distinte di valore
-    # (/dove-vedere = all, /dove-vedere?tipo=film, /dove-vedere?tipo=serie).
-    meta_robots = "noindex, follow" if page > 1 else "index, follow"
+    # SEO: indicizzata SOLO /dove-vedere pulita.
+    # - p>1 = noindex (duplicato sottile della pagina 1)
+    # - ?tipo=film / ?tipo=serie = noindex (08/10/2026): dovevano essere viste
+    #   distinte, ma Google le ha classificate "duplicate senza canonico".
+    #   Restano navigabili e i link (follow) continuano a far scoprire le
+    #   pagine /dove-vedere/{slug}, che sono quelle che contano.
+    meta_robots = "noindex, follow" if (page > 1 or content_type) else "index, follow"
 
     return templates.TemplateResponse(
         request=request,
@@ -5452,8 +5463,8 @@ def sitemap():
     static_urls = [
         ("",                 "daily",   "1.0"),
         ("/dove-vedere",     "daily",   "0.9"),
-        ("/dove-vedere?tipo=film",  "daily", "0.7"),
-        ("/dove-vedere?tipo=serie", "daily", "0.7"),
+        # ?tipo=film / ?tipo=serie tolte (08/10/2026): ora sono noindex, e una
+        # sitemap non deve mai contenere pagine noindex.
         ("/installa",        "monthly", "0.5"),
         ("/privacy",         "yearly",  "0.3"),
         ("/termini",         "yearly",  "0.3"),
