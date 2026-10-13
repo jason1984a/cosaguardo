@@ -2492,7 +2492,7 @@ PLATFORM_MAP = {
 }
 
 
-def get_scopri_results(
+def _scopri_results_live(
     tipo: str = "film",
     genere: str = "",
     mood: str = "",
@@ -2507,6 +2507,10 @@ def get_scopri_results(
     Risultati per la pagina /scopri con filtri combinabili.
     Usa TMDb /discover con i parametri giusti.
     Ritorna: {"results": [...], "total": int, "page": int}
+
+    ⚠️ Questa e' la versione che PARLA CON TMDb. I chiamanti usano
+    get_scopri_results, che ci mette davanti una cache. Chiamare questa
+    direttamente significa pagare la rete ogni volta.
     """
     if not TMDB_API_KEY:
         return {"results": [], "total": 0, "page": 1}
@@ -2660,6 +2664,99 @@ def get_scopri_results(
 
     except Exception:
         return {"results": [], "total": 0, "page": page}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Cache di /scopri
+#
+# Perche' serve: _scopri_results_live chiamava TMDb a OGNI invocazione, e con
+# il filtro voto attivo sono due chiamate (_SCOPRI_TMDB_PAGES). /scopri e' la
+# schermata dove si cambiano filtri in continuazione, e le combinazioni si
+# ripetono moltissimo fra utenti diversi: "Netflix + commedia, pagina 1" la
+# chiedono tutti. Erano chiamate identiche pagate ogni volta da capo.
+#
+# ⚠️ SI RESTITUISCONO SEMPRE COPIE, e non e' una precauzione teorica:
+# get_novita_piattaforma qui sotto fa `titoli.sort(...)` sulla lista che
+# riceve. Senza copia quel sort riordinerebbe la lista DENTRO la cache, e la
+# griglia di /scopri — che vuole l'ordine per popolarita' — comincerebbe a
+# mostrare i risultati ordinati per data di uscita. Un danno silenzioso su
+# una pagina che non c'entra niente, difficilissimo da ricondurre alla cache.
+# ═══════════════════════════════════════════════════════════════════════════
+
+import threading as _scopri_threading
+
+_scopri_cache: dict = {}
+_SCOPRI_TTL = 3 * 3600      # secondi: la popolarita' TMDb si muove piano
+_SCOPRI_MAX = 500           # voci: ~20 titoli l'una, qualche MB in tutto
+_scopri_lock = _scopri_threading.Lock()
+
+
+def _scopri_copia(dati: dict) -> dict:
+    """Copia superficiale ma abbastanza profonda: il dizionario esterno, la
+    lista e ogni titolo. Sono una ventina di dizionari piccoli, costa niente
+    rispetto a una chiamata di rete."""
+    return {
+        "results": [dict(t) for t in (dati.get("results") or [])],
+        "total":   dati.get("total", 0),
+        "page":    dati.get("page", 1),
+    }
+
+
+def get_scopri_results(
+    tipo: str = "film",
+    genere: str = "",
+    mood: str = "",
+    piattaforma: str = "",
+    anno: str = "",
+    voto: str = "",
+    page: int = 1,
+    limit: int = 20,
+    provider_id: int | None = None,
+) -> dict:
+    """
+    Come _scopri_results_live, ma con una cache di tre ore davanti.
+    La firma e' identica: i chiamanti non cambiano.
+    """
+    import time as _t
+    import datetime as _dt
+
+    # ⚠️ La data fa parte della chiave. I filtri anno ("recenti", "anno")
+    # sono relativi a OGGI: senza la data in chiave, una voce salvata ieri
+    # risponderebbe a una domanda diversa da quella che le viene fatta.
+    chiave = (
+        _dt.date.today().isoformat(),
+        tipo, genere, mood, piattaforma, anno, voto, page, limit, provider_id,
+    )
+
+    adesso = _t.time()
+    with _scopri_lock:
+        voce = _scopri_cache.get(chiave)
+        if voce and (adesso - voce["quando"]) < _SCOPRI_TTL:
+            return _scopri_copia(voce["dati"])
+
+    dati = _scopri_results_live(
+        tipo=tipo, genere=genere, mood=mood, piattaforma=piattaforma,
+        anno=anno, voto=voto, page=page, limit=limit, provider_id=provider_id,
+    )
+
+    # ⚠️ Non si mette in cache una risposta vuota. _scopri_results_live
+    # restituisce {"results": []} anche quando TMDb e' irraggiungibile o va in
+    # errore: salvarla significherebbe inchiodare per tre ore una pagina vuota
+    # a causa di un singolo momento storto della rete.
+    if dati.get("results"):
+        with _scopri_lock:
+            if len(_scopri_cache) >= _SCOPRI_MAX:
+                # Si buttano prima gli scaduti; se non bastano, si svuota.
+                # Una cache che riparte da zero costa qualche chiamata in
+                # piu', una che cresce senza fine costa il processo.
+                for k, v in list(_scopri_cache.items()):
+                    if (adesso - v["quando"]) >= _SCOPRI_TTL:
+                        _scopri_cache.pop(k, None)
+                if len(_scopri_cache) >= _SCOPRI_MAX:
+                    _scopri_cache.clear()
+            _scopri_cache[chiave] = {"dati": dati, "quando": adesso}
+
+    return _scopri_copia(dati)
 
 
 
