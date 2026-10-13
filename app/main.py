@@ -2348,6 +2348,59 @@ def api_series_untrack(request: Request, tmdb_id: int):
     return {"status": "ok", "deleted": deleted}
 
 
+# ── Titoli che TMDb non sa risolvere ───────────────────────────────────────
+#
+# ⚠️ Il write-back in poster_cache salva solo i titoli RISOLTI. Quelli che TMDb
+# non trova non lasciano traccia, quindi a ogni apertura della raccolta o dei
+# consigli personali venivano ricercati di nuovo, dal vivo, due volte a testa
+# (titolo originale + titolo ripulito). Sono proprio i titoli inventati o
+# storpiati dal motore dei consigli, cioe' quelli che restano li' per sempre:
+# il costo non spariva mai da solo.
+#
+# Qui si ricorda il fallimento per qualche ora. La memoria e' del processo e
+# non del database apposta: un titolo oggi introvabile puo' esistere domani
+# (film appena annunciato, titolo italiano aggiunto dopo), e un dato in RAM
+# che muore al prossimo deploy e' il modo piu' semplice di non incastrare
+# niente in modo permanente.
+_titoli_irrisolti: dict = {}
+_TTL_IRRISOLTI = 6 * 3600          # secondi
+_MAX_IRRISOLTI = 5000              # tetto, per non crescere all'infinito
+_lock_irrisolti = _perf_threading.Lock()
+
+
+def _e_irrisolto(chiave) -> bool:
+    """True se questo (titolo, tipo) e' gia' fallito di recente."""
+    import time as _t
+    with _lock_irrisolti:
+        scadenza = _titoli_irrisolti.get(chiave)
+        if scadenza is None:
+            return False
+        if scadenza < _t.time():
+            _titoli_irrisolti.pop(chiave, None)
+            return False
+        return True
+
+
+def _segna_irrisolto(chiavi) -> None:
+    import time as _t
+    if not chiavi:
+        return
+    adesso = _t.time()
+    with _lock_irrisolti:
+        # Pulizia degli scaduti solo quando il dizionario cresce: farla a ogni
+        # scrittura costerebbe una scansione completa per niente.
+        if len(_titoli_irrisolti) > _MAX_IRRISOLTI:
+            for k, v in list(_titoli_irrisolti.items()):
+                if v < adesso:
+                    _titoli_irrisolti.pop(k, None)
+            # Se dopo la pulizia e' ancora pieno, si riparte da zero: meglio
+            # qualche ricerca in piu' che un dizionario che cresce senza fine.
+            if len(_titoli_irrisolti) > _MAX_IRRISOLTI:
+                _titoli_irrisolti.clear()
+        for k in chiavi:
+            _titoli_irrisolti[k] = adesso + _TTL_IRRISOLTI
+
+
 def _enrich_titles_with_posters(items):
     """Items: list di sqlite3.Row o dict che contengono almeno 'title' e
     'content_type'. Aggiunge poster_url e tmdb_id leggendo prima da poster_cache
@@ -2358,7 +2411,16 @@ def _enrich_titles_with_posters(items):
     if not items:
         return []
     out = [dict(r) for r in items]
-    needs = [(d['title'], d['content_type']) for d in out if not d.get('poster_url')]
+    # ⚠️ Il criterio e' "manca il poster O manca il tmdb_id", e deve essere lo
+    # STESSO del fallback live qui sotto. Prima la cache veniva interrogata
+    # solo per chi era senza poster: una riga che aveva gia' la locandina ma
+    # non l'id — ed e' il caso di daily_recommendations, che la locandina ce
+    # l'ha sempre — saltava del tutto la cache e finiva dritta nel fallback
+    # live. Risultato: ogni apertura di "consigli personali" e di "la mia
+    # raccolta" rifaceva una ricerca TMDb per OGNI titolo, tutte le volte,
+    # pur avendo la risposta gia' salvata in poster_cache.
+    needs = [(d['title'], d['content_type']) for d in out
+             if not d.get('poster_url') or not d.get('tmdb_id')]
     if needs:
         try:
             cache = get_poster_cache(needs)
@@ -2366,16 +2428,27 @@ def _enrich_titles_with_posters(items):
             log.warning("_enrich_titles_with_posters: get_poster_cache fallita: %s", e)
             cache = {}
         for d in out:
-            if d.get('poster_url'):
+            # Si esce solo quando CI SONO ENTRAMBI. Prima bastava il poster per
+            # saltare la riga, e l'id non veniva mai riempito dalla cache.
+            if d.get('poster_url') and d.get('tmdb_id'):
                 continue
             cached = cache.get((d['title'], d['content_type']))
-            if cached:
+            if not cached:
+                continue
+            if not d.get('poster_url'):
                 d['poster_url'] = cached.get('poster_url', '')
-                if not d.get('tmdb_id'):
-                    d['tmdb_id'] = cached.get('tmdb_id')
+            if not d.get('tmdb_id'):
+                d['tmdb_id'] = cached.get('tmdb_id')
 
     # Fallback LIVE: item ancora senza poster O senza tmdb_id (= dead-click).
-    still = [d for d in out if not d.get('poster_url') or not d.get('tmdb_id')]
+    #
+    # ⚠️ Si escludono quelli gia' falliti di recente. Senza questo filtro un
+    # titolo che TMDb non conosce costa due ricerche live a OGNI richiesta,
+    # per sempre: il write-back qui sotto salva solo chi si risolve, quindi
+    # chi fallisce non lascia traccia e ritenta all'infinito.
+    still = [d for d in out
+             if (not d.get('poster_url') or not d.get('tmdb_id'))
+             and not _e_irrisolto((d.get('title') or '', d.get('content_type') or 'movie'))]
     if still:
         import re as _re
         from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -2429,6 +2502,16 @@ def _enrich_titles_with_posters(items):
                 save_poster_cache(writeback)
             except Exception as e:
                 log.debug("_enrich write-back cache fallito: %s", e)
+
+        # L'altra meta' del write-back: chi NON si e' risolto. Il criterio e'
+        # "manca ancora l'id", lo stesso che lo farebbe rientrare nel fallback
+        # al prossimo giro.
+        falliti = [(d.get('title') or '', d.get('content_type') or 'movie')
+                   for d in still if not d.get('tmdb_id')]
+        if falliti:
+            _segna_irrisolto(falliti)
+            log.debug("_enrich: %d titoli irrisolti messi in pausa per %dh",
+                      len(falliti), _TTL_IRRISOLTI // 3600)
 
     return out
 
