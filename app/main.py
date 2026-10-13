@@ -1356,7 +1356,7 @@ def home(request: Request):
         except Exception as e:
             log.debug("home: prefetch daily_recs fallita uid=%s: %s", user_id, e)
 
-    risposta = templates.TemplateResponse(
+    return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
@@ -1370,14 +1370,6 @@ def home(request: Request):
             "new_seasons_alert":   new_seasons_alert,
         },
     )
-    # ⚠️ SEO (08/10/2026): la home con parametri (?prefill=..., ?src=app,
-    # utm_...) e' la STESSA pagina, ma Google trattava ogni URL come pagina a
-    # se': Search Console ne contava ~1.600 come "duplicate senza canonico",
-    # quasi tutte ?prefill= con titoli esteri. Header e non meta tag: vale a
-    # prescindere dal template e non tocca la home pulita.
-    if request.query_params:
-        risposta.headers["X-Robots-Tag"] = "noindex, follow"
-    return risposta
 
 
 # ─── Phase 2: detection nuove stagioni ──────────────────────────────────
@@ -3241,9 +3233,18 @@ def api_recommend(
 
     import hashlib as _hl
     _ALGO_VERSION = "movie-tmdb-v7"
-    _cache_key = _hl.md5(
-        ("|".join(sorted(t.lower() for t in seed_titles)) + content_type + _ALGO_VERSION).encode()
-    ).hexdigest()
+    _base = "|".join(sorted(t.lower() for t in seed_titles)) + content_type + _ALGO_VERSION
+
+    # Chiave del SITO: identica a quella di /recommend, cosi' una combinazione
+    # gia' cercata dal web torna istantanea anche all'app.
+    _cache_key = _hl.md5(_base.encode()).hexdigest()
+
+    # ⚠️ Chiave SEPARATA per quello che salva l'app. Il sito, su cache hit,
+    # passa il contenuto direttamente al suo template, quindi li' dentro
+    # devono esserci le raccomandazioni ARRICCHITE (locandina, stato visto,
+    # preferito). L'app ha solo la forma grezza del motore: salvarla sotto la
+    # chiave del sito riempirebbe le pagine web di card incomplete.
+    _cache_key_app = _hl.md5(("app-v1:" + _base).encode()).hexdigest()
 
     cached = get_search_cache(_cache_key)
     if cached:
@@ -3254,6 +3255,11 @@ def api_recommend(
             "cached": True,
         }
 
+    # Cache dell'app: gia' nella forma finale, si restituisce com'e'.
+    pronta = get_search_cache(_cache_key_app)
+    if pronta and pronta.get("recommendations"):
+        return {**pronta, "cached": True}
+
     try:
         if content_type == "tv":
             result = recommend_tv_from_seed_titles(seed_titles)
@@ -3263,12 +3269,23 @@ def api_recommend(
         log.exception("api_recommend fallita: %s", e)
         raise HTTPException(status_code=500, detail="motore consigli non disponibile")
 
-    return {
+    risposta = {
         "recommendations": [_api_titolo_snello(r) for r in result.get("recommendations", [])],
         "resolved_seeds":  _api_semi_riconosciuti(result.get("resolved_seeds", [])),
         "missing_titles":  result.get("missing_titles", []),
-        "cached": False,
     }
+
+    # ⚠️ Il risultato NON veniva salvato: una combinazione nuova costava 4-5
+    # secondi, e rifacendola il giorno dopo ne costava altri 4-5. Ora la
+    # seconda volta e' istantanea. Si salva solo se c'e' qualcosa: mettere in
+    # cache una lista vuota significherebbe ripeterla per 24 ore.
+    if risposta["recommendations"]:
+        try:
+            save_search_cache(_cache_key_app, risposta)
+        except Exception as e:
+            log.warning("api_recommend: cache non salvata: %s", e)
+
+    return {**risposta, "cached": False}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -3832,30 +3849,16 @@ def api_consigli_personali(request: Request):
             log.debug("api_consigli_personali: prefetch fallito uid=%s: %s", uid, e)
         return {"risultati": [], "in_preparazione": True}
 
-    righe = [dict(r) for r in pronti]
-
-    # ⚠️ L'id arriva dalla tabella, NON da una ricerca per titolo. Il motore
-    # lo conosce quando genera il consiglio e ora viene salvato: ricercarlo
-    # dal titolo prendeva il risultato piu' popolare, e "Power" apriva
-    # "Power Rangers" con la locandina giusta e la scheda sbagliata.
-    #
-    # Solo le righe salvate PRIMA di questa correzione sono senza id: per
-    # quelle si ricade sulla ricerca, e si esauriscono da sole entro un
-    # giorno, quando i consigli vengono rigenerati.
-    senza_id = [r for r in righe if not r.get("tmdb_id")]
-    if senza_id:
-        try:
-            risolti = {
-                (d.get("title") or ""): d.get("tmdb_id")
-                for d in _enrich_titles_with_posters(senza_id)
-            }
-            for r in righe:
-                if not r.get("tmdb_id"):
-                    r["tmdb_id"] = risolti.get(r.get("title") or "")
-        except Exception as e:
-            log.warning("api_consigli_personali: risoluzione id fallita uid=%s: %s", uid, e)
-
-    arricchiti = righe
+    # ⚠️ Le righe di daily_recommendations NON hanno la forma di un titolo
+    # TMDb: contengono title, content_type, reason, score, poster_url — niente
+    # tmdb_id. Passarle a _api_titolo_snello darebbe card senza id, cioè non
+    # toccabili. Si costruisce la voce a mano e si risolve l'id con la stessa
+    # funzione che usa /la-mia-raccolta.
+    try:
+        arricchiti = _enrich_titles_with_posters([dict(r) for r in pronti])
+    except Exception as e:
+        log.warning("api_consigli_personali: arricchimento fallito uid=%s: %s", uid, e)
+        arricchiti = [dict(r) for r in pronti]
 
     return {
         "risultati": [
@@ -4755,13 +4758,10 @@ def dove_vedere_hub(request: Request, tipo: str = "", p: int = 1):
     items, total = list_seo_titles(content_type=content_type, page=page, per_page=per_page)
     total_pages = max(1, (total + per_page - 1) // per_page)
 
-    # SEO: indicizzata SOLO /dove-vedere pulita.
-    # - p>1 = noindex (duplicato sottile della pagina 1)
-    # - ?tipo=film / ?tipo=serie = noindex (08/10/2026): dovevano essere viste
-    #   distinte, ma Google le ha classificate "duplicate senza canonico".
-    #   Restano navigabili e i link (follow) continuano a far scoprire le
-    #   pagine /dove-vedere/{slug}, che sono quelle che contano.
-    meta_robots = "noindex, follow" if (page > 1 or content_type) else "index, follow"
+    # SEO: paginate (p>1) = noindex (thin duplicate del page 1).
+    # page=1 con qualsiasi 'tipo' resta index: sono 3 viste distinte di valore
+    # (/dove-vedere = all, /dove-vedere?tipo=film, /dove-vedere?tipo=serie).
+    meta_robots = "noindex, follow" if page > 1 else "index, follow"
 
     return templates.TemplateResponse(
         request=request,
@@ -5087,33 +5087,6 @@ def admin_report(request: Request, period: str = "7d"):
             "ga4_links": ga4_links,
             "ga4_property_id": GA4_PROPERTY_ID,
         },
-    )
-
-
-# ─── ADMIN CRESCITA (registrati → segnali → tornati, per origine) ─────────
-@app.get("/admin/crescita", response_class=HTMLResponse)
-def admin_crescita(request: Request, gruppo: str = "tutti"):
-    """
-    Per giorno di registrazione e origine: registrati, utenti che lasciano
-    almeno un segnale e utenti che tornano, entro 7 giorni. Logica e
-    definizioni in app/crescita.py.
-    """
-    if not _check_admin(request):
-        return RedirectResponse(url="/admin", status_code=302)
-
-    # Import locale come in /admin/report: si carica solo quando serve.
-    from app.crescita import get_crescita
-
-    try:
-        c = get_crescita(gruppo)
-    except Exception as e:
-        log.exception("admin_crescita: get_crescita fallita: %s", e)
-        c = {"error": str(e)}
-
-    return templates.TemplateResponse(
-        request=request,
-        name="admin_crescita.html",
-        context={"request": request, "c": c},
     )
 
 
@@ -5463,8 +5436,8 @@ def sitemap():
     static_urls = [
         ("",                 "daily",   "1.0"),
         ("/dove-vedere",     "daily",   "0.9"),
-        # ?tipo=film / ?tipo=serie tolte (08/10/2026): ora sono noindex, e una
-        # sitemap non deve mai contenere pagine noindex.
+        ("/dove-vedere?tipo=film",  "daily", "0.7"),
+        ("/dove-vedere?tipo=serie", "daily", "0.7"),
         ("/installa",        "monthly", "0.5"),
         ("/privacy",         "yearly",  "0.3"),
         ("/termini",         "yearly",  "0.3"),
