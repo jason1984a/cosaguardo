@@ -3954,6 +3954,10 @@ def api_trending(request: Request, limit: int = Query(12)):
     }
 
 
+# La scelta del giorno, tenuta in memoria: {"data": "2026-10-13", "titolo": {...}}
+_daily_scelto: dict = {}
+
+
 @app.get("/api/v1/daily", response_class=JSONResponse)
 def api_daily(request: Request):
     """
@@ -3976,10 +3980,36 @@ def api_daily(request: Request):
     if not validi:
         raise HTTPException(status_code=503, detail="nessun titolo disponibile")
 
-    # Indice dal giorno dell'anno: deterministico, ruota ogni 24 ore e non
-    # richiede di memorizzare nulla lato server.
-    giorno = datetime.now().timetuple().tm_yday
-    scelto = validi[giorno % len(validi)]
+    oggi = datetime.now().strftime("%Y-%m-%d")
+
+    # ⚠️ NON si indicizza piu' con validi[giorno % len(validi)]. Quell'indice
+    # dipende dalla LUNGHEZZA della lista, e i trending si aggiornano ogni 10
+    # minuti: bastava che TMDb aggiungesse o togliesse un titolo perche' il
+    # widget cambiasse film a meta' giornata, senza che fosse cambiato il
+    # giorno. Chi aveva visto un titolo la mattina non riusciva piu' a
+    # ritrovarlo.
+    #
+    # Ora la scelta deriva dall'IDENTITA' del titolo: per ogni candidato si
+    # calcola un'impronta da data + tmdb_id e vince la piu' bassa. Finche' quel
+    # titolo resta fra i trending, resta il titolo del giorno, qualunque cosa
+    # entri o esca dalla lista.
+    import hashlib as _hl
+
+    def _impronta(t):
+        return _hl.md5(f"{oggi}:{t.get('tmdb_id')}".encode()).hexdigest()
+
+    scelto = min(validi, key=_impronta)
+
+    # Memoria della scelta, per la giornata in corso: rende il titolo stabile
+    # anche nel caso in cui il vincitore esca del tutto dai trending.
+    global _daily_scelto
+    if _daily_scelto.get("data") == oggi and _daily_scelto.get("titolo"):
+        precedente = _daily_scelto["titolo"]
+        # Si riusa solo se quel titolo e' ancora disponibile: un widget che
+        # rimanda a una scheda sparita sarebbe peggio di un cambio.
+        if any(t.get("tmdb_id") == precedente.get("tmdb_id") for t in validi):
+            scelto = precedente
+    _daily_scelto = {"data": oggi, "titolo": scelto}
 
     return {
         "tmdb_id":      scelto.get("tmdb_id"),
@@ -3990,7 +4020,7 @@ def api_daily(request: Request):
         "label":        scelto.get("label") or "",
         # Data di validita': il widget la usa per sapere quando il contenuto
         # e' da considerarsi vecchio, senza doverlo dedurre.
-        "data":         datetime.now().strftime("%Y-%m-%d"),
+        "data":         oggi,
     }
 
 
