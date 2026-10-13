@@ -398,6 +398,42 @@ def _start_alerts_scheduler():
     log.info("alerts_job: scheduler avviato (giornaliero 04:00 Europe/Rome)")
 
 
+@app.on_event("startup")
+def _scalda_cache_scopri():
+    """
+    Riempie in anticipo la cache di /scopri per le viste senza filtri.
+
+    ⚠️ La cache di get_scopri_results vive nel processo: dopo ogni deploy e'
+    vuota, e il primo che apre "Scopri" paga la chiamata a TMDb per tutti.
+    Quella vista — nessun filtro, pagina 1 — e' esattamente cio' che vede
+    chiunque apra la schermata, quindi vale la pena averla pronta prima che
+    arrivi la prima richiesta.
+
+    Si scaldano SOLO le due viste iniziali (film e serie). Precaricare anche
+    le combinazioni di filtri sarebbe una scommessa su quali sceglie
+    l'utente, pagata in chiamate TMDb a ogni riavvio: le combinazioni le
+    riempie l'uso reale, che e' il criterio giusto.
+    """
+    import threading
+
+    def _lavora():
+        try:
+            from core.recommendation_api import get_scopri_results
+            for tipo in ("film", "serie"):
+                try:
+                    r = get_scopri_results(tipo=tipo, page=1)
+                    log.info("scopri_warmup: %s pronto (%d titoli)",
+                             tipo, len((r or {}).get("results") or []))
+                except Exception as e:
+                    log.warning("scopri_warmup: %s fallito: %s", tipo, e)
+        except Exception as e:
+            log.warning("scopri_warmup: non avviato: %s", e)
+
+    # In un thread a parte: lo startup non deve aspettare la rete, altrimenti
+    # un TMDb lento ritarderebbe l'avvio di tutto il sito.
+    threading.Thread(target=_lavora, daemon=True, name="scopri_warmup").start()
+
+
 # ─── Anti-scanner middleware ─────────────────────────────────────────────
 # Intercetta tentativi di scan verso path PHP/WordPress noti che NON esistono
 # nel sito (Python/FastAPI). Risponde 404 immediato senza far girare il router
