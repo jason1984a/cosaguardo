@@ -3679,6 +3679,28 @@ def coda_social_elenco(x_media_token: str = Header(None)):
     return {"coda": lista_coda()}
 
 
+@app.delete("/coda-social/{post_id}", response_class=JSONResponse)
+def coda_social_annulla(post_id: int, x_media_token: str = Header(None)):
+    """
+    Toglie dalla coda un post non ancora uscito.
+
+    ⚠️ Non cancella la riga, la marca 'annullato'. Serve a sapere domani che
+    quel contenuto era stato programmato e poi tolto: una riga sparita non
+    distingue "annullato da me" da "non e' mai stato accodato", e la seconda
+    e' un sintomo, non una scelta.
+    """
+    _media_temp_autorizza(x_media_token)
+    from app.db import annulla_post
+    fatto = annulla_post(post_id)
+    if not fatto:
+        raise HTTPException(
+            status_code=409,
+            detail="riga non annullabile: o non esiste, o e' gia' uscita, "
+                   "oppure il worker la sta pubblicando proprio ora")
+    log.info("coda_social: annullato il post %s", post_id)
+    return {"annullato": post_id}
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # API v1 — usata dall'app iOS nativa
 #

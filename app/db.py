@@ -2191,3 +2191,29 @@ def media_ancora_in_uso():
         return fuori
     finally:
         conn.close()
+
+
+def annulla_post(post_id: int) -> bool:
+    """
+    Toglie dalla coda un post non ancora uscito.
+
+    ⚠️ Solo se e' ancora 'in_attesa'. Una riga 'in_corso' e' gia' in mano al
+    worker, che magari ha appena creato il contenitore su Instagram: marcarla
+    annullata non fermerebbe niente e lascerebbe il database a raccontare una
+    cosa diversa da quella successa. Chi chiama riceve False e sa che e'
+    tardi.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE coda_social
+               SET stato = 'annullato', aggiornato_il = ?
+             WHERE id = ? AND stato = 'in_attesa'
+        """, (_dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
+              post_id))
+        conn.commit()
+        return cur.rowcount == 1
+    finally:
+        conn.close()
