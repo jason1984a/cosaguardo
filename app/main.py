@@ -3557,6 +3557,16 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
         else:
             esiti["facebook"] = dati.get("id")
 
+    if "tiktok" in piattaforme and e_video:
+        # ⚠️ Come Facebook, non fa fallire tutto: se Instagram e' gia' uscito,
+        # rimettere la riga in coda la ripubblicherebbe la', e un doppione su
+        # Instagram costa molto piu' di una bozza TikTok da rifare a mano.
+        try:
+            esiti["tiktok_bozza"] = _tiktok_carica_bozza(url[0])
+        except Exception as e:
+            log.warning("coda_social: TikTok fallito: %s", e)
+            esiti["tiktok_errore"] = str(e)[:200]
+
     if not esiti:
         raise RuntimeError("nessuna piattaforma ha pubblicato")
     return esiti
@@ -3699,6 +3709,225 @@ def coda_social_annulla(post_id: int, x_media_token: str = Header(None)):
                    "oppure il worker la sta pubblicando proprio ora")
     log.info("coda_social: annullato il post %s", post_id)
     return {"annullato": post_id}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TikTok — collegamento dell'account e caricamento in bozza
+#
+# ⚠️ PERCHE' LA BOZZA E NON LA PUBBLICAZIONE DIRETTA. Il "direct post" richiede
+# un audit piu' severo, e soprattutto non serve: su TikTok l'audio nativo si
+# sceglie solo dentro l'app. Il video arriva nella casella, Marco apre, mette
+# l'audio e pubblica. Trenta secondi, e in cambio nessun audit.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_TIKTOK_KEY = os.environ.get("TIKTOK_CLIENT_KEY", "")
+_TIKTOK_SECRET = os.environ.get("TIKTOK_CLIENT_SECRET", "")
+_TIKTOK_REDIRECT = "https://cosaguardo.com/tiktok/callback"
+_TIKTOK_SCOPE = "video.upload"
+
+# ⚠️ Gli "state" emessi, con la loro scadenza. Senza questo controllo chiunque
+# trovi /tiktok/callback potrebbe far salvare al server il token del PROPRIO
+# account TikTok, sovrascrivendo quello di CosaGuardo: la pubblicazione
+# continuerebbe a funzionare, ma su un account altrui. Il callback accetta solo
+# uno state che il server ha emesso lui.
+_tiktok_stati: dict = {}
+
+
+def _tiktok_pagina(titolo: str, corpo_html: str, codice: int = 200):
+    """Una pagina minima nei colori del sito, senza dipendere dai template."""
+    return HTMLResponse(f"""<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>{titolo} — CosaGuardo</title>
+<style>
+ body{{margin:0;min-height:100vh;display:flex;align-items:center;
+      justify-content:center;background:#0a0f21;color:#eef1f8;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}}
+ .r{{max-width:30rem;padding:2.5rem;text-align:center}}
+ h1{{font-size:1.5rem;margin:0 0 1rem}}
+ p{{color:#aab4d4;line-height:1.6;margin:0 0 1.5rem}}
+ a.b{{display:inline-block;background:#6ea8fe;color:#0a0f21;font-weight:700;
+      text-decoration:none;padding:.9rem 1.8rem;border-radius:.6rem}}
+ code{{background:#ffffff14;padding:.15rem .4rem;border-radius:.3rem;
+       font-size:.9em;word-break:break-all}}
+</style></head>
+<body><div class="r"><h1>{titolo}</h1>{corpo_html}</div></body></html>""",
+                        status_code=codice)
+
+
+@app.get("/tiktok/collega", response_class=HTMLResponse)
+def tiktok_collega(chiave: str = Query("")):
+    """
+    Da qui parte l'autorizzazione. Protetta dalla stessa chiave degli altri
+    strumenti: non deve poterci arrivare un visitatore qualunque.
+    """
+    if not _MEDIA_TEMP_TOKEN or not _secrets.compare_digest(chiave or "", _MEDIA_TEMP_TOKEN):
+        return _tiktok_pagina("Pagina non disponibile",
+                              "<p>Questo indirizzo non è pubblico.</p>", 403)
+    if not _TIKTOK_KEY:
+        return _tiktok_pagina("Configurazione mancante",
+                              "<p>Sul server manca <code>TIKTOK_CLIENT_KEY</code>.</p>", 503)
+
+    import time as _t
+    stato = _secrets.token_urlsafe(24)
+    # Pulizia degli stati vecchi, cosi' il dizionario non cresce.
+    adesso = _t.time()
+    for k in [k for k, v in _tiktok_stati.items() if v < adesso]:
+        _tiktok_stati.pop(k, None)
+    _tiktok_stati[stato] = adesso + 600
+
+    import urllib.parse as _up
+    url = "https://www.tiktok.com/v2/auth/authorize/?" + _up.urlencode({
+        "client_key": _TIKTOK_KEY,
+        "scope": _TIKTOK_SCOPE,
+        "response_type": "code",
+        "redirect_uri": _TIKTOK_REDIRECT,
+        "state": stato,
+    })
+    return _tiktok_pagina(
+        "Collega l'account TikTok",
+        "<p>CosaGuardo invierà i video prodotti ogni giorno nella casella "
+        "del tuo account TikTok, come bozze. Nulla viene pubblicato "
+        "automaticamente: aprirai tu la bozza, sceglierai l'audio e "
+        "pubblicherai dall'app.</p>"
+        f'<a class="b" href="{url}">Continua su TikTok</a>')
+
+
+@app.get("/tiktok/callback", response_class=HTMLResponse)
+def tiktok_callback(code: str = Query(""), state: str = Query(""),
+                    error: str = Query("")):
+    """Riceve il codice, lo scambia con i token e li salva."""
+    import time as _t
+    import urllib.parse as _up, urllib.request as _ur, urllib.error as _ue
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+
+    if error:
+        return _tiktok_pagina("Autorizzazione annullata",
+                              f"<p>TikTok ha risposto: <code>{error}</code></p>", 400)
+
+    scadenza = _tiktok_stati.pop(state, None)
+    if not scadenza or scadenza < _t.time():
+        return _tiktok_pagina(
+            "Richiesta non valida",
+            "<p>Questo collegamento è scaduto o non è partito da qui. "
+            "Riapri la pagina di collegamento e riprova.</p>", 400)
+
+    if not code:
+        return _tiktok_pagina("Codice mancante",
+                              "<p>TikTok non ha restituito il codice.</p>", 400)
+
+    dati_post = _up.urlencode({
+        "client_key": _TIKTOK_KEY,
+        "client_secret": _TIKTOK_SECRET,
+        "code": _up.unquote(code),
+        "grant_type": "authorization_code",
+        "redirect_uri": _TIKTOK_REDIRECT,
+    }).encode("utf-8")
+    req = _ur.Request("https://open.tiktokapis.com/v2/oauth/token/",
+                      data=dati_post, method="POST",
+                      headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with _ur.urlopen(req, timeout=60) as r:
+            risposta = json.loads(r.read().decode("utf-8"))
+    except _ue.HTTPError as e:
+        testo = e.read().decode("utf-8", "replace")[:300]
+        log.error("tiktok: scambio token fallito: %s", testo)
+        return _tiktok_pagina("Scambio non riuscito",
+                              f"<p><code>{testo}</code></p>", 502)
+
+    if risposta.get("error"):
+        log.error("tiktok: %s", risposta)
+        return _tiktok_pagina(
+            "Scambio non riuscito",
+            f"<p><code>{risposta.get('error_description') or risposta.get('error')}</code></p>",
+            502)
+
+    scade = (_dt.now(_tz.utc).replace(tzinfo=None)
+             + _td(seconds=int(risposta.get("expires_in", 86400)))
+             ).isoformat(timespec="seconds")
+    from app.db import salva_token_tiktok
+    salva_token_tiktok(risposta.get("open_id", ""), risposta["access_token"],
+                       risposta["refresh_token"], scade)
+    log.info("tiktok: account collegato (open_id %s)", risposta.get("open_id"))
+
+    return _tiktok_pagina(
+        "Account collegato",
+        "<p>Da ora i video di CosaGuardo arriveranno nella casella del tuo "
+        "account TikTok come bozze. Puoi chiudere questa pagina.</p>")
+
+
+def _tiktok_access_token() -> str:
+    """
+    Un access token valido, rinnovandolo se sta per scadere.
+
+    ⚠️ Il refresh token VA RISALVATO. TikTok puo' restituirne uno diverso da
+    quello inviato, e in quel caso il vecchio smette di valere: salvando solo
+    l'access token, il rinnovo del giorno dopo fallisce.
+    """
+    import urllib.parse as _up, urllib.request as _ur
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    from app.db import leggi_token_tiktok, salva_token_tiktok
+
+    t = leggi_token_tiktok()
+    if not t:
+        raise RuntimeError("TikTok non collegato: apri /tiktok/collega")
+
+    adesso = _dt.now(_tz.utc).replace(tzinfo=None)
+    # Dieci minuti di margine: un token che scade mentre la richiesta e' in
+    # volo fallirebbe senza che si capisca perche'.
+    if _dt.fromisoformat(t["scade_il"]) - _td(minutes=10) > adesso:
+        return t["access_token"]
+
+    dati = _up.urlencode({
+        "client_key": _TIKTOK_KEY, "client_secret": _TIKTOK_SECRET,
+        "grant_type": "refresh_token", "refresh_token": t["refresh_token"],
+    }).encode("utf-8")
+    req = _ur.Request("https://open.tiktokapis.com/v2/oauth/token/",
+                      data=dati, method="POST",
+                      headers={"Content-Type": "application/x-www-form-urlencoded"})
+    with _ur.urlopen(req, timeout=60) as r:
+        risposta = json.loads(r.read().decode("utf-8"))
+    if risposta.get("error"):
+        raise RuntimeError(f"rinnovo TikTok fallito: {risposta.get('error_description')}")
+
+    scade = (adesso + _td(seconds=int(risposta.get("expires_in", 86400)))
+             ).isoformat(timespec="seconds")
+    salva_token_tiktok(risposta.get("open_id", t.get("open_id") or ""),
+                       risposta["access_token"],
+                       risposta.get("refresh_token") or t["refresh_token"],
+                       scade)
+    log.info("tiktok: token rinnovato")
+    return risposta["access_token"]
+
+
+def _tiktok_carica_bozza(url_video: str) -> str:
+    """Manda il video nella casella TikTok come bozza. Restituisce publish_id."""
+    import urllib.request as _ur, urllib.error as _ue
+    token = _tiktok_access_token()
+    corpo = json.dumps({"source_info": {"source": "PULL_FROM_URL",
+                                        "video_url": url_video}}).encode("utf-8")
+    req = _ur.Request("https://open.tiktokapis.com/v2/post/publish/inbox/video/init/",
+                      data=corpo, method="POST",
+                      headers={"Authorization": f"Bearer {token}",
+                               "Content-Type": "application/json; charset=UTF-8"})
+    try:
+        with _ur.urlopen(req, timeout=120) as r:
+            risposta = json.loads(r.read().decode("utf-8"))
+    except _ue.HTTPError as e:
+        raise RuntimeError(f"TikTok: {e.read().decode('utf-8','replace')[:300]}")
+
+    errore = (risposta.get("error") or {})
+    if errore.get("code") not in ("ok", None, ""):
+        # ⚠️ Questo e' l'errore da riconoscere al volo: significa che il
+        # dominio da cui TikTok dovrebbe scaricare non e' fra quelli
+        # verificati nel portale, e non ha niente a che vedere col video.
+        if errore.get("code") == "url_ownership_unverified":
+            raise RuntimeError(
+                "TikTok rifiuta l'indirizzo: cosaguardo.com non risulta "
+                "verificato nel portale sviluppatori per questa app")
+        raise RuntimeError(f"TikTok: {errore.get('code')} {errore.get('message','')}")
+    return (risposta.get("data") or {}).get("publish_id", "")
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -2217,3 +2217,72 @@ def annulla_post(post_id: int) -> bool:
         return cur.rowcount == 1
     finally:
         conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Token di TikTok
+#
+# ⚠️ UNA RIGA SOLA, e il CHECK (id = 1) lo impone al database invece che alla
+# disciplina di chi scrive il codice. L'account e' uno; due righe qui
+# significherebbero non sapere quale token e' quello buono.
+#
+# ⚠️ IL REFRESH TOKEN RUOTA. La risposta di TikTok puo' contenere un refresh
+# token DIVERSO da quello inviato, e in quel caso il vecchio smette di valere.
+# Se si salva solo l'access token, il giorno dopo il rinnovo fallisce e la
+# pubblicazione si ferma — con un errore che parla di autorizzazione e fa
+# cercare il problema fra i permessi, dove non c'e'. Si salva sempre tutto.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def init_tiktok_token():
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS tiktok_token (
+                id             INTEGER PRIMARY KEY CHECK (id = 1),
+                open_id        TEXT,
+                access_token   TEXT NOT NULL,
+                refresh_token  TEXT NOT NULL,
+                scade_il       TEXT NOT NULL,
+                aggiornato_il  TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def salva_token_tiktok(open_id: str, access_token: str, refresh_token: str,
+                       scade_il: str) -> None:
+    from datetime import datetime as _dt, timezone as _tz
+    init_tiktok_token()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO tiktok_token
+                (id, open_id, access_token, refresh_token, scade_il, aggiornato_il)
+            VALUES (1, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                open_id = excluded.open_id,
+                access_token = excluded.access_token,
+                refresh_token = excluded.refresh_token,
+                scade_il = excluded.scade_il,
+                aggiornato_il = excluded.aggiornato_il
+        """, (open_id, access_token, refresh_token, scade_il,
+              _dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds")))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def leggi_token_tiktok():
+    init_tiktok_token()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM tiktok_token WHERE id = 1")
+        r = cur.fetchone()
+        return dict(r) if r else None
+    finally:
+        conn.close()
