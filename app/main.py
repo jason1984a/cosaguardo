@@ -3245,6 +3245,154 @@ def _cached_similar_tv(tmdb_id: int, title: str) -> list:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Media temporanei per la pubblicazione social
+#
+# ⚠️ PERCHE' ESISTONO. Instagram non accetta il file: accetta un INDIRIZZO da
+# cui scaricarselo. Si crea il contenitore passando l'url del video, Meta se lo
+# va a prendere dai suoi server, e solo quando e' pronto si pubblica. Quindi il
+# video montato sul PC deve stare qualche minuto a un indirizzo pubblico.
+#
+# ⚠️ PERCHE' NON SOTTO /api/v1/. Quelle rotte sono dietro il guard geografico,
+# e i server di Meta che scaricano il video non sono in Italia: il download
+# fallirebbe e si vedrebbe solo un contenitore che non diventa mai pronto,
+# senza un errore che punti alla causa. Questo prefisso sta fuori dal guard
+# apposta — e deve restarci.
+#
+# Le difese sono altre, e sono tre: un segreto condiviso per caricare, un nome
+# di file casuale che non si indovina, e la cancellazione automatica. Il file
+# resta pubblico il minimo necessario e la cartella non diventa un archivio
+# aperto.
+# ═══════════════════════════════════════════════════════════════════════════
+
+from fastapi import UploadFile, File, Header
+import tempfile as _tempfile
+import secrets as _secrets
+import re as _re_media
+from pathlib import Path as _Path_media
+
+_MEDIA_TEMP_DIR = _Path_media(_tempfile.gettempdir()) / "cosaguardo_media"
+_MEDIA_TEMP_TOKEN = os.environ.get("MEDIA_TEMP_TOKEN", "")
+_MEDIA_TEMP_ORE = 6
+_MEDIA_TEMP_MAX_MB = 150
+_MEDIA_TEMP_ESTENSIONI = {".mp4", ".mov", ".jpg", ".jpeg", ".png"}
+_MEDIA_TEMP_NOME_OK = _re_media.compile(r"^[A-Za-z0-9_-]{8,64}\.[A-Za-z0-9]{2,4}$")
+
+
+def _media_temp_autorizza(token: str) -> None:
+    """
+    ⚠️ Se la variabile d'ambiente non e' impostata NON si apre a tutti: si
+    chiude a tutti. Un endpoint che carica file e che diventa libero perche'
+    qualcuno ha dimenticato una variabile e' il modo classico di regalare uno
+    spazio di hosting a chi passa.
+    """
+    if not _MEDIA_TEMP_TOKEN:
+        raise HTTPException(status_code=503, detail="media temporanei non configurati")
+    if not token or not _secrets.compare_digest(token, _MEDIA_TEMP_TOKEN):
+        raise HTTPException(status_code=403, detail="non autorizzato")
+
+
+def _media_temp_pulisci() -> None:
+    """Toglie i file piu' vecchi di _MEDIA_TEMP_ORE."""
+    import time as _t
+    limite = _t.time() - _MEDIA_TEMP_ORE * 3600
+    try:
+        for f in _MEDIA_TEMP_DIR.iterdir():
+            try:
+                if f.is_file() and f.stat().st_mtime < limite:
+                    f.unlink()
+            except Exception:
+                pass
+    except FileNotFoundError:
+        pass
+
+
+def _media_temp_percorso(nome: str) -> "_Path_media":
+    """
+    ⚠️ Il nome si valida con una lista di caratteri AMMESSI, non togliendo
+    quelli vietati. Un nome come "..%2f..%2fetc%2fpasswd" supera qualunque
+    filtro per sottrazione; qui non supera il primo controllo.
+    """
+    if not _MEDIA_TEMP_NOME_OK.match(nome or ""):
+        raise HTTPException(status_code=404, detail="non trovato")
+    p = (_MEDIA_TEMP_DIR / nome).resolve()
+    if p.parent != _MEDIA_TEMP_DIR.resolve():
+        raise HTTPException(status_code=404, detail="non trovato")
+    return p
+
+
+@app.post("/media-temp", response_class=JSONResponse)
+async def media_temp_carica(file: UploadFile = File(...),
+                            x_media_token: str = Header(None)):
+    """Riceve un file e restituisce l'indirizzo pubblico da dare a Meta."""
+    _media_temp_autorizza(x_media_token)
+
+    estensione = os.path.splitext(file.filename or "")[1].lower()
+    if estensione not in _MEDIA_TEMP_ESTENSIONI:
+        raise HTTPException(status_code=400,
+                            detail=f"estensione non ammessa: {estensione}")
+
+    _MEDIA_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+    _media_temp_pulisci()
+
+    nome = _secrets.token_urlsafe(24).replace("-", "_") + estensione
+    destinazione = _MEDIA_TEMP_DIR / nome
+
+    # ⚠️ Si legge a pezzi e si controlla la dimensione STRADA FACENDO. Fidarsi
+    # dell'header content-length significa accettare che chi carica dica la
+    # verita'; leggere tutto in memoria significa che un file enorme fa cadere
+    # il processo invece di ricevere un errore.
+    massimo = _MEDIA_TEMP_MAX_MB * 1024 * 1024
+    scritti = 0
+    try:
+        with open(destinazione, "wb") as out:
+            while True:
+                pezzo = await file.read(1024 * 1024)
+                if not pezzo:
+                    break
+                scritti += len(pezzo)
+                if scritti > massimo:
+                    out.close()
+                    destinazione.unlink(missing_ok=True)
+                    raise HTTPException(status_code=413,
+                                        detail=f"oltre {_MEDIA_TEMP_MAX_MB} MB")
+                out.write(pezzo)
+    except HTTPException:
+        raise
+    except Exception as e:
+        destinazione.unlink(missing_ok=True)
+        log.exception("media_temp_carica fallito: %s", e)
+        raise HTTPException(status_code=500, detail="salvataggio non riuscito")
+
+    log.info("media_temp: caricato %s (%d KB)", nome, scritti // 1024)
+    return {"nome": nome,
+            "url": f"https://cosaguardo.com/media-temp/{nome}",
+            "byte": scritti}
+
+
+@app.get("/media-temp/{nome}")
+def media_temp_servi(nome: str):
+    """
+    Serve il file. Senza segreto: deve poterlo scaricare Meta, che non ha modo
+    di mandarci un'intestazione nostra. La difesa qui e' il nome casuale.
+    """
+    from fastapi.responses import FileResponse as _FileResponse
+    p = _media_temp_percorso(nome)
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="non trovato")
+    return _FileResponse(str(p))
+
+
+@app.delete("/media-temp/{nome}", response_class=JSONResponse)
+def media_temp_cancella(nome: str, x_media_token: str = Header(None)):
+    """Cancella subito dopo la pubblicazione, senza aspettare la scadenza."""
+    _media_temp_autorizza(x_media_token)
+    p = _media_temp_percorso(nome)
+    esisteva = p.is_file()
+    p.unlink(missing_ok=True)
+    return {"cancellato": esisteva}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # API v1 — usata dall'app iOS nativa
 #
 # ⚠️ PERCHE' IL PREFISSO DI VERSIONE. Una volta che l'app e' sull'App Store non
