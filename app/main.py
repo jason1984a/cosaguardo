@@ -1,6 +1,18 @@
 import os
 import sys
 import signal
+
+# ⚠️ ERA MANCANTE, e non si vedeva. _fetch_googlebot_nets() usa requests, ma
+# l'unico "import requests" del file stava DENTRO un'altra funzione: un import
+# dentro una funzione lega il nome solo a quella, non al modulo. Quindi la
+# funzione falliva sempre con "name 'requests' is not defined", l'except la
+# zittiva, e la lista degli intervalli IP di Googlebot restava vuota.
+#
+# Conseguenza: _is_verified_googlebot() non poteva mai confermare nessuno, e
+# Googlebot — che scansiona dagli USA — finiva nel blocco geografico insieme a
+# tutti gli altri. Cioe' esattamente il contrario di quello che il commento
+# dentro al middleware dichiara di voler garantire.
+import requests
 from fastapi import FastAPI, Form, Request, HTTPException, Query
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -3265,6 +3277,10 @@ def _cached_similar_tv(tmdb_id: int, title: str) -> list:
 # ═══════════════════════════════════════════════════════════════════════════
 
 from fastapi import UploadFile, File, Header
+import json          # ⚠️ main.py non lo importava a livello di modulo: lo usava
+                     # solo dentro una funzione, con un altro nome. Il codice
+                     # della coda lo dava per disponibile e falliva con
+                     # "name 'json' is not defined" al primo accodamento.
 import tempfile as _tempfile
 import secrets as _secrets
 import re as _re_media
