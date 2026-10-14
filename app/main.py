@@ -3611,7 +3611,6 @@ def coda_social_accoda(
 ):
     """Mette un contenuto in coda. I media devono essere gia' stati caricati."""
     _media_temp_autorizza(x_media_token)
-    from app.db import accoda_post
 
     if not media:
         raise HTTPException(status_code=400, detail="nessun media")
@@ -3619,8 +3618,40 @@ def coda_social_accoda(
         if not (_MEDIA_TEMP_DIR / _media_temp_percorso(n).name).is_file():
             raise HTTPException(status_code=400, detail=f"media non trovato: {n}")
 
-    pid = accoda_post(pubblicare_il, formato, piattaforme, didascalia,
-                      json.dumps(list(media)))
+    # ⚠️ L'import e la scrittura stanno dentro il try, e il motivo vero
+    # dell'errore torna al chiamante invece di diventare un "Internal Server
+    # Error" muto. Questo endpoint lo chiama solo chi ha il segreto, quindi
+    # non si sta raccontando niente a sconosciuti — e senza il motivo si
+    # finisce a indovinare fra codice non aggiornato, tabella mancante e
+    # permessi sul disco, che richiedono rimedi del tutto diversi.
+    try:
+        from app.db import accoda_post, init_coda_social
+    except ImportError as e:
+        log.error("coda_social: db.py non aggiornato: %s", e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"db.py sul server non ha le funzioni della coda ({e}). "
+                   f"Va aggiornato anche quello, non solo main.py.")
+
+    try:
+        pid = accoda_post(pubblicare_il, formato, piattaforme, didascalia,
+                          json.dumps(list(media)))
+    except Exception as e:
+        # Tabella assente: la si crea e si riprova una volta. Capita quando il
+        # processo gira da prima del deploy che ha introdotto la tabella.
+        if "no such table" in str(e).lower():
+            log.warning("coda_social: tabella assente, la creo ora")
+            try:
+                init_coda_social()
+                pid = accoda_post(pubblicare_il, formato, piattaforme,
+                                  didascalia, json.dumps(list(media)))
+            except Exception as e2:
+                log.exception("coda_social: creazione tabella fallita: %s", e2)
+                raise HTTPException(status_code=500, detail=f"coda non scrivibile: {e2}")
+        else:
+            log.exception("coda_social: accodamento fallito: %s", e)
+            raise HTTPException(status_code=500, detail=f"accodamento fallito: {e}")
+
     log.info("coda_social: accodato %s per %s", pid, pubblicare_il)
     return {"id": pid, "pubblicare_il": pubblicare_il}
 
