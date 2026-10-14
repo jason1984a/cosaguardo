@@ -3689,6 +3689,69 @@ def coda_social_elenco(x_media_token: str = Header(None)):
     return {"coda": lista_coda()}
 
 
+@app.get("/coda-social/{post_id}/testo", response_class=HTMLResponse)
+def coda_social_testo(post_id: int, chiave: str = Query("")):
+    """
+    La didascalia di una riga, da aprire dal telefono.
+
+    ⚠️ Esiste per un limite della bozza TikTok: l'endpoint della casella
+    accetta solo il video, il campo per il testo c'e' solo nella pubblicazione
+    diretta. Quindi la didascalia va scritta a mano in app — e averla sul
+    telefono con un pulsante per copiarla evita di doverla rincorrere sul PC
+    mentre si e' sull'altro dispositivo.
+    """
+    if not _MEDIA_TEMP_TOKEN or not _secrets.compare_digest(chiave or "", _MEDIA_TEMP_TOKEN):
+        return _tiktok_pagina("Pagina non disponibile",
+                              "<p>Questo indirizzo non è pubblico.</p>", 403)
+    from app.db import get_connection
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT didascalia FROM coda_social WHERE id = ?", (post_id,))
+        r = cur.fetchone()
+    finally:
+        conn.close()
+    if not r:
+        return _tiktok_pagina("Non trovato",
+                              f"<p>Nessuna riga con id {post_id}.</p>", 404)
+
+    import html as _html
+    testo = _html.escape(r["didascalia"])
+    return _tiktok_pagina("Didascalia", f"""
+<p style="text-align:left;white-space:pre-wrap;background:#ffffff10;
+   padding:1rem;border-radius:.6rem;color:#eef1f8" id="t">{testo}</p>
+<button class="b" onclick="navigator.clipboard.writeText(
+   document.getElementById('t').innerText).then(()=>{{
+   this.textContent='Copiata'}})"
+   style="border:0;font-size:1rem;cursor:pointer;background:#6ea8fe;
+   color:#0a0f21;font-weight:700;padding:.9rem 1.8rem;border-radius:.6rem">
+   Copia la didascalia</button>""")
+
+
+@app.get("/coda-social/{post_id}/tiktok", response_class=JSONResponse)
+def coda_social_stato_tiktok(post_id: int, x_media_token: str = Header(None)):
+    """Com'e' andata davvero la bozza su TikTok."""
+    _media_temp_autorizza(x_media_token)
+    from app.db import get_connection
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT risultato FROM coda_social WHERE id = ?", (post_id,))
+        r = cur.fetchone()
+    finally:
+        conn.close()
+    if not r or not r["risultato"]:
+        raise HTTPException(status_code=404, detail="riga senza risultato")
+    try:
+        pid = json.loads(r["risultato"]).get("tiktok_bozza")
+    except Exception:
+        pid = None
+    if not pid:
+        raise HTTPException(status_code=404,
+                            detail="questa riga non ha un caricamento TikTok")
+    return {"publish_id": pid, "tiktok": _tiktok_stato(pid)}
+
+
 @app.delete("/coda-social/{post_id}", response_class=JSONResponse)
 def coda_social_annulla(post_id: int, x_media_token: str = Header(None)):
     """
@@ -3899,6 +3962,29 @@ def _tiktok_access_token() -> str:
                        scade)
     log.info("tiktok: token rinnovato")
     return risposta["access_token"]
+
+
+def _tiktok_stato(publish_id: str) -> dict:
+    """
+    Chiede a TikTok com'e' finita davvero.
+
+    ⚠️ Serve perche' l'init risponde SUBITO con un publish_id: a quel punto
+    TikTok non ha ancora scaricato il video. Se il download o l'elaborazione
+    falliscono, succede dopo, e da noi la riga risulta comunque "pubblicato".
+    Senza questa chiamata un fallimento resta invisibile.
+    """
+    import urllib.request as _ur, urllib.error as _ue
+    token = _tiktok_access_token()
+    corpo = json.dumps({"publish_id": publish_id}).encode("utf-8")
+    req = _ur.Request("https://open.tiktokapis.com/v2/post/publish/status/fetch/",
+                      data=corpo, method="POST",
+                      headers={"Authorization": f"Bearer {token}",
+                               "Content-Type": "application/json; charset=UTF-8"})
+    try:
+        with _ur.urlopen(req, timeout=60) as r:
+            return json.loads(r.read().decode("utf-8"))
+    except _ue.HTTPError as e:
+        return {"error": {"message": e.read().decode("utf-8", "replace")[:400]}}
 
 
 def _tiktok_carica_bozza(url_video: str) -> str:
