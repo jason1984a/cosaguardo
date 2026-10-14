@@ -3567,8 +3567,17 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
             log.warning("coda_social: TikTok fallito: %s", e)
             esiti["tiktok_errore"] = str(e)[:200]
 
-    if not esiti:
-        raise RuntimeError("nessuna piattaforma ha pubblicato")
+    # ⚠️ NON BASTA CHE "esiti" NON SIA VUOTO. Facebook e TikTok sono stati resi
+    # non fatali per non far ripubblicare Instagram al tentativo successivo —
+    # giusto quando Instagram e' uscito davvero. Ma se la riga ha SOLO quelle
+    # piattaforme, o se nessuna e' riuscita, quel ragionamento non vale piu':
+    # il risultato conterrebbe solo chiavi "_errore" e la riga finirebbe
+    # marcata "pubblicato" pur non avendo pubblicato niente. E' esattamente
+    # cio' che e' successo alla prima prova TikTok: errore salvato, riga verde.
+    riusciti = [k for k in esiti if not k.endswith("_errore")]
+    if not riusciti:
+        motivi = "; ".join(f"{k}: {v}" for k, v in esiti.items()) or "nessun esito"
+        raise RuntimeError(f"nessuna piattaforma ha pubblicato — {motivi}")
     return esiti
 
 
@@ -3743,12 +3752,17 @@ def coda_social_stato_tiktok(post_id: int, x_media_token: str = Header(None)):
     if not r or not r["risultato"]:
         raise HTTPException(status_code=404, detail="riga senza risultato")
     try:
-        pid = json.loads(r["risultato"]).get("tiktok_bozza")
+        salvato = json.loads(r["risultato"])
     except Exception:
-        pid = None
+        salvato = {}
+    pid = salvato.get("tiktok_bozza")
     if not pid:
-        raise HTTPException(status_code=404,
-                            detail="questa riga non ha un caricamento TikTok")
+        # ⚠️ Se non c'e' un publish_id ma c'e' un errore salvato, quello e' il
+        # dato che serve: rispondere solo "non trovato" nasconderebbe proprio
+        # il motivo per cui non c'e'.
+        return {"publish_id": None,
+                "errore_salvato": salvato.get("tiktok_errore"),
+                "risultato": salvato}
     return {"publish_id": pid, "tiktok": _tiktok_stato(pid)}
 
 
