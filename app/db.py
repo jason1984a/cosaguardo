@@ -743,6 +743,9 @@ def init_db():
     # annidare due connessioni su SQLite e' una fonte di blocchi.
     init_api_tokens()
 
+    # Stesso motivo: connessione propria, fuori da quella di init_db().
+    init_coda_social()
+
 
 def add_streaming_alert(email: str, tmdb_id: int, content_type: str,
                         title: str | None = None, user_id: int | None = None) -> bool:
@@ -2011,3 +2014,180 @@ def get_recommendation_feedback_stats(limit_comments=50):
         "complaint_counts": dict(sorted(complaint_counts.items(), key=lambda x: -x[1])),
         "recent_comments": comments,
     }
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Coda di pubblicazione social
+#
+# ⚠️ PERCHE' UNA CODA E NON UN CRON SUL PC. Instagram non sa programmare un
+# post: l'API pubblica nell'istante in cui la chiami. Se l'orologio stesse sul
+# PC di Marco e il PC fosse spento alle 18, su Instagram non uscirebbe niente.
+# Qui le righe aspettano su Render, che e' sempre acceso.
+#
+# ⚠️ DOVE STANNO I MEDIA. Nella stessa cartella del database, non in /tmp. Il
+# database vive su un disco che sopravvive ai riavvii (altrimenti a ogni
+# deploy si perderebbero gli utenti), quindi mettendo i media accanto a lui
+# ereditano la stessa durata senza dover sapere dove quel disco e' montato.
+# Un contenuto montato oggi e programmato per domani si ritrova tutto al suo
+# posto anche se Render riavvia nel mezzo.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def init_coda_social():
+    """Crea la tabella della coda. Idempotente."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS coda_social (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                creato_il      TEXT NOT NULL,
+                pubblicare_il  TEXT NOT NULL,
+                formato        TEXT NOT NULL,
+                piattaforme    TEXT NOT NULL,
+                didascalia     TEXT NOT NULL,
+                media          TEXT NOT NULL,
+                stato          TEXT NOT NULL DEFAULT 'in_attesa',
+                tentativi      INTEGER NOT NULL DEFAULT 0,
+                ultimo_errore  TEXT,
+                risultato      TEXT,
+                aggiornato_il  TEXT
+            )
+        """)
+        # L'indice che serve davvero: il worker chiede "cosa e' scaduto e
+        # ancora in attesa" una volta al minuto, per sempre.
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_coda_stato_quando
+            ON coda_social (stato, pubblicare_il)
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def accoda_post(pubblicare_il: str, formato: str, piattaforme: str,
+                didascalia: str, media_json: str) -> int:
+    """Mette un contenuto in coda. pubblicare_il e' ISO UTC."""
+    from datetime import datetime as _dt, timezone as _tz
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO coda_social
+                (creato_il, pubblicare_il, formato, piattaforme, didascalia, media)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (_dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds"), pubblicare_il,
+              formato, piattaforme, didascalia, media_json))
+        conn.commit()
+        return cur.lastrowid
+    finally:
+        conn.close()
+
+
+def prendi_post_da_pubblicare(adesso_iso: str, max_tentativi: int = 3):
+    """
+    Prende UNA riga scaduta e la marca 'in_corso', in modo atomico.
+
+    ⚠️ LA CLAUSOLA "AND stato='in_attesa'" NELL'UPDATE E' IL PUNTO DI TUTTO.
+    Il peggio che puo' capitare a una coda di pubblicazione non e' saltare un
+    post: e' pubblicarlo DUE VOLTE. Leggere la riga e poi aggiornarla in due
+    passi lascia una finestra in cui due esecuzioni prendono la stessa riga.
+    Aggiornando con quella condizione, solo una delle due vede rowcount=1 e
+    procede; l'altra trova 0 e lascia perdere.
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT * FROM coda_social
+            WHERE stato = 'in_attesa'
+              AND pubblicare_il <= ?
+              AND tentativi < ?
+            ORDER BY pubblicare_il ASC
+            LIMIT 1
+        """, (adesso_iso, max_tentativi))
+        riga = cur.fetchone()
+        if not riga:
+            return None
+
+        cur.execute("""
+            UPDATE coda_social
+               SET stato = 'in_corso', aggiornato_il = ?
+             WHERE id = ? AND stato = 'in_attesa'
+        """, (adesso_iso, riga["id"]))
+        conn.commit()
+        if cur.rowcount != 1:
+            # Qualcun altro l'ha presa nel frattempo.
+            return None
+        return dict(riga)
+    finally:
+        conn.close()
+
+
+def chiudi_post(post_id: int, esito: str, risultato: str = "",
+                errore: str = "") -> None:
+    """esito: 'pubblicato' oppure 'errore'."""
+    from datetime import datetime as _dt, timezone as _tz
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        if esito == "errore":
+            # ⚠️ Torna 'in_attesa', non resta 'in_corso': altrimenti un errore
+            # di rete passeggero bloccherebbe la riga per sempre. Il contatore
+            # dei tentativi e' cio' che impedisce il ciclo infinito.
+            cur.execute("""
+                UPDATE coda_social
+                   SET stato = 'in_attesa', tentativi = tentativi + 1,
+                       ultimo_errore = ?, aggiornato_il = ?
+                 WHERE id = ?
+            """, (errore[:500], _dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds"), post_id))
+        else:
+            cur.execute("""
+                UPDATE coda_social
+                   SET stato = 'pubblicato', risultato = ?, aggiornato_il = ?
+                 WHERE id = ?
+            """, (risultato, _dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds"), post_id))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def lista_coda(limite: int = 50):
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, creato_il, pubblicare_il, formato, piattaforme,
+                   stato, tentativi, ultimo_errore, risultato,
+                   substr(didascalia, 1, 80) AS anteprima
+              FROM coda_social
+             ORDER BY pubblicare_il DESC
+             LIMIT ?
+        """, (limite,))
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def media_ancora_in_uso():
+    """
+    I nomi dei file citati da righe non ancora concluse.
+
+    ⚠️ Serve alla pulizia automatica: senza, lo spazzino cancellerebbe il
+    video di un post programmato per domani, e domani il post fallirebbe
+    senza che niente faccia pensare allo spazzino.
+    """
+    import json as _json
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT media FROM coda_social WHERE stato IN ('in_attesa','in_corso')")
+        fuori = set()
+        for r in cur.fetchall():
+            try:
+                for n in _json.loads(r["media"]):
+                    fuori.add(n)
+            except Exception:
+                pass
+        return fuori
+    finally:
+        conn.close()

@@ -3270,7 +3270,16 @@ import secrets as _secrets
 import re as _re_media
 from pathlib import Path as _Path_media
 
-_MEDIA_TEMP_DIR = _Path_media(_tempfile.gettempdir()) / "cosaguardo_media"
+# ⚠️ ACCANTO AL DATABASE, NON IN /tmp. Il disco di Render e' effimero: un
+# deploy o un riavvio svuota /tmp. Un contenuto montato oggi e programmato per
+# domani si ritroverebbe senza file proprio nel momento della pubblicazione, e
+# il motivo sarebbe invisibile. Il database invece vive su un disco che
+# sopravvive ai riavvii — deve, altrimenti a ogni deploy spariscono gli utenti
+# — quindi mettendo i media nella SUA cartella ereditano la stessa durata
+# senza che questo codice debba sapere dove quel disco e' montato.
+_MEDIA_TEMP_DIR = _Path_media(
+    os.path.dirname(os.environ.get("DATABASE_PATH", "")) or _tempfile.gettempdir()
+) / "media_social"
 _MEDIA_TEMP_TOKEN = os.environ.get("MEDIA_TEMP_TOKEN", "")
 _MEDIA_TEMP_ORE = 6
 _MEDIA_TEMP_MAX_MB = 150
@@ -3292,12 +3301,29 @@ def _media_temp_autorizza(token: str) -> None:
 
 
 def _media_temp_pulisci() -> None:
-    """Toglie i file piu' vecchi di _MEDIA_TEMP_ORE."""
+    """
+    Toglie i file scaduti.
+
+    ⚠️ RISPARMIA QUELLI CITATI DALLA CODA. Senza questo controllo lo spazzino
+    cancellerebbe il video di un post programmato per domani — e domani la
+    pubblicazione fallirebbe senza che niente faccia pensare allo spazzino.
+    """
     import time as _t
+    try:
+        from app.db import media_ancora_in_uso
+        protetti = media_ancora_in_uso()
+    except Exception as e:
+        # Se non si riesce a sapere cosa e' in uso NON si cancella niente:
+        # perdere un video programmato costa piu' di qualche MB di troppo.
+        log.warning("media_temp: pulizia saltata, coda non leggibile: %s", e)
+        return
+
     limite = _t.time() - _MEDIA_TEMP_ORE * 3600
     try:
         for f in _MEDIA_TEMP_DIR.iterdir():
             try:
+                if f.name in protetti:
+                    continue
                 if f.is_file() and f.stat().st_mtime < limite:
                     f.unlink()
             except Exception:
@@ -3390,6 +3416,220 @@ def media_temp_cancella(nome: str, x_media_token: str = Header(None)):
     esisteva = p.is_file()
     p.unlink(missing_ok=True)
     return {"cancellato": esisteva}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Coda di pubblicazione social
+#
+# ⚠️ PERCHE' LA PUBBLICAZIONE STA QUI E NON SUL PC. Instagram non sa
+# programmare un post: l'API pubblica nell'istante in cui la chiami. Se
+# l'orologio stesse sul PC e il PC fosse spento alle 18, non uscirebbe niente.
+# E tenendo la logica di pubblicazione solo qui, il percorso "pubblica subito"
+# e quello programmato sono LO STESSO CODICE: il PC si limita a caricare il
+# file e ad accodare. Due implementazioni della stessa cosa divergono sempre,
+# e divergono proprio nel ramo che si prova meno.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_SOCIAL_PAGINA_ID = os.environ.get("SOCIAL_PAGINA_ID", "")
+_SOCIAL_PAGINA_TOKEN = os.environ.get("SOCIAL_PAGINA_TOKEN", "")
+_SOCIAL_IG_ID = os.environ.get("SOCIAL_IG_ID", "")
+_SOCIAL_API = os.environ.get("SOCIAL_API_VERSIONE", "v26.0")
+_SOCIAL_ATTESA_MAX = 420
+_SOCIAL_TENTATIVI_MAX = 3
+
+
+def _social_graph(metodo: str, percorso: str, parametri: dict):
+    """Una chiamata all'API Graph. Restituisce (dati, errore)."""
+    import urllib.request as _ur, urllib.parse as _up, urllib.error as _ue
+    url = f"https://graph.facebook.com/{_SOCIAL_API}{percorso}"
+    if metodo == "GET":
+        req = _ur.Request(url + "?" + _up.urlencode(parametri))
+    else:
+        req = _ur.Request(url, data=_up.urlencode(parametri).encode("utf-8"),
+                          method=metodo)
+    try:
+        with _ur.urlopen(req, timeout=180) as r:
+            return json.loads(r.read().decode("utf-8")), None
+    except _ue.HTTPError as e:
+        try:
+            corpo = json.loads(e.read().decode("utf-8"))
+        except Exception:
+            corpo = {"error": {"message": f"HTTP {e.code}"}}
+        return None, corpo.get("error", corpo)
+    except Exception as e:
+        return None, {"message": f"{type(e).__name__}: {e}"}
+
+
+def _social_attendi(creation_id: str) -> None:
+    """
+    Aspetta che Meta abbia scaricato ed elaborato il video.
+
+    ⚠️ Pubblicare un contenitore non ancora pronto restituisce un errore
+    generico che sembra un problema di permessi: si finisce a rigenerare
+    token che stavano benissimo.
+    """
+    import time as _t
+    inizio = _t.time()
+    while _t.time() - inizio < _SOCIAL_ATTESA_MAX:
+        dati, err = _social_graph("GET", f"/{creation_id}", {
+            "fields": "status_code,status", "access_token": _SOCIAL_PAGINA_TOKEN})
+        if err:
+            raise RuntimeError(f"stato non leggibile: {err.get('message')}")
+        stato = dati.get("status_code")
+        if stato == "FINISHED":
+            return
+        if stato == "ERROR":
+            raise RuntimeError(
+                f"Meta non ha elaborato il video ({dati.get('status')}). "
+                f"Causa tipica: non e' riuscita a SCARICARLO.")
+        _t.sleep(5)
+    raise RuntimeError(f"contenitore non pronto entro {_SOCIAL_ATTESA_MAX}s")
+
+
+def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
+                     nomi_media: list) -> dict:
+    """Pubblica e restituisce gli id ottenuti. Solleva in caso di errore."""
+    url = [f"https://cosaguardo.com/media-temp/{n}" for n in nomi_media]
+    for n in nomi_media:
+        if not (_MEDIA_TEMP_DIR / n).is_file():
+            raise RuntimeError(f"il file {n} non c'e' piu'")
+
+    esiti = {}
+    e_video = nomi_media and nomi_media[0].lower().endswith((".mp4", ".mov"))
+
+    if "instagram" in piattaforme and _SOCIAL_IG_ID:
+        if e_video:
+            dati, err = _social_graph("POST", f"/{_SOCIAL_IG_ID}/media", {
+                "media_type": "REELS", "video_url": url[0],
+                "caption": didascalia, "access_token": _SOCIAL_PAGINA_TOKEN})
+            if err:
+                raise RuntimeError(f"Instagram, creazione: {err.get('message')}")
+            contenitore = dati["id"]
+        else:
+            figli = []
+            for u in url:
+                dati, err = _social_graph("POST", f"/{_SOCIAL_IG_ID}/media", {
+                    "image_url": u, "is_carousel_item": "true",
+                    "access_token": _SOCIAL_PAGINA_TOKEN})
+                if err:
+                    raise RuntimeError(f"Instagram, immagine: {err.get('message')}")
+                figli.append(dati["id"])
+            dati, err = _social_graph("POST", f"/{_SOCIAL_IG_ID}/media", {
+                "media_type": "CAROUSEL", "children": ",".join(figli),
+                "caption": didascalia, "access_token": _SOCIAL_PAGINA_TOKEN})
+            if err:
+                raise RuntimeError(f"Instagram, carosello: {err.get('message')}")
+            contenitore = dati["id"]
+
+        _social_attendi(contenitore)
+        dati, err = _social_graph("POST", f"/{_SOCIAL_IG_ID}/media_publish", {
+            "creation_id": contenitore, "access_token": _SOCIAL_PAGINA_TOKEN})
+        if err:
+            raise RuntimeError(f"Instagram, pubblicazione: {err.get('message')}")
+        esiti["instagram"] = dati.get("id")
+
+    if "facebook" in piattaforme and _SOCIAL_PAGINA_ID and e_video:
+        # ⚠️ Facebook NON fa fallire tutto. Se Instagram e' uscito e Facebook
+        # no, rimettere la riga in coda farebbe ripubblicare su Instagram al
+        # tentativo dopo. Tre follower non valgono un doppione.
+        dati, err = _social_graph("POST", f"/{_SOCIAL_PAGINA_ID}/videos", {
+            "file_url": url[0], "description": didascalia,
+            "access_token": _SOCIAL_PAGINA_TOKEN})
+        if err:
+            log.warning("coda_social: Facebook fallito: %s", err.get("message"))
+            esiti["facebook_errore"] = err.get("message")
+        else:
+            esiti["facebook"] = dati.get("id")
+
+    if not esiti:
+        raise RuntimeError("nessuna piattaforma ha pubblicato")
+    return esiti
+
+
+def _coda_social_giro() -> None:
+    """Un giro della coda: prende al massimo una riga scaduta e la lavora."""
+    from datetime import datetime as _dt, timezone as _tz
+    from app.db import prendi_post_da_pubblicare, chiudi_post
+
+    adesso = _dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds")
+    riga = prendi_post_da_pubblicare(adesso, _SOCIAL_TENTATIVI_MAX)
+    if not riga:
+        return
+
+    log.info("coda_social: lavoro la riga %s (%s)", riga["id"], riga["formato"])
+    try:
+        nomi = json.loads(riga["media"])
+        esiti = _social_pubblica(riga["formato"], riga["piattaforme"],
+                                 riga["didascalia"], nomi)
+        chiudi_post(riga["id"], "pubblicato", risultato=json.dumps(esiti))
+        log.info("coda_social: riga %s pubblicata: %s", riga["id"], esiti)
+        # I media servivano solo a questo: il giro di pulizia li togliera'
+        # ora che la riga non li protegge piu'.
+    except Exception as e:
+        log.warning("coda_social: riga %s fallita: %s", riga["id"], e)
+        chiudi_post(riga["id"], "errore", errore=str(e))
+
+
+@app.on_event("startup")
+def _avvia_coda_social():
+    """
+    Il worker della coda. Un giro al minuto.
+
+    ⚠️ Non parte se mancano le credenziali: un thread che gira a vuoto ogni
+    minuto riempie i log di errori identici e nasconde quelli veri.
+    """
+    if not (_SOCIAL_PAGINA_TOKEN and (_SOCIAL_IG_ID or _SOCIAL_PAGINA_ID)):
+        log.info("coda_social: worker non avviato (credenziali social assenti)")
+        return
+    if os.environ.get("DISABLE_CODA_SOCIAL"):
+        log.info("coda_social: worker disattivato da variabile d'ambiente")
+        return
+
+    import threading as _th
+    import time as _t
+
+    def _lavora():
+        while True:
+            try:
+                _coda_social_giro()
+            except Exception as e:
+                log.exception("coda_social: giro fallito: %s", e)
+            _t.sleep(60)
+
+    _th.Thread(target=_lavora, daemon=True, name="coda_social").start()
+    log.info("coda_social: worker avviato (un giro al minuto)")
+
+
+@app.post("/coda-social", response_class=JSONResponse)
+def coda_social_accoda(
+    pubblicare_il: str = Body(..., embed=True),
+    formato: str = Body("duo", embed=True),
+    piattaforme: str = Body("instagram,facebook", embed=True),
+    didascalia: str = Body(..., embed=True),
+    media: list = Body(..., embed=True),
+    x_media_token: str = Header(None),
+):
+    """Mette un contenuto in coda. I media devono essere gia' stati caricati."""
+    _media_temp_autorizza(x_media_token)
+    from app.db import accoda_post
+
+    if not media:
+        raise HTTPException(status_code=400, detail="nessun media")
+    for n in media:
+        if not (_MEDIA_TEMP_DIR / _media_temp_percorso(n).name).is_file():
+            raise HTTPException(status_code=400, detail=f"media non trovato: {n}")
+
+    pid = accoda_post(pubblicare_il, formato, piattaforme, didascalia,
+                      json.dumps(list(media)))
+    log.info("coda_social: accodato %s per %s", pid, pubblicare_il)
+    return {"id": pid, "pubblicare_il": pubblicare_il}
+
+
+@app.get("/coda-social", response_class=JSONResponse)
+def coda_social_elenco(x_media_token: str = Header(None)):
+    _media_temp_autorizza(x_media_token)
+    from app.db import lista_coda
+    return {"coda": lista_coda()}
 
 
 # ═══════════════════════════════════════════════════════════════════════════
