@@ -3502,6 +3502,31 @@ def _social_attendi(creation_id: str) -> None:
     raise RuntimeError(f"contenitore non pronto entro {_SOCIAL_ATTESA_MAX}s")
 
 
+def _social_commenta(oggetto_id: str, testo: str):
+    """
+    Pubblica il commento sotto a un contenuto gia' uscito. (ok, motivo).
+
+    ⚠️ PUBBLICA, NON FISSA. Fissare un commento in cima non esiste in nessuna
+    delle API — ne' Instagram ne' Facebook ne' YouTube: e' una funzione solo
+    da app. Quindi quel gesto resta a mano. Il valore di automatizzare la
+    pubblicazione e' un altro: il commento col link al sito c'e' comunque,
+    anche nei giorni in cui l'app non la apri, ed essendo immediato e' il
+    primo della lista, che e' poi il motivo per cui lo fissavi.
+
+    ⚠️ Niente YouTube, deliberatamente. Li' commentare richiede
+    youtube.force-ssl, che da' accesso completo in scrittura al canale
+    (cancellare video compreso), mentre oggi l'automazione ha solo
+    youtube.upload. Allargare quel permesso per un commento al giorno
+    significa che un token rubato puo' fare danni veri invece che caricare un
+    video di troppo. Su YouTube il commento si mette a mano.
+    """
+    dati, err = _social_graph("POST", f"/{oggetto_id}/comments", {
+        "message": testo, "access_token": _SOCIAL_PAGINA_TOKEN})
+    if err:
+        return False, (err.get("message") or "errore non specificato")[:200]
+    return True, dati.get("id", "")
+
+
 def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
                      nomi_media: list, extra: dict = None) -> dict:
     """Pubblica e restituisce gli id ottenuti. Solleva in caso di errore."""
@@ -3544,6 +3569,13 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
         if err:
             raise RuntimeError(f"Instagram, pubblicazione: {err.get('message')}")
         esiti["instagram"] = dati.get("id")
+        # ⚠️ In un try suo e non fatale: il post e' GIA' USCITO. Se il
+        # commento fallisse dentro il blocco principale, la riga tornerebbe
+        # in coda e Instagram pubblicherebbe un doppione. Un commento da
+        # mettere a mano costa molto meno.
+        if extra.get("commento") and esiti["instagram"]:
+            ok, motivo = _social_commenta(esiti["instagram"], extra["commento"])
+            esiti["instagram_commento" if ok else "instagram_commento_errore"] = motivo
 
     if "facebook" in piattaforme and _SOCIAL_PAGINA_ID and e_video:
         # ⚠️ Facebook NON fa fallire tutto. Se Instagram e' uscito e Facebook
@@ -3557,6 +3589,9 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
             esiti["facebook_errore"] = err.get("message")
         else:
             esiti["facebook"] = dati.get("id")
+            if extra.get("commento") and esiti["facebook"]:
+                ok, motivo = _social_commenta(esiti["facebook"], extra["commento"])
+                esiti["facebook_commento" if ok else "facebook_commento_errore"] = motivo
 
     if "youtube" in piattaforme and e_video:
         # ⚠️ Non fatale, per lo stesso motivo di Facebook: se Instagram e'
@@ -3602,7 +3637,11 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
     # il risultato conterrebbe solo chiavi "_errore" e la riga finirebbe
     # marcata "pubblicato" pur non avendo pubblicato niente. E' esattamente
     # cio' che e' successo alla prima prova TikTok: errore salvato, riga verde.
-    riusciti = [k for k in esiti if not k.endswith("_errore")]
+    # ⚠️ "_commento" escluso: un commento riuscito non e' una pubblicazione
+    # riuscita. Senza questo filtro, una riga in cui l'unica cosa andata bene
+    # fosse un commento risulterebbe pubblicata.
+    riusciti = [k for k in esiti
+                if not k.endswith("_errore") and "_commento" not in k]
     if not riusciti:
         motivi = "; ".join(f"{k}: {v}" for k, v in esiti.items()) or "nessun esito"
         raise RuntimeError(f"nessuna piattaforma ha pubblicato — {motivi}")
@@ -3966,38 +4005,61 @@ def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
     nomi = {"instagram": "Instagram", "facebook": "Facebook",
             "youtube": "YouTube", "tiktok_bozza": "TikTok (bozza)",
             "tiktok_foto": "TikTok (carosello in casella)"}
-    usciti = [nomi.get(k, k) for k in esiti if not k.endswith("_errore")]
+
+    # ⚠️ "_commento" va escluso da questo elenco: senza il filtro, una chiave
+    # come "instagram_commento" finirebbe fra le piattaforme uscite e il
+    # messaggio direbbe "Uscito su: Instagram, instagram_commento".
+    def e_piattaforma(k):
+        return not k.endswith("_errore") and "_commento" not in k
+
+    usciti = [nomi.get(k, k) for k in esiti if e_piattaforma(k)]
     falliti = [f"{nomi.get(k[:-7], k[:-7])}: {v}"
-               for k, v in esiti.items() if k.endswith("_errore")]
+               for k, v in esiti.items()
+               if k.endswith("_errore") and "_commento" not in k]
 
     righe = [f"<b>{_tg_scappa(riga.get('formato','contenuto'))} pubblicato</b>",
              "Uscito su: " + (", ".join(usciti) or "—")]
     if falliti:
         righe.append("\n⚠️ Non riuscito su:\n" + "\n".join(_tg_scappa(f) for f in falliti))
 
-    # ⚠️ La didascalia si manda SOLO se TikTok ha ricevuto la bozza: e' li' che
-    # devi incollarla a mano, perche' l'endpoint della casella non accetta il
-    # testo. Mandarla sempre farebbe rumore inutile sulle altre piattaforme,
-    # dove la didascalia e' gia' andata insieme al post.
-    # ⚠️ Solo per tiktok_bozza, cioe' i video. Il carosello di foto passa da
-    # un endpoint che porta gia' il testo: mandarlo anche qui farebbe pensare
-    # che ci sia ancora qualcosa da incollare quando non c'e'.
+    # ⚠️ La didascalia si manda SOLO se TikTok ha ricevuto la bozza video: e'
+    # li' che devi incollarla a mano, perche' l'endpoint della casella non
+    # accetta il testo. Il carosello di foto passa da un endpoint che il testo
+    # ce l'ha, quindi li' non serve.
     if esiti.get("tiktok_bozza"):
         righe.append("\nApri la notifica su TikTok e incolla questo:")
         righe.append(f"<pre>{_tg_scappa(riga.get('didascalia',''))}</pre>")
 
-    # ⚠️ Il commento da fissare va mandato SEMPRE, non solo per TikTok: lo
-    # fissi a mano su ogni piattaforma e nessuna API lo pubblica al posto
-    # tuo. Senza questa riga resta in un txt sul PC, e nel momento in cui
-    # servirebbe — col telefono in mano, davanti al post appena uscito — non
-    # ce l'hai.
     try:
         commento = json.loads(riga.get("extra") or "{}").get("commento", "")
     except Exception:
         commento = ""
-    if commento and usciti:
-        righe.append("\nCommento da fissare sotto al post:")
-        righe.append(f"<pre>{_tg_scappa(commento)}</pre>")
+
+    if commento:
+        fatti = [nomi[k.replace("_commento", "")] for k in esiti
+                 if k.endswith("_commento") and k.replace("_commento", "") in nomi]
+        # Dove e' uscito il contenuto ma il commento no: o perche' li' non lo
+        # pubblichiamo (YouTube, TikTok), o perche' il tentativo e' fallito.
+        da_fare = [nomi.get(k, k) for k in esiti if e_piattaforma(k)
+                   and f"{k}_commento" not in esiti]
+        non_riusciti = [f"{nomi.get(k.replace('_commento_errore',''), k)}: {v}"
+                        for k, v in esiti.items() if k.endswith("_commento_errore")]
+
+        if fatti:
+            righe.append(f"\n💬 Commento pubblicato su: {', '.join(fatti)}")
+        if non_riusciti:
+            righe.append("\n⚠️ Commento non riuscito su:\n"
+                         + "\n".join(_tg_scappa(n) for n in non_riusciti))
+        if da_fare or non_riusciti:
+            dove = ", ".join(da_fare) or "le piattaforme qui sopra"
+            righe.append(f"\nDa commentare a mano su {_tg_scappa(dove)}:")
+            righe.append(f"<pre>{_tg_scappa(commento)}</pre>")
+        if fatti:
+            # ⚠️ Si dice ogni volta perche' e' il passaggio che resta a mano e
+            # che non ha nessun promemoria: fissare in cima non esiste in
+            # nessuna API, e senza questa riga passerebbe di mente.
+            righe.append("\n<i>Fissarlo in cima resta da fare in app: "
+                         "nessuna API lo permette.</i>")
 
     _notifica("\n".join(righe))
 
