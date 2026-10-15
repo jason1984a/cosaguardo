@@ -3579,12 +3579,18 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
             log.warning("coda_social: YouTube fallito: %s", e)
             esiti["youtube_errore"] = str(e)[:300]
 
-    if "tiktok" in piattaforme and e_video:
+    if "tiktok" in piattaforme:
         # ⚠️ Come Facebook, non fa fallire tutto: se Instagram e' gia' uscito,
         # rimettere la riga in coda la ripubblicherebbe la', e un doppione su
         # Instagram costa molto piu' di una bozza TikTok da rifare a mano.
         try:
-            esiti["tiktok_bozza"] = _tiktok_carica_bozza(url[0])
+            if e_video:
+                esiti["tiktok_bozza"] = _tiktok_carica_bozza(url[0])
+            else:
+                # Il carosello di foto passa da un endpoint diverso, che a
+                # differenza di quello video porta con se' anche il testo.
+                esiti["tiktok_foto"] = _tiktok_carica_foto(
+                    url, extra.get("titolo_tiktok", ""), didascalia)
         except Exception as e:
             log.warning("coda_social: TikTok fallito: %s", e)
             esiti["tiktok_errore"] = str(e)[:200]
@@ -3958,7 +3964,8 @@ def telegram_prova(chiave: str = Query("")):
 def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
     """Il messaggio che arriva quando un contenuto e' uscito."""
     nomi = {"instagram": "Instagram", "facebook": "Facebook",
-            "youtube": "YouTube", "tiktok_bozza": "TikTok (bozza)"}
+            "youtube": "YouTube", "tiktok_bozza": "TikTok (bozza)",
+            "tiktok_foto": "TikTok (carosello in casella)"}
     usciti = [nomi.get(k, k) for k in esiti if not k.endswith("_errore")]
     falliti = [f"{nomi.get(k[:-7], k[:-7])}: {v}"
                for k, v in esiti.items() if k.endswith("_errore")]
@@ -3972,6 +3979,9 @@ def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
     # devi incollarla a mano, perche' l'endpoint della casella non accetta il
     # testo. Mandarla sempre farebbe rumore inutile sulle altre piattaforme,
     # dove la didascalia e' gia' andata insieme al post.
+    # ⚠️ Solo per tiktok_bozza, cioe' i video. Il carosello di foto passa da
+    # un endpoint che porta gia' il testo: mandarlo anche qui farebbe pensare
+    # che ci sia ancora qualcosa da incollare quando non c'e'.
     if esiti.get("tiktok_bozza"):
         righe.append("\nApri la notifica su TikTok e incolla questo:")
         righe.append(f"<pre>{_tg_scappa(riga.get('didascalia',''))}</pre>")
@@ -4577,6 +4587,60 @@ def youtube_stato(chiave: str = Query("")):
         fuori["nota"] = ("ha superato i sette giorni e funziona: la schermata "
                          "di consenso e' in produzione per davvero")
     return fuori
+
+
+def _tiktok_carica_foto(url_immagini: list, titolo: str, didascalia: str) -> str:
+    """
+    Manda un carosello di foto nella casella TikTok. Restituisce publish_id.
+
+    ⚠️ ENDPOINT DIVERSO DA QUELLO DEI VIDEO, e non e' un dettaglio
+    burocratico: /inbox/video/init/ accetta solo un video e NON ha un campo
+    per il testo, mentre /content/init/ accetta fino a 35 immagini E il
+    titolo con la descrizione. Quindi sui caroselli, al contrario dei reel,
+    la didascalia parte da sola e non serve incollarla a mano.
+
+    Stesso scope (video.upload) e stessa verifica del dominio dei video:
+    non c'e' niente da riconfigurare nel portale.
+    """
+    import urllib.request as _ur, urllib.error as _ue
+    token = _tiktok_access_token()
+    corpo = json.dumps({
+        "post_info": {
+            # 90 e 4000 sono i limiti dichiarati: si tagliano qui, perche'
+            # sforare fa fallire tutta la chiamata senza dire quale campo.
+            "title": (titolo or "")[:90],
+            "description": (didascalia or "")[:4000],
+        },
+        "source_info": {
+            "source": "PULL_FROM_URL",
+            "photo_cover_index": 0,     # la cover e' sempre la prima slide
+            "photo_images": url_immagini[:35],
+        },
+        "post_mode": "MEDIA_UPLOAD",    # in casella, non pubblicato
+        "media_type": "PHOTO",
+    }).encode("utf-8")
+    req = _ur.Request("https://open.tiktokapis.com/v2/post/publish/content/init/",
+                      data=corpo, method="POST",
+                      headers={"Authorization": f"Bearer {token}",
+                               "Content-Type": "application/json; charset=UTF-8"})
+    try:
+        with _ur.urlopen(req, timeout=120) as r:
+            risposta = json.loads(r.read().decode("utf-8"))
+    except _ue.HTTPError as e:
+        raise RuntimeError(f"TikTok foto: {e.read().decode('utf-8','replace')[:300]}")
+
+    errore = (risposta.get("error") or {})
+    if errore.get("code") not in ("ok", None, ""):
+        if errore.get("code") == "url_ownership_unverified":
+            raise RuntimeError(
+                "TikTok rifiuta l'indirizzo delle immagini: cosaguardo.com non "
+                "risulta verificato nel portale per questa app")
+        if errore.get("code") == "app_version_check_failed":
+            raise RuntimeError(
+                "L'app TikTok sul telefono e' troppo vecchia per ricevere i "
+                "caroselli di foto (serve almeno la 31.8): aggiornala")
+        raise RuntimeError(f"TikTok foto: {errore.get('code')} {errore.get('message','')}")
+    return (risposta.get("data") or {}).get("publish_id", "")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
