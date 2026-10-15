@@ -3598,6 +3598,15 @@ def _coda_social_giro() -> None:
                                  riga["didascalia"], nomi)
         chiudi_post(riga["id"], "pubblicato", risultato=json.dumps(esiti))
         log.info("coda_social: riga %s pubblicata: %s", riga["id"], esiti)
+        # ⚠️ Dopo chiudi_post e in un try suo. Il contenuto e' gia' uscito: se
+        # la notifica fallisse dentro il blocco principale, l'except qui sotto
+        # rimetterebbe la riga in coda e la ripubblicherebbe. Un messaggio
+        # perso e' un fastidio, un doppione no.
+        try:
+            _notifica_pubblicazione(riga, esiti)
+        except Exception as e:
+            log.warning("coda_social: notifica non inviata per la riga %s: %s",
+                        riga["id"], e)
         # I media servivano solo a questo: il giro di pulizia li togliera'
         # ora che la riga non li protegge piu'.
     except Exception as e:
@@ -3786,6 +3795,119 @@ def coda_social_annulla(post_id: int, x_media_token: str = Header(None)):
                    "oppure il worker la sta pubblicando proprio ora")
     log.info("coda_social: annullato il post %s", post_id)
     return {"annullato": post_id}
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Notifiche a Marco
+#
+# ⚠️ TUTTO PASSA DA _notifica(). Oggi sotto c'e' Telegram; se un domani si
+# passa a WhatsApp o all'email, si cambia una funzione e nient'altro. Chi
+# chiama non sa e non deve sapere quale canale sta usando — e' il motivo per
+# cui questo blocco esiste invece di chiamare Telegram direttamente dal worker.
+#
+# ⚠️ Una notifica che fallisce NON deve far fallire la pubblicazione. Il post
+# e' gia' uscito: tornare indietro non si puo', e marcare la riga in errore la
+# farebbe ripubblicare. Qui si registra e si tira dritto.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_TG_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+_TG_CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+
+def _tg_scappa(t: str) -> str:
+    """Telegram in modalita' HTML accetta pochi tag: il resto va protetto."""
+    return (t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _notifica(testo_html: str) -> bool:
+    """
+    Manda un messaggio. Restituisce True se e' partito.
+
+    Il testo usa i pochi tag HTML che Telegram accetta: <b>, <i>, <a>, <code>,
+    <pre>. Un blocco <pre> su Telegram si copia con un tocco — ed e' il motivo
+    per cui la didascalia di TikTok viene mandata cosi'.
+    """
+    if not (_TG_TOKEN and _TG_CHAT):
+        log.info("notifica non inviata (Telegram non configurato): %s",
+                 testo_html[:80])
+        return False
+    import urllib.request as _ur, urllib.parse as _up
+    dati = _up.urlencode({
+        "chat_id": _TG_CHAT, "text": testo_html, "parse_mode": "HTML",
+        "disable_web_page_preview": "true",
+    }).encode("utf-8")
+    try:
+        req = _ur.Request(f"https://api.telegram.org/bot{_TG_TOKEN}/sendMessage",
+                          data=dati, method="POST")
+        with _ur.urlopen(req, timeout=30) as r:
+            return json.loads(r.read().decode("utf-8")).get("ok", False)
+    except Exception as e:
+        log.warning("notifica fallita: %s", e)
+        return False
+
+
+@app.get("/telegram/chat-id", response_class=JSONResponse)
+def telegram_chat_id(chiave: str = Query("")):
+    """
+    Trova il tuo chat_id dopo che hai scritto al bot.
+
+    ⚠️ Esiste per non farti costruire a mano un indirizzo che contiene il
+    token: un url del genere finisce nella cronologia del browser, e il token
+    di un bot e' una credenziale a tutti gli effetti.
+    """
+    if not _MEDIA_TEMP_TOKEN or not _secrets.compare_digest(chiave or "", _MEDIA_TEMP_TOKEN):
+        raise HTTPException(status_code=403, detail="non autorizzato")
+    if not _TG_TOKEN:
+        raise HTTPException(status_code=503, detail="manca TELEGRAM_BOT_TOKEN")
+    import urllib.request as _ur
+    with _ur.urlopen(f"https://api.telegram.org/bot{_TG_TOKEN}/getUpdates",
+                     timeout=30) as r:
+        dati = json.loads(r.read().decode("utf-8"))
+    chat = []
+    for u in dati.get("result", []):
+        m = u.get("message") or u.get("channel_post") or {}
+        c = m.get("chat") or {}
+        if c.get("id") and c["id"] not in [x["id"] for x in chat]:
+            chat.append({"id": c["id"],
+                         "nome": c.get("first_name") or c.get("title") or "",
+                         "username": c.get("username", "")})
+    if not chat:
+        return {"chat": [], "nota": "Manda un messaggio qualsiasi al bot e "
+                                    "ricarica questa pagina."}
+    return {"chat": chat, "nota": "Metti l'id in TELEGRAM_CHAT_ID su Render."}
+
+
+@app.get("/telegram/prova", response_class=JSONResponse)
+def telegram_prova(chiave: str = Query("")):
+    """Manda un messaggio di prova, per verificare che la catena funzioni."""
+    if not _MEDIA_TEMP_TOKEN or not _secrets.compare_digest(chiave or "", _MEDIA_TEMP_TOKEN):
+        raise HTTPException(status_code=403, detail="non autorizzato")
+    ok = _notifica("<b>CosaGuardo</b>\nLe notifiche funzionano.")
+    return {"inviato": ok}
+
+
+def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
+    """Il messaggio che arriva quando un contenuto e' uscito."""
+    nomi = {"instagram": "Instagram", "facebook": "Facebook",
+            "youtube": "YouTube", "tiktok_bozza": "TikTok (bozza)"}
+    usciti = [nomi.get(k, k) for k in esiti if not k.endswith("_errore")]
+    falliti = [f"{nomi.get(k[:-7], k[:-7])}: {v}"
+               for k, v in esiti.items() if k.endswith("_errore")]
+
+    righe = [f"<b>{_tg_scappa(riga.get('formato','contenuto'))} pubblicato</b>",
+             "Uscito su: " + (", ".join(usciti) or "—")]
+    if falliti:
+        righe.append("\n⚠️ Non riuscito su:\n" + "\n".join(_tg_scappa(f) for f in falliti))
+
+    # ⚠️ La didascalia si manda SOLO se TikTok ha ricevuto la bozza: e' li' che
+    # devi incollarla a mano, perche' l'endpoint della casella non accetta il
+    # testo. Mandarla sempre farebbe rumore inutile sulle altre piattaforme,
+    # dove la didascalia e' gia' andata insieme al post.
+    if esiti.get("tiktok_bozza"):
+        righe.append("\nApri la notifica su TikTok e incolla questo:")
+        righe.append(f"<pre>{_tg_scappa(riga.get('didascalia',''))}</pre>")
+
+    _notifica("\n".join(righe))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
