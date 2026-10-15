@@ -3819,19 +3819,22 @@ def _tg_scappa(t: str) -> str:
     return (t or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
-def _notifica(testo_html: str) -> bool:
+def _notifica_dettaglio(testo_html: str):
     """
-    Manda un messaggio. Restituisce True se e' partito.
+    Manda un messaggio e restituisce (riuscito, motivo).
 
-    Il testo usa i pochi tag HTML che Telegram accetta: <b>, <i>, <a>, <code>,
-    <pre>. Un blocco <pre> su Telegram si copia con un tocco — ed e' il motivo
-    per cui la didascalia di TikTok viene mandata cosi'.
+    ⚠️ Il motivo serve. Un semplice False non distingue "manca una variabile"
+    da "token sbagliato" da "non hai mai scritto al bot" — tre cause che si
+    risolvono in tre modi diversi, e indovinare fra loro costa piu' tempo che
+    riportare la risposta di Telegram cosi' com'e'.
     """
-    if not (_TG_TOKEN and _TG_CHAT):
-        log.info("notifica non inviata (Telegram non configurato): %s",
-                 testo_html[:80])
-        return False
-    import urllib.request as _ur, urllib.parse as _up
+    import urllib.request as _ur, urllib.parse as _up, urllib.error as _ue
+
+    mancanti = [n for n, v in (("TELEGRAM_BOT_TOKEN", _TG_TOKEN),
+                               ("TELEGRAM_CHAT_ID", _TG_CHAT)) if not v]
+    if mancanti:
+        return False, f"variabili mancanti sul server: {', '.join(mancanti)}"
+
     dati = _up.urlencode({
         "chat_id": _TG_CHAT, "text": testo_html, "parse_mode": "HTML",
         "disable_web_page_preview": "true",
@@ -3840,10 +3843,40 @@ def _notifica(testo_html: str) -> bool:
         req = _ur.Request(f"https://api.telegram.org/bot{_TG_TOKEN}/sendMessage",
                           data=dati, method="POST")
         with _ur.urlopen(req, timeout=30) as r:
-            return json.loads(r.read().decode("utf-8")).get("ok", False)
+            risposta = json.loads(r.read().decode("utf-8"))
+        if risposta.get("ok"):
+            return True, "inviato"
+        return False, str(risposta.get("description") or risposta)[:300]
+    except _ue.HTTPError as e:
+        # ⚠️ Il corpo dell'errore di Telegram contiene la descrizione vera —
+        # "Unauthorized" per un token sbagliato, "chat not found" se non hai
+        # mai scritto al bot o l'id e' errato. Il solo numero non basta.
+        try:
+            corpo = json.loads(e.read().decode("utf-8"))
+            motivo = corpo.get("description") or f"HTTP {e.code}"
+        except Exception:
+            motivo = f"HTTP {e.code}"
+        if e.code == 401:
+            motivo += " — il token non è valido (l'hai rigenerato su BotFather?)"
+        if "chat not found" in str(motivo).lower():
+            motivo += " — scrivi un messaggio al bot, o l'id è sbagliato"
+        return False, str(motivo)[:300]
     except Exception as e:
-        log.warning("notifica fallita: %s", e)
-        return False
+        return False, f"{type(e).__name__}: {e}"
+
+
+def _notifica(testo_html: str) -> bool:
+    """
+    Manda un messaggio. Restituisce True se e' partito.
+
+    Il testo usa i pochi tag HTML che Telegram accetta: <b>, <i>, <a>, <code>,
+    <pre>. Un blocco <pre> su Telegram si copia con un tocco — ed e' il motivo
+    per cui la didascalia di TikTok viene mandata cosi'.
+    """
+    ok, motivo = _notifica_dettaglio(testo_html)
+    if not ok:
+        log.warning("notifica non inviata: %s", motivo)
+    return ok
 
 
 @app.get("/telegram/chat-id", response_class=JSONResponse)
@@ -3882,8 +3915,10 @@ def telegram_prova(chiave: str = Query("")):
     """Manda un messaggio di prova, per verificare che la catena funzioni."""
     if not _MEDIA_TEMP_TOKEN or not _secrets.compare_digest(chiave or "", _MEDIA_TEMP_TOKEN):
         raise HTTPException(status_code=403, detail="non autorizzato")
-    ok = _notifica("<b>CosaGuardo</b>\nLe notifiche funzionano.")
-    return {"inviato": ok}
+    ok, motivo = _notifica_dettaglio("<b>CosaGuardo</b>\nLe notifiche funzionano.")
+    return {"inviato": ok, "motivo": motivo,
+            "token_configurato": bool(_TG_TOKEN),
+            "chat_id_configurato": bool(_TG_CHAT)}
 
 
 def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
