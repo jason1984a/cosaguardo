@@ -3986,6 +3986,19 @@ def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
         righe.append("\nApri la notifica su TikTok e incolla questo:")
         righe.append(f"<pre>{_tg_scappa(riga.get('didascalia',''))}</pre>")
 
+    # ⚠️ Il commento da fissare va mandato SEMPRE, non solo per TikTok: lo
+    # fissi a mano su ogni piattaforma e nessuna API lo pubblica al posto
+    # tuo. Senza questa riga resta in un txt sul PC, e nel momento in cui
+    # servirebbe — col telefono in mano, davanti al post appena uscito — non
+    # ce l'hai.
+    try:
+        commento = json.loads(riga.get("extra") or "{}").get("commento", "")
+    except Exception:
+        commento = ""
+    if commento and usciti:
+        righe.append("\nCommento da fissare sotto al post:")
+        righe.append(f"<pre>{_tg_scappa(commento)}</pre>")
+
     _notifica("\n".join(righe))
 
 
@@ -4925,7 +4938,8 @@ def approva_avvisa(x_media_token: str = Header(None)):
     link = f"https://cosaguardo.com/approva?chiave={_MEDIA_TEMP_TOKEN}"
     primo = _giorno_esteso(righe[0]["pubblicare_il"])
     ultimo = _giorno_esteso(righe[-1]["pubblicare_il"])
-    testo = (f"<b>{len(righe)} contenuti pronti</b>\n"
+    quanti = len(righe)
+    testo = (f"<b>{quanti} contenut{'o pronto' if quanti == 1 else 'i pronti'}</b>\n"
              f"Da {_tg_scappa(primo)} a {_tg_scappa(ultimo)}\n\n"
              f'<a href="{link}">Apri per approvare</a>')
     ok, motivo = _notifica_dettaglio(testo)
