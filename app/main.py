@@ -3680,6 +3680,7 @@ def coda_social_accoda(
     didascalia: str = Body(..., embed=True),
     media: list = Body(..., embed=True),
     extra: dict = Body(None, embed=True),
+    da_approvare: bool = Body(False, embed=True),
     x_media_token: str = Header(None),
 ):
     """Mette un contenuto in coda. I media devono essere gia' stati caricati."""
@@ -3707,9 +3708,10 @@ def coda_social_accoda(
                    f"Va aggiornato anche quello, non solo main.py.")
 
     try:
+        stato = "da_approvare" if da_approvare else "in_attesa"
         pid = accoda_post(pubblicare_il, formato, piattaforme, didascalia,
                           json.dumps(list(media)),
-                          json.dumps(extra) if extra else "")
+                          json.dumps(extra) if extra else "", stato)
     except Exception as e:
         # Tabella assente: la si crea e si riprova una volta. Capita quando il
         # processo gira da prima del deploy che ha introdotto la tabella.
@@ -3719,7 +3721,8 @@ def coda_social_accoda(
                 init_coda_social()
                 pid = accoda_post(pubblicare_il, formato, piattaforme,
                                   didascalia, json.dumps(list(media)),
-                                  json.dumps(extra) if extra else "")
+                                  json.dumps(extra) if extra else "",
+                                  "da_approvare" if da_approvare else "in_attesa")
             except Exception as e2:
                 log.exception("coda_social: creazione tabella fallita: %s", e2)
                 raise HTTPException(status_code=500, detail=f"coda non scrivibile: {e2}")
@@ -3727,8 +3730,8 @@ def coda_social_accoda(
             log.exception("coda_social: accodamento fallito: %s", e)
             raise HTTPException(status_code=500, detail=f"accodamento fallito: {e}")
 
-    log.info("coda_social: accodato %s per %s", pid, pubblicare_il)
-    return {"id": pid, "pubblicare_il": pubblicare_il}
+    log.info("coda_social: accodato %s per %s (%s)", pid, pubblicare_il, stato)
+    return {"id": pid, "pubblicare_il": pubblicare_il, "stato": stato}
 
 
 @app.get("/coda-social", response_class=JSONResponse)
@@ -4574,6 +4577,295 @@ def youtube_stato(chiave: str = Query("")):
         fuori["nota"] = ("ha superato i sette giorni e funziona: la schermata "
                          "di consenso e' in produzione per davvero")
     return fuori
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Approvazione settimanale
+#
+# ⚠️ PERCHE' UNA PAGINA E NON UNA CONVERSAZIONE SU TELEGRAM. Approvare sei
+# contenuti a colpi di messaggi significa ricostruire a mano quale risposta si
+# riferisce a quale reel, e sbagliarsi una volta vuol dire pubblicare quello
+# scartato. Una pagina mostra tutto insieme, con il video che si guarda da li'.
+# Telegram serve solo a far arrivare il link.
+#
+# ⚠️ Il worker cerca solo le righe 'in_attesa'. Una riga 'da_approvare' non
+# puo' uscire per errore: non e' una regola da ricordarsi, e' la query che non
+# la vede.
+# ═══════════════════════════════════════════════════════════════════════════
+
+import html as _html
+
+
+def _fuso_rome():
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("Europe/Rome")
+    except Exception:
+        return None
+
+
+def _in_locale(iso_utc: str) -> str:
+    """UTC salvato -> ora italiana, per il campo del modulo."""
+    from datetime import datetime as _dt, timezone as _tz
+    try:
+        q = _dt.fromisoformat(iso_utc).replace(tzinfo=_tz.utc)
+        tz = _fuso_rome()
+        return (q.astimezone(tz) if tz else q).strftime("%Y-%m-%dT%H:%M")
+    except Exception:
+        return ""
+
+
+_GIORNI = ["lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato", "domenica"]
+_MESI = ["gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno", "luglio",
+         "agosto", "settembre", "ottobre", "novembre", "dicembre"]
+
+
+def _giorno_esteso(iso_utc: str) -> str:
+    """
+    "lunedì 19 ottobre, 19:30".
+
+    ⚠️ I nomi sono scritti a mano e non presi da strftime: il locale del
+    server e' quello di Render, non il tuo, e verrebbero in inglese.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    try:
+        q = _dt.fromisoformat(iso_utc).replace(tzinfo=_tz.utc)
+        tz = _fuso_rome()
+        if tz:
+            q = q.astimezone(tz)
+        # Solo l'iniziale del giorno: in italiano il mese resta minuscolo, e
+        # text-transform:capitalize del CSS maiuscolava anche quello.
+        return (f"{_GIORNI[q.weekday()].capitalize()} {q.day} "
+                f"{_MESI[q.month - 1]}, {q.strftime('%H:%M')}")
+    except Exception:
+        return "data non leggibile"
+
+
+def _da_locale(testo: str) -> str:
+    """
+    Ora italiana dal modulo -> UTC da salvare.
+
+    ⚠️ La conversione si fa QUI e non in JavaScript. In JavaScript userebbe il
+    fuso del telefono: giusto quasi sempre, sbagliato di un'ora esatta se stai
+    approvando da un fuso diverso, e un'ora di scarto su una pubblicazione non
+    la noti finche' non e' uscita.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    try:
+        q = _dt.strptime(testo.strip()[:16], "%Y-%m-%dT%H:%M")
+        tz = _fuso_rome()
+        if tz:
+            q = q.replace(tzinfo=tz)
+        else:
+            q = q.replace(tzinfo=_tz.utc)
+        return q.astimezone(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds")
+    except Exception:
+        return ""
+
+
+_APPROVA_CSS = """
+ *{box-sizing:border-box}
+ body{margin:0;background:#0a0f21;color:#eef1f8;padding:1rem 1rem 7rem;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+ .w{max-width:46rem;margin:0 auto}
+ h1{font-size:1.3rem;margin:.5rem 0 .25rem}
+ .sub{color:#aab4d4;font-size:.9rem;margin:0 0 1.5rem}
+ .c{background:#131a35;border:1px solid #ffffff14;border-radius:.8rem;
+    padding:1rem;margin-bottom:1rem;display:flex;gap:1rem;align-items:flex-start}
+ .c video,.c img{width:96px;height:171px;object-fit:cover;border-radius:.5rem;
+    background:#000;flex:0 0 auto}
+ .d{flex:1;min-width:0}
+ .g{color:#6ea8fe;font-weight:700;font-size:.8rem;letter-spacing:.02em;
+    margin:0 0 .35rem}
+ .t{font-weight:700;margin:0 0 .4rem;line-height:1.3;font-size:.98rem}
+ .m{color:#8e99bd;font-size:.78rem;margin:0 0 .6rem}
+ /* ⚠️ Niente max-height. Tagliare la didascalia su una pagina che serve ad
+    approvarla e' il modo piu' veloce per far approvare un refuso che si
+    vedeva solo scorrendo dentro un riquadro alto cinque righe. */
+ .cap{color:#c3cbe6;font-size:.82rem;line-height:1.45;margin:0 0 .8rem;
+      white-space:pre-wrap;word-break:break-word}
+ label.r{display:inline-flex;align-items:center;gap:.3rem;margin-right:.9rem;
+         font-size:.85rem;cursor:pointer}
+ input[type=datetime-local]{background:#0a0f21;color:#eef1f8;border:1px solid #ffffff26;
+      border-radius:.4rem;padding:.45rem .5rem;font-size:.85rem;margin-bottom:.6rem;
+      font-family:inherit;width:100%;max-width:15rem}
+ .bar{position:fixed;left:0;right:0;bottom:0;background:#0a0f21f2;
+      border-top:1px solid #ffffff1a;padding:1rem;text-align:center;
+      backdrop-filter:blur(8px)}
+ button{background:#6ea8fe;color:#0a0f21;font-weight:700;border:0;
+        padding:.9rem 2rem;border-radius:.6rem;font-size:1rem;cursor:pointer;
+        font-family:inherit}
+ .vuoto{color:#aab4d4;text-align:center;padding:4rem 1rem}
+ a{color:#6ea8fe}
+"""
+
+
+def _approva_pagina(corpo: str, codice: int = 200):
+    return HTMLResponse(f"""<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Approvazione — CosaGuardo</title>
+<style>{_APPROVA_CSS}</style></head>
+<body><div class="w">{corpo}</div></body></html>""", status_code=codice)
+
+
+def _approva_autorizza(chiave: str):
+    if not _MEDIA_TEMP_TOKEN or not _secrets.compare_digest(chiave or "", _MEDIA_TEMP_TOKEN):
+        raise HTTPException(status_code=403, detail="non autorizzato")
+
+
+@app.get("/approva", response_class=HTMLResponse)
+def approva_elenco(chiave: str = Query("")):
+    """La lista dei contenuti in attesa del tuo ok."""
+    _approva_autorizza(chiave)
+    from app.db import lista_da_approvare
+
+    righe = lista_da_approvare()
+    if not righe:
+        return _approva_pagina(
+            '<div class="vuoto"><h1>Niente da approvare</h1>'
+            '<p>Quando arriva la prossima infornata la trovi qui.</p></div>')
+
+    e = _html.escape
+    pezzi = [f"<h1>{len(righe)} contenut{'o' if len(righe)==1 else 'i'} da approvare</h1>",
+             '<p class="sub">Sono già selezionati tutti. Togli quelli che non '
+             'vanno e correggi gli orari se serve.</p>',
+             f'<form method="post" action="/approva">'
+             f'<input type="hidden" name="chiave" value="{e(chiave)}">']
+
+    for r in righe:
+        try:
+            nomi = json.loads(r["media"])
+        except Exception:
+            nomi = []
+        try:
+            extra = json.loads(r.get("extra") or "{}")
+        except Exception:
+            extra = {}
+
+        primo = nomi[0] if nomi else ""
+        if primo.lower().endswith((".mp4", ".mov")):
+            anteprima = (f'<video controls playsinline preload="metadata" '
+                         f'src="/media-temp/{e(primo)}"></video>')
+        elif primo:
+            anteprima = f'<img src="/media-temp/{e(primo)}" alt="">'
+        else:
+            anteprima = '<img alt="">'
+
+        titolo = extra.get("titolo_youtube") or (r["didascalia"] or "").strip().splitlines()[0][:70]
+        piu = f" +{len(nomi)-1}" if len(nomi) > 1 else ""
+        i = r["id"]
+        pezzi.append(f"""<div class="c">{anteprima}<div class="d">
+  <p class="g">{e(_giorno_esteso(r['pubblicare_il']))}</p>
+  <p class="t">{e(titolo)}</p>
+  <p class="m">{e(r['formato'])}{piu} · {e(r['piattaforme'].replace(',', ' · '))}</p>
+  <p class="cap">{e(r['didascalia'] or '')}</p>
+  <input type="datetime-local" name="quando_{i}" value="{_in_locale(r['pubblicare_il'])}">
+  <div>
+    <label class="r"><input type="radio" name="azione_{i}" value="approva" checked> Pubblica</label>
+    <label class="r"><input type="radio" name="azione_{i}" value="scarta"> Scarta</label>
+    <label class="r"><input type="radio" name="azione_{i}" value="dopo"> Decido dopo</label>
+  </div>
+</div></div>""")
+
+    pezzi.append('</div><div class="bar"><button type="submit">Conferma</button></div></form>')
+    return _approva_pagina("".join(pezzi))
+
+
+@app.post("/approva", response_class=HTMLResponse)
+async def approva_conferma(request: Request):
+    """
+    Applica le scelte.
+
+    ⚠️ Si leggono i campi del modulo e non un elenco di id passato a parte: un
+    id arrivato da fuori non puo' far approvare una riga che non era in
+    attesa, perche' approva_post ammette solo la transizione da
+    'da_approvare'. Lo stesso vale per lo scarto.
+    """
+    modulo = await request.form()
+    _approva_autorizza(modulo.get("chiave", ""))
+    from app.db import approva_post, annulla_post, lista_da_approvare
+
+    in_attesa = {r["id"]: r for r in lista_da_approvare()}
+    approvati, scartati, saltati, problemi = [], [], 0, []
+
+    for chiave_campo, valore in modulo.items():
+        if not chiave_campo.startswith("azione_"):
+            continue
+        try:
+            i = int(chiave_campo[7:])
+        except ValueError:
+            continue
+        if i not in in_attesa:
+            # Riga sparita mentre la pagina era aperta: lo si dice invece di
+            # fingere che sia andata.
+            problemi.append(f"la riga {i} non era piu' in attesa di approvazione")
+            continue
+
+        if valore == "scarta":
+            scartati.append(i) if annulla_post(i) else problemi.append(
+                f"la riga {i} non si e' potuta scartare")
+        elif valore == "approva":
+            quando = _da_locale(modulo.get(f"quando_{i}", ""))
+            if not quando:
+                problemi.append(f"la riga {i} aveva un orario illeggibile: lasciata in sospeso")
+                continue
+            if approva_post(i, quando):
+                approvati.append((i, quando))
+            else:
+                problemi.append(f"la riga {i} non si e' potuta approvare")
+        else:
+            saltati += 1
+
+    e = _html.escape
+    pezzi = ["<h1>Fatto</h1>"]
+    if approvati:
+        pezzi.append(f'<p class="sub">{len(approvati)} in uscita:</p><ul class="sub">')
+        for i, q in sorted(approvati, key=lambda x: x[1]):
+            r = in_attesa[i]
+            t = (json.loads(r.get("extra") or "{}").get("titolo_youtube")
+                 or (r["didascalia"] or "").splitlines()[0][:60])
+            pezzi.append(f"<li>{e(_giorno_esteso(q))} — {e(t)}</li>")
+        pezzi.append("</ul>")
+    if scartati:
+        pezzi.append(f'<p class="sub">{len(scartati)} scartat{"o" if len(scartati)==1 else "i"}.</p>')
+    if saltati:
+        pezzi.append(f'<p class="sub">{saltati} lasciat{"a" if saltati==1 else "e"} '
+                     f'in sospeso: {"la ritrovi" if saltati==1 else "le ritrovi"} qui.</p>')
+    if problemi:
+        pezzi.append('<p class="sub">⚠️ ' + "<br>".join(e(p) for p in problemi) + "</p>")
+    if not (approvati or scartati or saltati or problemi):
+        pezzi.append('<p class="sub">Non c\'era niente da fare.</p>')
+
+    chiave = modulo.get("chiave", "")
+    pezzi.append(f'<p><a href="/approva?chiave={e(chiave)}">Torna alla lista</a></p>')
+    return _approva_pagina("".join(pezzi))
+
+
+@app.post("/approva/avvisa", response_class=JSONResponse)
+def approva_avvisa(x_media_token: str = Header(None)):
+    """
+    Manda su Telegram il link all'approvazione. Lo chiama il PC a fine invio.
+
+    ⚠️ Restituisce il motivo, non solo un booleano: se il messaggio non parte
+    le cause sono tre (token assente, chat id assente, Telegram che rifiuta) e
+    hanno rimedi diversi.
+    """
+    _media_temp_autorizza(x_media_token)
+    from app.db import lista_da_approvare
+    righe = lista_da_approvare()
+    if not righe:
+        return {"inviato": False, "motivo": "non c'e' niente da approvare"}
+
+    link = f"https://cosaguardo.com/approva?chiave={_MEDIA_TEMP_TOKEN}"
+    primo = _giorno_esteso(righe[0]["pubblicare_il"])
+    ultimo = _giorno_esteso(righe[-1]["pubblicare_il"])
+    testo = (f"<b>{len(righe)} contenuti pronti</b>\n"
+             f"Da {_tg_scappa(primo)} a {_tg_scappa(ultimo)}\n\n"
+             f'<a href="{link}">Apri per approvare</a>')
+    ok, motivo = _notifica_dettaglio(testo)
+    return {"inviato": ok, "motivo": motivo, "da_approvare": len(righe)}
 
 
 # ═══════════════════════════════════════════════════════════════════════════

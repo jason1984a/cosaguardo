@@ -2066,9 +2066,16 @@ def init_coda_social():
 
 
 def accoda_post(pubblicare_il: str, formato: str, piattaforme: str,
-                didascalia: str, media_json: str, extra_json: str = "") -> int:
+                didascalia: str, media_json: str, extra_json: str = "",
+                stato: str = "in_attesa") -> int:
     """
     Mette un contenuto in coda. pubblicare_il e' ISO UTC.
+
+    stato: 'in_attesa' esce da solo all'ora prevista, 'da_approvare' no.
+
+    ⚠️ Il worker cerca solo 'in_attesa'. Quindi una riga 'da_approvare' non
+    puo' uscire per sbaglio: non e' una regola scritta da qualche parte che
+    si puo' dimenticare di applicare, e' il fatto che la query non la vede.
 
     extra_json porta i dettagli che valgono per UNA sola piattaforma — il
     titolo di YouTube, per esempio, che su Instagram non esiste. Sta in un
@@ -2082,10 +2089,12 @@ def accoda_post(pubblicare_il: str, formato: str, piattaforme: str,
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO coda_social
-                (creato_il, pubblicare_il, formato, piattaforme, didascalia, media, extra)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (creato_il, pubblicare_il, formato, piattaforme, didascalia,
+                 media, extra, stato)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (_dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds"), pubblicare_il,
-              formato, piattaforme, didascalia, media_json, extra_json or None))
+              formato, piattaforme, didascalia, media_json, extra_json or None,
+              stato))
         conn.commit()
         return cur.lastrowid
     finally:
@@ -2189,7 +2198,13 @@ def media_ancora_in_uso():
     conn = get_connection()
     try:
         cur = conn.cursor()
-        cur.execute("SELECT media FROM coda_social WHERE stato IN ('in_attesa','in_corso')")
+        # ⚠️ 'da_approvare' sta in questa lista e non e' un dettaglio: una
+        # riga in attesa del tuo ok puo' restarci giorni, molto piu' a lungo
+        # di una programmata. Senza, lo spazzino le cancellerebbe il video
+        # mentre aspetta, e l'approvazione fallirebbe con "il file non c'e'
+        # piu'" senza che niente faccia pensare alla pulizia.
+        cur.execute("SELECT media FROM coda_social "
+                    "WHERE stato IN ('in_attesa','in_corso','da_approvare')")
         fuori = set()
         for r in cur.fetchall():
             try:
@@ -2219,7 +2234,7 @@ def annulla_post(post_id: int) -> bool:
         cur.execute("""
             UPDATE coda_social
                SET stato = 'annullato', aggiornato_il = ?
-             WHERE id = ? AND stato = 'in_attesa'
+             WHERE id = ? AND stato IN ('in_attesa', 'da_approvare')
         """, (_dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
               post_id))
         conn.commit()
@@ -2379,5 +2394,56 @@ def aggiungi_colonna_extra_coda():
         if colonne and "extra" not in colonne:
             cur.execute("ALTER TABLE coda_social ADD COLUMN extra TEXT")
             conn.commit()
+    finally:
+        conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Approvazione settimanale
+# ═══════════════════════════════════════════════════════════════════════════
+
+def lista_da_approvare():
+    """Le righe in attesa del tuo ok, in ordine di uscita prevista."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT * FROM coda_social
+             WHERE stato = 'da_approvare'
+             ORDER BY pubblicare_il ASC
+        """)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def approva_post(post_id: int, pubblicare_il: str = "") -> bool:
+    """
+    Da 'da_approvare' a 'in_attesa', eventualmente con un orario nuovo.
+
+    ⚠️ La condizione sullo stato c'e' per lo stesso motivo del claim atomico:
+    due click sul pulsante di approvazione, o la pagina riaperta e rinviata,
+    non devono poter riportare 'in_attesa' una riga gia' pubblicata o gia'
+    scartata. Qui l'unica transizione ammessa e' da 'da_approvare'.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        adesso = _dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds")
+        if pubblicare_il:
+            cur.execute("""
+                UPDATE coda_social
+                   SET stato = 'in_attesa', pubblicare_il = ?, aggiornato_il = ?
+                 WHERE id = ? AND stato = 'da_approvare'
+            """, (pubblicare_il, adesso, post_id))
+        else:
+            cur.execute("""
+                UPDATE coda_social
+                   SET stato = 'in_attesa', aggiornato_il = ?
+                 WHERE id = ? AND stato = 'da_approvare'
+            """, (adesso, post_id))
+        conn.commit()
+        return cur.rowcount == 1
     finally:
         conn.close()
