@@ -3503,8 +3503,9 @@ def _social_attendi(creation_id: str) -> None:
 
 
 def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
-                     nomi_media: list) -> dict:
+                     nomi_media: list, extra: dict = None) -> dict:
     """Pubblica e restituisce gli id ottenuti. Solleva in caso di errore."""
+    extra = extra or {}
     url = [f"https://cosaguardo.com/media-temp/{n}" for n in nomi_media]
     for n in nomi_media:
         if not (_MEDIA_TEMP_DIR / n).is_file():
@@ -3557,6 +3558,27 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
         else:
             esiti["facebook"] = dati.get("id")
 
+    if "youtube" in piattaforme and e_video:
+        # ⚠️ Non fatale, per lo stesso motivo di Facebook: se Instagram e'
+        # gia' uscito, far fallire tutta la riga la rimetterebbe in coda e
+        # Instagram riceverebbe un doppione. Un caricamento YouTube da
+        # rifare a mano costa molto meno.
+        try:
+            # ⚠️ Il titolo di YouTube e' un campo a parte, non la didascalia:
+            # i testi che il generatore scrive hanno una riga "TITOLO YouTube"
+            # proprio perche' la' serve un titolo breve e qui invece va tutto
+            # il testo. Se mancasse, si ripiega sulla prima riga della
+            # didascalia — brutto ma pubblicabile, meglio di un errore.
+            titolo = (extra.get("titolo_youtube") or "").strip()
+            if not titolo:
+                titolo = (didascalia or "").strip().splitlines()[0] if didascalia else ""
+                log.warning("coda_social: nessun titolo YouTube, uso la prima "
+                            "riga della didascalia")
+            esiti["youtube"] = _youtube_carica(nomi_media[0], titolo, didascalia)
+        except Exception as e:
+            log.warning("coda_social: YouTube fallito: %s", e)
+            esiti["youtube_errore"] = str(e)[:300]
+
     if "tiktok" in piattaforme and e_video:
         # ⚠️ Come Facebook, non fa fallire tutto: se Instagram e' gia' uscito,
         # rimettere la riga in coda la ripubblicherebbe la', e un doppione su
@@ -3594,8 +3616,14 @@ def _coda_social_giro() -> None:
     log.info("coda_social: lavoro la riga %s (%s)", riga["id"], riga["formato"])
     try:
         nomi = json.loads(riga["media"])
+        # ⚠️ .get e non [""]: la colonna extra e' stata aggiunta dopo, e una
+        # riga accodata prima di quel deploy non la ha affatto.
+        try:
+            extra = json.loads(riga.get("extra") or "{}")
+        except Exception:
+            extra = {}
         esiti = _social_pubblica(riga["formato"], riga["piattaforme"],
-                                 riga["didascalia"], nomi)
+                                 riga["didascalia"], nomi, extra)
         chiudi_post(riga["id"], "pubblicato", risultato=json.dumps(esiti))
         log.info("coda_social: riga %s pubblicata: %s", riga["id"], esiti)
         # ⚠️ Dopo chiudi_post e in un try suo. Il contenuto e' gia' uscito: se
@@ -3651,6 +3679,7 @@ def coda_social_accoda(
     piattaforme: str = Body("instagram,facebook", embed=True),
     didascalia: str = Body(..., embed=True),
     media: list = Body(..., embed=True),
+    extra: dict = Body(None, embed=True),
     x_media_token: str = Header(None),
 ):
     """Mette un contenuto in coda. I media devono essere gia' stati caricati."""
@@ -3679,7 +3708,8 @@ def coda_social_accoda(
 
     try:
         pid = accoda_post(pubblicare_il, formato, piattaforme, didascalia,
-                          json.dumps(list(media)))
+                          json.dumps(list(media)),
+                          json.dumps(extra) if extra else "")
     except Exception as e:
         # Tabella assente: la si crea e si riprova una volta. Capita quando il
         # processo gira da prima del deploy che ha introdotto la tabella.
@@ -3688,7 +3718,8 @@ def coda_social_accoda(
             try:
                 init_coda_social()
                 pid = accoda_post(pubblicare_il, formato, piattaforme,
-                                  didascalia, json.dumps(list(media)))
+                                  didascalia, json.dumps(list(media)),
+                                  json.dumps(extra) if extra else "")
             except Exception as e2:
                 log.exception("coda_social: creazione tabella fallita: %s", e2)
                 raise HTTPException(status_code=500, detail=f"coda non scrivibile: {e2}")
@@ -4185,6 +4216,364 @@ def _tiktok_carica_bozza(url_video: str) -> str:
                 "verificato nel portale sviluppatori per questa app")
         raise RuntimeError(f"TikTok: {errore.get('code')} {errore.get('message','')}")
     return (risposta.get("data") or {}).get("publish_id", "")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# YouTube — collegamento del canale e caricamento del video
+#
+# ⚠️ PERCHE' IL CARICAMENTO E' DIVERSO DA TUTTI GLI ALTRI. Meta e TikTok
+# SCARICANO il file da /media-temp: a loro si passa un indirizzo. YouTube no:
+# i byte glieli manda il server. Quindi qui il file viene letto dal disco e
+# spedito, e il video NON ha bisogno di essere raggiungibile da fuori. E' la
+# piattaforma meno fragile delle tre.
+#
+# ⚠️ IL VIDEO DIVENTA UNO SHORT DA SOLO. Verticale e sotto i tre minuti basta:
+# YouTube lo classifica senza che glielo si dica, e l'etichetta "#Shorts" nel
+# titolo non serve piu' da un paio d'anni. Metterla a mano nei titoli
+# significherebbe solo sporcarli.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_YT_CLIENT_ID = os.environ.get("YOUTUBE_CLIENT_ID", "")
+_YT_CLIENT_SECRET = os.environ.get("YOUTUBE_CLIENT_SECRET", "")
+_YT_REDIRECT = "https://cosaguardo.com/youtube/callback"
+_YT_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+
+# 24 = Entertainment. E' la categoria giusta per contenuti su film e serie, e
+# va messa: senza categoryId l'API risponde 400 senza spiegare quale campo
+# manca.
+_YT_CATEGORIA = os.environ.get("YOUTUBE_CATEGORIA", "24")
+
+# Pubblico o privato alla prima uscita. Si tiene configurabile perche' la
+# prima volta conviene "private": si guarda il risultato sul canale e solo
+# dopo si passa a public, senza dover ritoccare il codice.
+_YT_VISIBILITA = os.environ.get("YOUTUBE_VISIBILITA", "public")
+
+_yt_stati: dict = {}
+
+
+@app.get("/youtube/collega", response_class=HTMLResponse)
+def youtube_collega(chiave: str = Query("")):
+    """Da qui parte l'autorizzazione del canale."""
+    if not _MEDIA_TEMP_TOKEN or not _secrets.compare_digest(chiave or "", _MEDIA_TEMP_TOKEN):
+        return _tiktok_pagina("Pagina non disponibile",
+                              "<p>Questo indirizzo non è pubblico.</p>", 403)
+    if not _YT_CLIENT_ID or not _YT_CLIENT_SECRET:
+        mancanti = [n for n, v in (("YOUTUBE_CLIENT_ID", _YT_CLIENT_ID),
+                                   ("YOUTUBE_CLIENT_SECRET", _YT_CLIENT_SECRET)) if not v]
+        return _tiktok_pagina(
+            "Configurazione mancante",
+            f"<p>Sul server manca <code>{'</code> e <code>'.join(mancanti)}</code>.</p>", 503)
+
+    import time as _t, urllib.parse as _up
+    stato = _secrets.token_urlsafe(24)
+    adesso = _t.time()
+    for k in [k for k, v in _yt_stati.items() if v < adesso]:
+        _yt_stati.pop(k, None)
+    _yt_stati[stato] = adesso + 600
+
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + _up.urlencode({
+        "client_id": _YT_CLIENT_ID,
+        "redirect_uri": _YT_REDIRECT,
+        "response_type": "code",
+        "scope": _YT_SCOPE,
+        # ⚠️ QUESTI DUE PARAMETRI SONO TUTTO IL PUNTO DELLA PAGINA.
+        # access_type=offline e' cio' che fa restituire un refresh token: senza,
+        # si ottiene un access token da un'ora e l'automazione si ferma dopo
+        # pranzo. E prompt=consent va messo perche' Google il refresh token lo
+        # consegna SOLO alla prima autorizzazione: se un giorno si riautorizza
+        # per cambiare canale, senza questo la risposta arriva senza refresh
+        # token e il server resta con quello vecchio, che punta al canale
+        # sbagliato — e non c'e' nessun errore a dirlo.
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": stato,
+    })
+    return _tiktok_pagina(
+        "Collega il canale YouTube",
+        "<p>CosaGuardo caricherà sul canale i video prodotti ogni giorno, "
+        "negli orari che decidi tu. Il permesso richiesto è solo quello di "
+        "caricare: non può leggere né cancellare nulla di quello che c'è già.</p>"
+        "<p>Accedi con l'account che possiede il canale CosaGuardo.</p>"
+        f'<a class="b" href="{url}">Continua su Google</a>')
+
+
+@app.get("/youtube/callback", response_class=HTMLResponse)
+def youtube_callback(code: str = Query(""), state: str = Query(""),
+                     error: str = Query("")):
+    """Riceve il codice, lo scambia con i token e li salva."""
+    import time as _t
+    import urllib.parse as _up, urllib.request as _ur, urllib.error as _ue
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+
+    if error:
+        return _tiktok_pagina("Autorizzazione annullata",
+                              f"<p>Google ha risposto: <code>{error}</code></p>", 400)
+
+    scadenza = _yt_stati.pop(state, None)
+    if not scadenza or scadenza < _t.time():
+        return _tiktok_pagina(
+            "Richiesta non valida",
+            "<p>Questo collegamento è scaduto o non è partito da qui. "
+            "Riapri la pagina di collegamento e riprova.</p>", 400)
+    if not code:
+        return _tiktok_pagina("Codice mancante",
+                              "<p>Google non ha restituito il codice.</p>", 400)
+
+    dati_post = _up.urlencode({
+        "client_id": _YT_CLIENT_ID, "client_secret": _YT_CLIENT_SECRET,
+        "code": code, "grant_type": "authorization_code",
+        "redirect_uri": _YT_REDIRECT,
+    }).encode("utf-8")
+    req = _ur.Request("https://oauth2.googleapis.com/token", data=dati_post,
+                      method="POST",
+                      headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with _ur.urlopen(req, timeout=60) as r:
+            risposta = json.loads(r.read().decode("utf-8"))
+    except _ue.HTTPError as e:
+        testo = e.read().decode("utf-8", "replace")[:400]
+        log.error("youtube: scambio token fallito: %s", testo)
+        return _tiktok_pagina("Scambio non riuscito",
+                              f"<p><code>{testo}</code></p>", 502)
+
+    # ⚠️ Un refresh token assente non e' un dettaglio: e' il fallimento
+    # dell'intera operazione, travestito da successo. Il caricamento di oggi
+    # funzionerebbe (l'access token c'e'), e domani si fermerebbe. Meglio
+    # dirlo adesso, con scritto cosa controllare.
+    if not risposta.get("refresh_token"):
+        log.error("youtube: nessun refresh token nella risposta")
+        return _tiktok_pagina(
+            "Manca il refresh token",
+            "<p>Google ha autorizzato ma non ha restituito il <i>refresh "
+            "token</i>, quello che permette di andare avanti domani senza "
+            "rifare l'accesso.</p>"
+            "<p>Succede quando il canale era già stato autorizzato per questa "
+            "app. Vai su <code>myaccount.google.com/permissions</code>, "
+            "rimuovi CosaGuardo dalla lista e riapri questa pagina.</p>", 502)
+
+    scade = (_dt.now(_tz.utc).replace(tzinfo=None)
+             + _td(seconds=int(risposta.get("expires_in", 3600)))
+             ).isoformat(timespec="seconds")
+    from app.db import salva_token_social
+    salva_token_social("youtube", risposta["access_token"],
+                       risposta["refresh_token"], scade,
+                       extra=json.dumps({"autorizzato_il": _dt.now(_tz.utc)
+                                         .replace(tzinfo=None)
+                                         .isoformat(timespec="seconds")}))
+    log.info("youtube: canale collegato")
+
+    return _tiktok_pagina(
+        "Canale collegato",
+        "<p>Da ora CosaGuardo può caricare i video sul canale. "
+        "Puoi chiudere questa pagina.</p>"
+        "<p style='font-size:.85em'>Se fra una settimana i caricamenti si "
+        "fermassero, è il segno che la schermata di consenso è rimasta in "
+        "stato <i>Testing</i>: va messa in produzione e il canale "
+        "riautorizzato una volta sola.</p>")
+
+
+def _youtube_access_token() -> str:
+    """
+    Un access token valido, rinnovandolo se sta per scadere.
+
+    ⚠️ L'access token di Google dura un'ora: qui si rinnova praticamente
+    sempre, al contrario di TikTok dove dura un giorno. E' normale.
+
+    ⚠️ Il refresh token Google NON ruota — a differenza di TikTok — ma se la
+    risposta ne contenesse uno si risalva comunque: costa una riga e copre il
+    caso in cui cambino comportamento.
+    """
+    import urllib.parse as _up, urllib.request as _ur, urllib.error as _ue
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    from app.db import leggi_token_social, salva_token_social
+
+    t = leggi_token_social("youtube")
+    if not t:
+        raise RuntimeError("YouTube non collegato: apri /youtube/collega")
+
+    adesso = _dt.now(_tz.utc).replace(tzinfo=None)
+    if _dt.fromisoformat(t["scade_il"]) - _td(minutes=5) > adesso:
+        return t["access_token"]
+
+    dati = _up.urlencode({
+        "client_id": _YT_CLIENT_ID, "client_secret": _YT_CLIENT_SECRET,
+        "grant_type": "refresh_token", "refresh_token": t["refresh_token"],
+    }).encode("utf-8")
+    req = _ur.Request("https://oauth2.googleapis.com/token", data=dati,
+                      method="POST",
+                      headers={"Content-Type": "application/x-www-form-urlencoded"})
+    try:
+        with _ur.urlopen(req, timeout=60) as r:
+            risposta = json.loads(r.read().decode("utf-8"))
+    except _ue.HTTPError as e:
+        testo = e.read().decode("utf-8", "replace")[:300]
+        # ⚠️ invalid_grant e' l'unico errore che vale la pena riconoscere: il
+        # refresh token non vale piu'. Ha due cause, e il messaggio le dice
+        # entrambe perche' richiedono rimedi diversi — una si risolve
+        # riautorizzando, l'altra ritorna fra sette giorni se non si sistema
+        # la schermata di consenso.
+        if "invalid_grant" in testo:
+            giorni = _youtube_eta_token(t)
+            raise RuntimeError(
+                f"YouTube: l'autorizzazione non vale piu' (invalid_grant), "
+                f"rilasciata {giorni} giorni fa. Se sono circa sette, la "
+                f"schermata di consenso su Google Cloud e' rimasta in stato "
+                f"'Testing' e va messa in produzione. Altrimenti e' stata "
+                f"revocata a mano. In entrambi i casi: riapri /youtube/collega.")
+        raise RuntimeError(f"rinnovo YouTube fallito: {testo}")
+
+    scade = (adesso + _td(seconds=int(risposta.get("expires_in", 3600)))
+             ).isoformat(timespec="seconds")
+    salva_token_social("youtube", risposta["access_token"],
+                       risposta.get("refresh_token") or t["refresh_token"],
+                       scade, extra=t.get("extra") or "")
+    return risposta["access_token"]
+
+
+def _youtube_eta_token(t: dict) -> int:
+    """Quanti giorni fa e' stata rilasciata l'autorizzazione."""
+    from datetime import datetime as _dt, timezone as _tz
+    try:
+        quando = (json.loads(t.get("extra") or "{}").get("autorizzato_il")
+                  or t.get("aggiornato_il"))
+        return (_dt.now(_tz.utc).replace(tzinfo=None) - _dt.fromisoformat(quando)).days
+    except Exception:
+        return -1
+
+
+def _youtube_titolo_valido(titolo: str) -> str:
+    """
+    Sistema il titolo invece di farlo rifiutare.
+
+    ⚠️ Due limiti che l'API non spiega quando li viola: cento caratteri, e
+    nessun < o >. Un titolo di centoquattro caratteri torna come 400 generico,
+    e si finisce a cercare il problema nelle credenziali.
+    """
+    t = (titolo or "").replace("<", "(").replace(">", ")").strip()
+    if len(t) > 100:
+        t = t[:97].rstrip() + "..."
+    return t or "CosaGuardo"
+
+
+def _youtube_carica(nome_file: str, titolo: str, descrizione: str) -> str:
+    """
+    Carica il video e restituisce l'id. Caricamento ripristinabile, due passi.
+
+    ⚠️ PERCHE' DUE PASSI E NON IL MULTIPART. Nel caricamento in un colpo solo
+    i metadati viaggiano insieme ai byte, quindi un titolo troppo lungo o una
+    categoria sbagliata si scoprono DOPO aver spedito tutto il file. Qui il
+    primo passo manda solo i metadati: se qualcosa non va, l'errore torna
+    prima di caricare un megabyte.
+    """
+    import urllib.request as _ur, urllib.error as _ue
+
+    percorso = _MEDIA_TEMP_DIR / nome_file
+    if not percorso.is_file():
+        raise RuntimeError(f"il file {nome_file} non c'e' piu'")
+    byte_totali = percorso.stat().st_size
+    token = _youtube_access_token()
+
+    metadati = {
+        "snippet": {
+            "title": _youtube_titolo_valido(titolo),
+            "description": (descrizione or "")[:4900],
+            "categoryId": _YT_CATEGORIA,
+        },
+        "status": {
+            "privacyStatus": _YT_VISIBILITA,
+            # ⚠️ Obbligatorio. Senza la dichiarazione "non per bambini" il
+            # video sale ma YouTube lo tratta come non dichiarato e limita i
+            # commenti e i suggerimenti. E' un campo che non si puo' lasciare
+            # implicito.
+            "selfDeclaredMadeForKids": False,
+        },
+    }
+
+    # ── passo 1: i metadati, e in risposta l'indirizzo dove spedire i byte ──
+    req = _ur.Request(
+        "https://www.googleapis.com/upload/youtube/v3/videos"
+        "?uploadType=resumable&part=snippet,status",
+        data=json.dumps(metadati).encode("utf-8"), method="POST",
+        headers={"Authorization": f"Bearer {token}",
+                 "Content-Type": "application/json; charset=UTF-8",
+                 "X-Upload-Content-Length": str(byte_totali),
+                 "X-Upload-Content-Type": "video/*"})
+    try:
+        with _ur.urlopen(req, timeout=60) as r:
+            destinazione = r.headers.get("Location")
+    except _ue.HTTPError as e:
+        testo = e.read().decode("utf-8", "replace")[:400]
+        if "quotaExceeded" in testo:
+            raise RuntimeError(
+                "YouTube: quota giornaliera esaurita. Un caricamento costa "
+                "1600 delle 10000 unita' al giorno, quindi sono sei video: "
+                "oggi non ne entrano altri, domani riparte da sola.")
+        raise RuntimeError(f"YouTube, metadati rifiutati: {testo}")
+
+    if not destinazione:
+        raise RuntimeError("YouTube non ha restituito l'indirizzo di caricamento")
+
+    # ── passo 2: i byte ────────────────────────────────────────────────────
+    corpo = percorso.read_bytes()
+    req = _ur.Request(destinazione, data=corpo, method="PUT",
+                      headers={"Authorization": f"Bearer {token}",
+                               "Content-Type": "video/*",
+                               "Content-Length": str(byte_totali)})
+    try:
+        with _ur.urlopen(req, timeout=900) as r:
+            risposta = json.loads(r.read().decode("utf-8"))
+    except _ue.HTTPError as e:
+        raise RuntimeError(
+            f"YouTube, caricamento: {e.read().decode('utf-8','replace')[:400]}")
+
+    video_id = risposta.get("id")
+    if not video_id:
+        raise RuntimeError(f"YouTube: risposta senza id ({str(risposta)[:200]})")
+    log.info("youtube: caricato %s (%s byte)", video_id, byte_totali)
+    return video_id
+
+
+@app.get("/youtube/stato", response_class=JSONResponse)
+def youtube_stato(chiave: str = Query("")):
+    """
+    Com'e' messo il collegamento a YouTube, con i perche'.
+
+    ⚠️ Esiste per non ritrovarsi davanti a un booleano. "collegato: false" non
+    distingue fra credenziali mancanti sul server, canale mai autorizzato e
+    autorizzazione revocata, e sono tre rimedi diversi. E l'eta' del token sta
+    qui perche' e' il numero che rivela la trappola dei sette giorni prima che
+    si manifesti da sola.
+    """
+    if not _MEDIA_TEMP_TOKEN or not _secrets.compare_digest(chiave or "", _MEDIA_TEMP_TOKEN):
+        raise HTTPException(status_code=403, detail="non autorizzato")
+    from app.db import leggi_token_social
+    t = leggi_token_social("youtube")
+    fuori = {
+        "client_id_configurato": bool(_YT_CLIENT_ID),
+        "client_secret_configurato": bool(_YT_CLIENT_SECRET),
+        "visibilita": _YT_VISIBILITA,
+        "categoria": _YT_CATEGORIA,
+        "collegato": bool(t),
+    }
+    if not t:
+        fuori["motivo"] = ("canale mai autorizzato: apri /youtube/collega"
+                           if _YT_CLIENT_ID else
+                           "mancano YOUTUBE_CLIENT_ID / YOUTUBE_CLIENT_SECRET")
+        return fuori
+
+    giorni = _youtube_eta_token(t)
+    fuori["autorizzato_giorni_fa"] = giorni
+    fuori["access_token_scade_il"] = t["scade_il"]
+    try:
+        _youtube_access_token()
+        fuori["rinnovo"] = "ok"
+    except Exception as e:
+        fuori["rinnovo"] = "fallito"
+        fuori["motivo"] = str(e)
+    if 5 <= giorni <= 9 and fuori.get("rinnovo") == "ok":
+        fuori["nota"] = ("ha superato i sette giorni e funziona: la schermata "
+                         "di consenso e' in produzione per davvero")
+    return fuori
 
 
 # ═══════════════════════════════════════════════════════════════════════════

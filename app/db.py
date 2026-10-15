@@ -745,6 +745,7 @@ def init_db():
 
     # Stesso motivo: connessione propria, fuori da quella di init_db().
     init_coda_social()
+    aggiungi_colonna_extra_coda()
 
 
 def add_streaming_alert(email: str, tmdb_id: int, content_type: str,
@@ -2065,18 +2066,26 @@ def init_coda_social():
 
 
 def accoda_post(pubblicare_il: str, formato: str, piattaforme: str,
-                didascalia: str, media_json: str) -> int:
-    """Mette un contenuto in coda. pubblicare_il e' ISO UTC."""
+                didascalia: str, media_json: str, extra_json: str = "") -> int:
+    """
+    Mette un contenuto in coda. pubblicare_il e' ISO UTC.
+
+    extra_json porta i dettagli che valgono per UNA sola piattaforma — il
+    titolo di YouTube, per esempio, che su Instagram non esiste. Sta in un
+    campo JSON e non in una colonna per non dover migrare la tabella ogni
+    volta che una piattaforma chiede un campo in piu'.
+    """
     from datetime import datetime as _dt, timezone as _tz
+    aggiungi_colonna_extra_coda()
     conn = get_connection()
     try:
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO coda_social
-                (creato_il, pubblicare_il, formato, piattaforme, didascalia, media)
-            VALUES (?, ?, ?, ?, ?, ?)
+                (creato_il, pubblicare_il, formato, piattaforme, didascalia, media, extra)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (_dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds"), pubblicare_il,
-              formato, piattaforme, didascalia, media_json))
+              formato, piattaforme, didascalia, media_json, extra_json or None))
         conn.commit()
         return cur.lastrowid
     finally:
@@ -2284,5 +2293,91 @@ def leggi_token_tiktok():
         cur.execute("SELECT * FROM tiktok_token WHERE id = 1")
         r = cur.fetchone()
         return dict(r) if r else None
+    finally:
+        conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Token delle piattaforme social (generico)
+#
+# ⚠️ Generico, al contrario di tiktok_token che e' nato specifico. Quella
+# tabella resta dov'e' perche' e' gia' in produzione e funziona, e una
+# migrazione per eleganza e' un rischio senza guadagno. Da YouTube in poi si
+# usa questa: la piattaforma e' la chiave, e aggiungerne una non richiede piu'
+# codice nuovo nel database.
+# ═══════════════════════════════════════════════════════════════════════════
+
+def init_token_social():
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS token_social (
+                piattaforma    TEXT PRIMARY KEY,
+                access_token   TEXT NOT NULL,
+                refresh_token  TEXT NOT NULL,
+                scade_il       TEXT NOT NULL,
+                extra          TEXT,
+                aggiornato_il  TEXT NOT NULL
+            )
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def salva_token_social(piattaforma: str, access_token: str, refresh_token: str,
+                       scade_il: str, extra: str = "") -> None:
+    from datetime import datetime as _dt, timezone as _tz
+    init_token_social()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO token_social
+                (piattaforma, access_token, refresh_token, scade_il, extra, aggiornato_il)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(piattaforma) DO UPDATE SET
+                access_token = excluded.access_token,
+                refresh_token = excluded.refresh_token,
+                scade_il = excluded.scade_il,
+                extra = excluded.extra,
+                aggiornato_il = excluded.aggiornato_il
+        """, (piattaforma, access_token, refresh_token, scade_il, extra,
+              _dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds")))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def leggi_token_social(piattaforma: str):
+    init_token_social()
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM token_social WHERE piattaforma = ?", (piattaforma,))
+        r = cur.fetchone()
+        return dict(r) if r else None
+    finally:
+        conn.close()
+
+
+def aggiungi_colonna_extra_coda():
+    """
+    Aggiunge coda_social.extra se manca.
+
+    ⚠️ SQLite non ha "ADD COLUMN IF NOT EXISTS": si guarda prima com'e' fatta
+    la tabella. Serve a portare dettagli che riguardano una sola piattaforma —
+    il titolo di YouTube, per esempio — senza aggiungere una colonna per ogni
+    campo che servira' in futuro.
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(coda_social)")
+        colonne = {r[1] for r in cur.fetchall()}
+        if colonne and "extra" not in colonne:
+            cur.execute("ALTER TABLE coda_social ADD COLUMN extra TEXT")
+            conn.commit()
     finally:
         conn.close()
