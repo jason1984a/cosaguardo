@@ -7003,6 +7003,40 @@ def admin_report(request: Request, period: str = "7d"):
     )
 
 
+# ─── ADMIN CRESCITA (registrati → segnali → tornati, per origine) ─────────
+#
+# ⚠️ Questa rotta era sparita. Aggiunta il 07/10 (commit 083e791), si e' persa
+# dentro una consegna del 13/10 che riguardava tutt'altro (la cache dei
+# consigli, commit d29a080: 47 righe aggiunte, 74 rimosse). Nessuno se n'e'
+# accorto per tre giorni, perche' una rotta che sparisce non rompe niente
+# finche' non la apri: la pagina ha semplicemente cominciato a rispondere 404.
+# Ripristinata identica all'originale.
+@app.get("/admin/crescita", response_class=HTMLResponse)
+def admin_crescita(request: Request, gruppo: str = "tutti"):
+    """
+    Per giorno di registrazione e origine: registrati, utenti che lasciano
+    almeno un segnale e utenti che tornano, entro 7 giorni. Logica e
+    definizioni in app/crescita.py.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    # Import locale come in /admin/report: si carica solo quando serve.
+    from app.crescita import get_crescita
+
+    try:
+        c = get_crescita(gruppo)
+    except Exception as e:
+        log.exception("admin_crescita: get_crescita fallita: %s", e)
+        c = {"error": str(e)}
+
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_crescita.html",
+        context={"request": request, "c": c},
+    )
+
+
 @app.get("/admin/debug-come/{slug}")
 def admin_debug_come(request: Request, slug: str):
     """
