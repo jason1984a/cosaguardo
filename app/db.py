@@ -2447,3 +2447,28 @@ def approva_post(post_id: int, pubblicare_il: str = "") -> bool:
         return cur.rowcount == 1
     finally:
         conn.close()
+
+
+def riprova_post(post_id: int, pubblicare_il: str) -> bool:
+    """
+    Rimette in coda una riga fallita, azzerando i tentativi.
+
+    ⚠️ Solo da 'in_attesa' o 'errore': una riga gia' pubblicata non si
+    "riprova", si ripubblicherebbe. E una annullata l'hai scartata tu.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE coda_social
+               SET stato = 'in_attesa', tentativi = 0, ultimo_errore = NULL,
+                   pubblicare_il = ?, aggiornato_il = ?
+             WHERE id = ? AND stato IN ('in_attesa', 'errore')
+        """, (pubblicare_il,
+              _dt.now(_tz.utc).replace(tzinfo=None).isoformat(timespec="seconds"),
+              post_id))
+        conn.commit()
+        return cur.rowcount == 1
+    finally:
+        conn.close()

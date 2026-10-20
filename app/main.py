@@ -3502,6 +3502,75 @@ def _social_attendi(creation_id: str) -> None:
     raise RuntimeError(f"contenitore non pronto entro {_SOCIAL_ATTESA_MAX}s")
 
 
+@app.get("/social/stato", response_class=JSONResponse)
+def social_stato(chiave: str = Query("")):
+    """
+    A chi appartiene davvero il token di Meta configurato.
+
+    ⚠️ ESISTE PER UN ERRORE COSTATO UNA PUBBLICAZIONE. Il 15/10 il token e'
+    stato rigenerato e su Render e' finito il token UTENTE al posto di quello
+    di PAGINA: due campi vicini nello stesso file, indistinguibili a occhio
+    (iniziano entrambi per "EAA"). Tutto sembrava a posto, e il problema si e'
+    manifestato quattro giorni dopo, alle 19:30, come
+    "Any of the pages_read_engagement... must be granted before impersonating
+    a user's page" — un messaggio che sembra parlare di permessi mancanti
+    mentre il permesso c'era: era sbagliato il token.
+
+    ⚠️ Il trucco per distinguerli senza l'app secret: /me con un token di
+    PAGINA restituisce la PAGINA, con un token utente restituisce la PERSONA.
+    Basta confrontare l'id con SOCIAL_PAGINA_ID.
+    """
+    if not _MEDIA_TEMP_TOKEN or not _secrets.compare_digest(chiave or "", _MEDIA_TEMP_TOKEN):
+        raise HTTPException(status_code=403, detail="non autorizzato")
+
+    fuori = {
+        "pagina_id_atteso": _SOCIAL_PAGINA_ID or "(non configurato)",
+        "instagram_id_atteso": _SOCIAL_IG_ID or "(non configurato)",
+        "token_configurato": bool(_SOCIAL_PAGINA_TOKEN),
+        "versione_api": _SOCIAL_API,
+    }
+    if not _SOCIAL_PAGINA_TOKEN:
+        fuori["esito"] = "manca SOCIAL_PAGINA_TOKEN"
+        return fuori
+
+    dati, err = _social_graph("GET", "/me", {
+        "fields": "id,name", "access_token": _SOCIAL_PAGINA_TOKEN})
+    if err:
+        fuori["esito"] = "token non valido"
+        fuori["motivo"] = err.get("message")
+        return fuori
+
+    fuori["il_token_appartiene_a"] = {"id": dati.get("id"), "nome": dati.get("name")}
+
+    if dati.get("id") == _SOCIAL_PAGINA_ID:
+        fuori["tipo_token"] = "pagina"
+        fuori["esito"] = "ok"
+    else:
+        # Qui sta il valore di questo endpoint: dire QUALE errore e' stato
+        # fatto, non solo che qualcosa non va.
+        fuori["tipo_token"] = "NON di questa pagina"
+        fuori["esito"] = "SBAGLIATO"
+        fuori["motivo"] = (
+            f"Il token appartiene a '{dati.get('name')}' (id {dati.get('id')}), "
+            f"non alla pagina {_SOCIAL_PAGINA_ID}. Se il nome e' una PERSONA, su "
+            f"Render e' finito il token utente invece di quello di pagina: in "
+            f"_segreti_meta.json serve 'pagina_token' dentro 'pagine', non "
+            f"'token_utente_60gg'.")
+
+    # L'account Instagram e' raggiungibile con questo token?
+    if _SOCIAL_IG_ID:
+        d2, e2 = _social_graph("GET", f"/{_SOCIAL_IG_ID}", {
+            "fields": "id,username", "access_token": _SOCIAL_PAGINA_TOKEN})
+        if e2:
+            fuori["instagram"] = {"ok": False, "motivo": e2.get("message")}
+        else:
+            fuori["instagram"] = {"ok": True, "username": d2.get("username")}
+            if fuori.get("esito") == "ok":
+                fuori["esito"] = "ok — pagina e Instagram raggiungibili"
+
+    return fuori
+
+
 def _social_commenta(oggetto_id: str, testo: str):
     """
     Pubblica il commento sotto a un contenuto gia' uscito. (ok, motivo).
@@ -3852,6 +3921,35 @@ def coda_social_stato_tiktok(post_id: int, x_media_token: str = Header(None)):
                 "errore_salvato": salvato.get("tiktok_errore"),
                 "risultato": salvato}
     return {"publish_id": pid, "tiktok": _tiktok_stato(pid)}
+
+
+@app.post("/coda-social/{post_id}/riprova", response_class=JSONResponse)
+def coda_social_riprova(post_id: int, quando: str = Body("", embed=True),
+                        x_media_token: str = Header(None)):
+    """
+    Azzera i tentativi di una riga esaurita, con un orario nuovo.
+
+    ⚠️ Serve perche' dopo tre fallimenti il worker non riprova piu' (ed e'
+    giusto: senza quel limite una riga rotta ciclerebbe per sempre). Ma quando
+    la causa era esterna e l'hai sistemata — un token sbagliato, per dire — i
+    media sono ancora li' e rifare tutto il giro dal PC sarebbe assurdo.
+
+    ⚠️ L'orario e' OBBLIGATORIO: una riga esaurita ha per forza una data
+    passata, e rimetterla in coda cosi' com'e' la farebbe uscire all'istante.
+    Il pericolo e' proprio che funzioni.
+    """
+    _media_temp_autorizza(x_media_token)
+    if not quando:
+        raise HTTPException(status_code=400,
+                            detail="serve 'quando' (ISO UTC): senza, la riga "
+                                   "uscirebbe subito")
+    from app.db import riprova_post
+    if not riprova_post(post_id, quando):
+        raise HTTPException(status_code=404,
+                            detail=f"la riga {post_id} non esiste, oppure e' "
+                                   f"gia' stata pubblicata o annullata")
+    log.info("coda_social: riga %s rimessa in coda per %s", post_id, quando)
+    return {"id": post_id, "pubblicare_il": quando, "stato": "in_attesa"}
 
 
 @app.delete("/coda-social/{post_id}", response_class=JSONResponse)
