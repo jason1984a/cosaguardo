@@ -4099,7 +4099,16 @@ def telegram_prova(chiave: str = Query("")):
 
 
 def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
-    """Il messaggio che arriva quando un contenuto e' uscito."""
+    """
+    I messaggi che arrivano quando un contenuto e' uscito.
+
+    ⚠️ PIU' MESSAGGI, NON UNO SOLO. I testi da incollare — la didascalia di
+    TikTok e il commento da fissare — vanno ognuno in un messaggio SUO, senza
+    nemmeno un'etichetta dentro. Stando tutti in un blocco unico insieme al
+    riepilogo, copiare il messaggio portava via anche "Uscito su: Instagram,
+    Facebook..." e bisognava ripulire a mano ogni volta, col telefono, davanti
+    al post da pubblicare. Un messaggio = una cosa da copiare.
+    """
     nomi = {"instagram": "Instagram", "facebook": "Facebook",
             "youtube": "YouTube", "tiktok_bozza": "TikTok (bozza)",
             "tiktok_foto": "TikTok (carosello in casella)"}
@@ -4120,24 +4129,19 @@ def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
     if falliti:
         righe.append("\n⚠️ Non riuscito su:\n" + "\n".join(_tg_scappa(f) for f in falliti))
 
-    # ⚠️ La didascalia si manda SOLO se TikTok ha ricevuto la bozza video: e'
-    # li' che devi incollarla a mano, perche' l'endpoint della casella non
-    # accetta il testo. Il carosello di foto passa da un endpoint che il testo
-    # ce l'ha, quindi li' non serve.
-    if esiti.get("tiktok_bozza"):
-        righe.append("\nApri la notifica su TikTok e incolla questo:")
-        righe.append(f"<pre>{_tg_scappa(riga.get('didascalia',''))}</pre>")
-
     try:
         commento = json.loads(riga.get("extra") or "{}").get("commento", "")
     except Exception:
         commento = ""
 
+    # ── didascalia TikTok: serve solo per il video, non per il carosello ──
+    didascalia = riga.get("didascalia", "") if esiti.get("tiktok_bozza") else ""
+
+    # ── commento: dove e' andato da solo e dove no ──
+    da_incollare = ""
     if commento:
         fatti = [nomi[k.replace("_commento", "")] for k in esiti
                  if k.endswith("_commento") and k.replace("_commento", "") in nomi]
-        # Dove e' uscito il contenuto ma il commento no: o perche' li' non lo
-        # pubblichiamo (YouTube, TikTok), o perche' il tentativo e' fallito.
         da_fare = [nomi.get(k, k) for k in esiti if e_piattaforma(k)
                    and f"{k}_commento" not in esiti]
         non_riusciti = [f"{nomi.get(k.replace('_commento_errore',''), k)}: {v}"
@@ -4150,16 +4154,43 @@ def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
                          + "\n".join(_tg_scappa(n) for n in non_riusciti))
         if da_fare or non_riusciti:
             dove = ", ".join(da_fare) or "le piattaforme qui sopra"
-            righe.append(f"\nDa commentare a mano su {_tg_scappa(dove)}:")
-            righe.append(f"<pre>{_tg_scappa(commento)}</pre>")
+            righe.append(f"\nCommento da mettere a mano su {_tg_scappa(dove)}.")
+            da_incollare = commento
         if fatti:
             # ⚠️ Si dice ogni volta perche' e' il passaggio che resta a mano e
             # che non ha nessun promemoria: fissare in cima non esiste in
             # nessuna API, e senza questa riga passerebbe di mente.
             righe.append("\n<i>Fissarlo in cima resta da fare in app: "
                          "nessuna API lo permette.</i>")
+    elif usciti:
+        # ⚠️ Detto esplicitamente invece di tacere: senza questa riga, un
+        # contenuto accodato prima che il commento esistesse non ne parla
+        # affatto, e sembra che il commento automatico sia rotto.
+        righe.append("\n<i>Nessun commento salvato per questo contenuto.</i>")
+
+    # Cosa arriva dopo, cosi' i messaggi nudi qui sotto si capiscono.
+    code = []
+    if didascalia:
+        code.append("la didascalia per TikTok")
+    if da_incollare:
+        code.append("il commento")
+    if code:
+        # Senza aggettivi: "didascalia" e' femminile e "commento" maschile,
+        # e una concordanza sbagliata su un messaggio che arrivi ogni giorno
+        # si nota.
+        coda = " e poi ".join(code)
+        ognuno = "ognuno in un messaggio a parte" if len(code) > 1 else "in un messaggio a parte"
+        righe.append(f"\n↓ Qui sotto {coda}, {ognuno} da copiare.")
 
     _notifica("\n".join(righe))
+
+    # ⚠️ Messaggi SENZA etichetta, solo il testo: copiando il messaggio intero
+    # si ottiene esattamente quello che serve e niente altro. E' il punto di
+    # tutta questa separazione.
+    if didascalia:
+        _notifica(f"<pre>{_tg_scappa(didascalia)}</pre>")
+    if da_incollare:
+        _notifica(f"<pre>{_tg_scappa(da_incollare)}</pre>")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
