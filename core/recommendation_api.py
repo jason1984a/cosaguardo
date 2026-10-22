@@ -2042,6 +2042,82 @@ def get_cinema_news(limit: int = 8) -> list:
 
 
 
+def _cerca_nel_catalogo_seo(query: str, content_type: str = "movie", limit: int = 10) -> list:
+    """
+    Cerca per PREFISSO nel catalogo `seo_titles`.
+
+    ⚠️ Perche' esiste questa funzione.
+    La ricerca di TMDb (/search/movie) e' una ricerca PER PAROLE, non per
+    prefissi: privilegia pesantemente chi ha la parola intera. Digitando
+    "inter" restituisce "Inter. Due Stelle sul Cuore" (0 voti),
+    "inter.m@tes" (1 voto), "Inter Rail"... e "Interstellar", con 41.581 voti,
+    finisce alla posizione 45 su 4128 risultati. Per "titan" il vero "Titanic"
+    non compare nemmeno nelle prime 120.
+
+    Allargare il bacino non risolve: la profondita' necessaria e'
+    imprevedibile, e sei chiamate HTTP a ogni lettera digitata sono fuori
+    discussione per un autocomplete.
+
+    `seo_titles` invece e' una tabella locale con i ~700 titoli piu' popolari
+    e piu' votati di TMDb, gia' costruita per le pagine /dove-vedere e
+    aggiornata ogni settimana. Un LIKE con indice ci mette un millisecondo e
+    contiene esattamente i titoli che la gente cerca.
+    """
+    q = (query or "").strip().lower()
+    if len(q) < 2:
+        return []
+
+    # ⚠️ Gli speciali di LIKE vanno neutralizzati, altrimenti una query che
+    # contiene % o _ diventa un carattere jolly e restituisce mezzo catalogo.
+    q_esc = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    try:
+        import sqlite3 as _sqlite3
+        from core.seo_pages import SEO_DB_PATH  # import locale: evita il ciclo
+    except Exception:
+        return []
+
+    try:
+        conn = _sqlite3.connect(SEO_DB_PATH, timeout=2)
+        conn.row_factory = _sqlite3.Row
+        cur = conn.cursor()
+        # Due forme: il titolo INIZIA con la query, oppure una sua parola
+        # inizia con la query ("padri" deve trovare "Il padrino").
+        cur.execute("""
+            SELECT tmdb_id, title, year, popularity, poster_path
+            FROM seo_titles
+            WHERE content_type = ?
+              AND (LOWER(title) LIKE ? ESCAPE '\\'
+                   OR LOWER(title) LIKE ? ESCAPE '\\')
+            ORDER BY popularity DESC
+            LIMIT ?
+        """, (content_type, f"{q_esc}%", f"% {q_esc}%", limit))
+        righe = [dict(r) for r in cur.fetchall()]
+        conn.close()
+    except Exception:
+        return []
+
+    out = []
+    for r in righe:
+        titolo = (r.get("title") or "").strip()
+        if not titolo:
+            continue
+        out.append({
+            "movie_id":      None,
+            "tmdb_id":       r.get("tmdb_id"),
+            "title":         titolo,
+            "display_title": titolo,
+            "poster_url":    (f"https://image.tmdb.org/t/p/w185{r.get('poster_path')}"
+                              if r.get("poster_path") else ""),
+            "year":          str(r.get("year") or ""),
+            "_popularity":   float(r.get("popularity") or 0),
+            "_vote_count":   0,
+            # Marcatore per il punteggio: vedi score() in search_movies_fast.
+            "_dal_catalogo": True,
+        })
+    return out
+
+
 def search_movies_fast(query: str, limit: int = 8) -> list:
     """
     Ricerca veloce film con ranking per popolarità (titoli famosi prima).
@@ -2078,7 +2154,7 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
     # chiave DEVE cambiare a ogni modifica della forma O DELL'ORDINE dei
     # risultati, altrimenti per 24 ore si continua a servire la graduatoria
     # vecchia e la correzione sembra non aver funzionato.
-    cache_key = f"search_movie_v5:{q_lower}:{limit}"
+    cache_key = f"search_movie_v6:{q_lower}:{limit}"
 
     # L2 cache hit?
     try:
@@ -2205,9 +2281,19 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
         disp_na  = _strip_article(disp_l)
 
         s = 0
-        # Match esatto: super boost (utente ha digitato il titolo intero)
+        # ⚠️ Match esatto, pesato sulla LUNGHEZZA della query.
+        #
+        # Prima valeva 10000 fisso. Ma "esatto" e' una prova forte solo se
+        # l'utente ha scritto un titolo per intero: su un prefisso corto che
+        # per caso coincide con un titolo brevissimo non vuol dire niente.
+        # Digitando "titan" il film "Titan" risultava match esatto e scavalcava
+        # "Titanic" — e nessuno scrive "titan" pensando al film del 2018.
+        #
+        # Sotto le 6 lettere un match esatto vale quanto un prefisso, e a
+        # decidere resta la fama. Oltre, il bonus cresce fino a diventare
+        # dominante: chi scrive "interstellar" per intero vuole quello.
         if q_lower in (title_l, disp_l, title_na, disp_na):
-            s += 10000
+            s += 5000 + max(0, len(q_lower) - 6) * 700
         # StartsWith: boost grande (es. "inter" → "Interstellar")
         elif (title_l.startswith(q_lower) or disp_l.startswith(q_lower)
               or title_na.startswith(q_lower) or disp_na.startswith(q_lower)):
@@ -2238,14 +2324,33 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
         # un vote_count enorme vale ~1700, il gap fra un tier e l'altro e'
         # 2500+. Rompe i pari-merito senza mai scavalcare un match migliore.
         import math
-        vc = int(item.get("_vote_count") or 0)
-        s += math.log10(vc + 1) * 300
-        pop = float(item.get("_popularity") or 0)
-        s += math.log10(pop + 1) * 50
+        if item.get("_dal_catalogo"):
+            # ⚠️ Le righe del catalogo SEO non hanno vote_count, ma hanno un
+            # segnale piu' forte: la loro semplice PRESENZA in quella tabella.
+            # Ci finiscono solo i titoli che stanno nelle prime 400 posizioni
+            # di /movie/popular e /movie/top_rated, ricalcolate ogni settimana.
+            # Essere li' dentro vale gia' quanto un vote_count alto; fra loro
+            # si ordina per popularity, che in un insieme gia' filtrato per
+            # fama torna a essere un criterio sensato.
+            s += 1000
+            s += math.log10(float(item.get("_popularity") or 0) + 1) * 100
+        else:
+            vc = int(item.get("_vote_count") or 0)
+            s += math.log10(vc + 1) * 300
+            pop = float(item.get("_popularity") or 0)
+            s += math.log10(pop + 1) * 50
 
         return s
 
-    combined = tmdb_results + db_results
+    # ── 2-bis. Catalogo SEO locale (prefissi) ─────────────────────────
+    # ⚠️ SEMPRE, non solo come ripiego. E' una query locale con indice: costa
+    # un millisecondo e non tocca la rete. Serve perche' la ricerca di TMDb
+    # non trova i prefissi (vedi _cerca_nel_catalogo_seo): senza questa riga,
+    # "inter" non restituisce Interstellar e "titan" non restituisce Titanic,
+    # per quante pagine si scarichino.
+    seo_results = _cerca_nel_catalogo_seo(query, content_type="movie", limit=limit + 4)
+
+    combined = tmdb_results + seo_results + db_results
     # Calcola score una volta sola e tieni traccia (servirà per merge client-side
     # quando la lente unisce risultati film+TV)
     scored = [(item, score(item)) for item in combined]
@@ -2254,7 +2359,18 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
     # Pulisci campi interni prima di restituire
     cleaned = []
     seen = set()
+    seen_ids = set()
     for item, s in scored:
+        # ⚠️ Dedup per tmdb_id PRIMA che per titolo: lo stesso film puo'
+        # arrivare sia da TMDb sia dal catalogo SEO con il titolo scritto in
+        # modo leggermente diverso, e il confronto sul testo non lo
+        # intercetterebbe.
+        tid = item.get("tmdb_id")
+        if tid:
+            if tid in seen_ids:
+                continue
+            seen_ids.add(tid)
+
         # Dedup finale per titolo (case-insensitive)
         key = (item.get("display_title") or item.get("title", "")).lower()
         if key in seen:
