@@ -5191,7 +5191,12 @@ def _api_titolo_snello(rec: dict) -> dict:
         generi = []
 
     return {
-        "tmdb_id":      rec.get("tmdb_id"),
+        # ⚠️ Il motore delle serie produce `tv_id`, quello dei film `movie_id`:
+        # solo alcuni percorsi riempiono `tmdb_id`. Senza questi ripieghi, per
+        # le serie il campo usciva `null` — e in Modelli.swift `tmdbId` non e'
+        # opzionale, quindi falliva la decodifica dell'INTERA risposta e l'app
+        # mostrava "Risposta non comprensibile dal server" invece dei consigli.
+        "tmdb_id":      rec.get("tmdb_id") or rec.get("tv_id") or rec.get("movie_id"),
         "title":        rec.get("title") or "",
         "year":         anno,
         "poster_url":   poster,

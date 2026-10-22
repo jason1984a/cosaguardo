@@ -2042,26 +2042,17 @@ def get_cinema_news(limit: int = 8) -> list:
 
 
 
-def _cerca_nel_catalogo_seo(query: str, content_type: str = "movie", limit: int = 10) -> list:
+def righe_catalogo_seo(query: str, content_type: str = "movie", limit: int = 10) -> list:
     """
-    Cerca per PREFISSO nel catalogo `seo_titles`.
+    Righe GREZZE del catalogo `seo_titles` che iniziano con la query.
 
-    ⚠️ Perche' esiste questa funzione.
-    La ricerca di TMDb (/search/movie) e' una ricerca PER PAROLE, non per
-    prefissi: privilegia pesantemente chi ha la parola intera. Digitando
-    "inter" restituisce "Inter. Due Stelle sul Cuore" (0 voti),
-    "inter.m@tes" (1 voto), "Inter Rail"... e "Interstellar", con 41.581 voti,
-    finisce alla posizione 45 su 4128 risultati. Per "titan" il vero "Titanic"
-    non compare nemmeno nelle prime 120.
+    ⚠️ Restituisce i campi come stanno in tabella — tmdb_id, title, year,
+    popularity, poster_path — senza dargli una forma. Le due ricerche che la
+    usano (film e serie) hanno formati di risultato diversi, e ognuna adatta
+    per conto suo: la query SQL invece resta una sola, cosi' se un giorno
+    cambia il criterio di match cambia per entrambe.
 
-    Allargare il bacino non risolve: la profondita' necessaria e'
-    imprevedibile, e sei chiamate HTTP a ogni lettera digitata sono fuori
-    discussione per un autocomplete.
-
-    `seo_titles` invece e' una tabella locale con i ~700 titoli piu' popolari
-    e piu' votati di TMDb, gia' costruita per le pagine /dove-vedere e
-    aggiornata ogni settimana. Un LIKE con indice ci mette un millisecondo e
-    contiene esattamente i titoli che la gente cerca.
+    Perche' esiste, vedi `_cerca_nel_catalogo_seo` qui sotto.
     """
     q = (query or "").strip().lower()
     if len(q) < 2:
@@ -2094,14 +2085,35 @@ def _cerca_nel_catalogo_seo(query: str, content_type: str = "movie", limit: int 
         """, (content_type, f"{q_esc}%", f"% {q_esc}%", limit))
         righe = [dict(r) for r in cur.fetchall()]
         conn.close()
+        return [r for r in righe if (r.get("title") or "").strip()]
     except Exception:
         return []
 
+
+def _cerca_nel_catalogo_seo(query: str, content_type: str = "movie", limit: int = 10) -> list:
+    """
+    Cerca per PREFISSO nel catalogo `seo_titles`.
+
+    ⚠️ Perche' esiste questa funzione.
+    La ricerca di TMDb (/search/movie) e' una ricerca PER PAROLE, non per
+    prefissi: privilegia pesantemente chi ha la parola intera. Digitando
+    "inter" restituisce "Inter. Due Stelle sul Cuore" (0 voti),
+    "inter.m@tes" (1 voto), "Inter Rail"... e "Interstellar", con 41.581 voti,
+    finisce alla posizione 45 su 4128 risultati. Per "titan" il vero "Titanic"
+    non compare nemmeno nelle prime 120.
+
+    Allargare il bacino non risolve: la profondita' necessaria e'
+    imprevedibile, e sei chiamate HTTP a ogni lettera digitata sono fuori
+    discussione per un autocomplete.
+
+    `seo_titles` invece e' una tabella locale con i ~700 titoli piu' popolari
+    e piu' votati di TMDb, gia' costruita per le pagine /dove-vedere e
+    aggiornata ogni settimana. Un LIKE con indice ci mette un millisecondo e
+    contiene esattamente i titoli che la gente cerca.
+    """
     out = []
-    for r in righe:
+    for r in righe_catalogo_seo(query, content_type=content_type, limit=limit):
         titolo = (r.get("title") or "").strip()
-        if not titolo:
-            continue
         out.append({
             "movie_id":      None,
             "tmdb_id":       r.get("tmdb_id"),

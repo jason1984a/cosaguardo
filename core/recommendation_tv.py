@@ -1204,6 +1204,40 @@ def search_tv_series(query: str, limit: int = 8):
         raw2 = _fetch(q_norm)
         raw += [r for r in raw2 if r.get("id") not in seen_fetch_ids]
 
+    # ── Catalogo SEO locale: i prefissi che TMDb non restituisce ──────────
+    # ⚠️ Stesso problema dei film, stessa cura. La ricerca di TMDb e' una
+    # ricerca PER PAROLE: su "break" restituisce "Break Point", "Break
+    # Clause", "Break the Bank" — tutti con la parola intera — e "Breaking
+    # Bad" resta fuori anche prendendo due pagine. Allargare non risolve: la
+    # profondita' necessaria e' imprevedibile e ogni pagina e' una chiamata
+    # HTTP a ogni lettera digitata.
+    #
+    # `seo_titles` e' una tabella locale con le ~350 serie evergreen, un LIKE
+    # con indice, un millisecondo. Si aggiunge al bacino e poi si riordina
+    # tutto insieme.
+    try:
+        from core.recommendation_api import righe_catalogo_seo
+        for r in righe_catalogo_seo(query, content_type="tv", limit=limit + 4):
+            tid = r.get("tmdb_id")
+            if not tid or tid in seen_fetch_ids:
+                continue
+            seen_fetch_ids.add(tid)
+            # Forma TMDb, cosi' attraversa senza modifiche il resto della
+            # funzione: punteggio, filtri e costruzione del risultato.
+            anno = r.get("year")
+            raw.append({
+                "id":            tid,
+                "name":          r.get("title") or "",
+                "original_name": r.get("title") or "",
+                "poster_path":   r.get("poster_path"),
+                "first_air_date": f"{anno}-01-01" if anno else "",
+                "vote_count":    0,
+                "popularity":    float(r.get("popularity") or 0),
+                "_dal_catalogo": True,
+            })
+    except Exception:
+        pass
+
     q_lower = query.lower()
 
     # ── Ranking custom: match qualità + popolarità ──
@@ -1227,8 +1261,14 @@ def search_tv_series(query: str, limit: int = 8):
         it_na     = _strip_article(it_name)
         orig_na   = _strip_article(orig_name)
         s = 0
+        # ⚠️ Match esatto pesato sulla LUNGHEZZA della query, come nella
+        # ricerca film. "Esatto" e' una prova forte solo se l'utente ha
+        # scritto un titolo per intero: su un prefisso corto che per caso
+        # coincide con un titolo brevissimo non vuol dire niente, e faceva
+        # scavalcare le serie famose da omonimi sconosciuti. Sotto le 6
+        # lettere vale quanto un prefisso e a decidere resta la fama.
         if q_lower in (it_name, orig_name, it_na, orig_na):
-            s += 10000
+            s += 5000 + max(0, len(q_lower) - 6) * 700
         elif (it_name.startswith(q_lower) or orig_name.startswith(q_lower)
               or it_na.startswith(q_lower) or orig_na.startswith(q_lower)):
             s += 5000
@@ -1244,10 +1284,19 @@ def search_tv_series(query: str, limit: int = 8):
         # ma resta SOTTO i salti di match-tier (max ~1500 < gap di 2500+),
         # quindi rompe i pari-merito senza scavalcare un match migliore.
         import math
-        vc = int(item.get("vote_count") or 0)
-        s += math.log10(vc + 1) * 300
-        pop = float(item.get("popularity") or 0)
-        s += math.log10(pop + 1) * 50
+        if item.get("_dal_catalogo"):
+            # Le righe del catalogo non hanno vote_count, ma la loro semplice
+            # PRESENZA li' dentro e' il segnale di fama: ci finiscono solo le
+            # serie nelle prime posizioni di /tv/popular e /tv/top_rated.
+            # Resta sotto il salto fra un tier di match e l'altro (2500), cosi'
+            # non scavalca mai un match migliore.
+            s += 1000
+            s += math.log10(float(item.get("popularity") or 0) + 1) * 100
+        else:
+            vc = int(item.get("vote_count") or 0)
+            s += math.log10(vc + 1) * 300
+            pop = float(item.get("popularity") or 0)
+            s += math.log10(pop + 1) * 50
         return s
 
     raw_sorted = sorted(raw, key=score, reverse=True)
@@ -1261,8 +1310,11 @@ def search_tv_series(query: str, limit: int = 8):
         if not it_name and not orig_name:
             continue
 
-        # Filtro qualità minima (scarta scheduri placeholder)
-        if int(item.get("vote_count") or 0) < 1:
+        # Filtro qualità minima (scarta schede placeholder)
+        # ⚠️ Non si applica alle righe del catalogo: quelle non portano
+        # vote_count, e con questo filtro verrebbero scartate tutte — cioe'
+        # proprio i titoli famosi che siamo andati a pescare.
+        if not item.get("_dal_catalogo") and int(item.get("vote_count") or 0) < 1:
             continue
 
         # Usa il titolo italiano se diverso dall'originale, altrimenti originale
