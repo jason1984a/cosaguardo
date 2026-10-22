@@ -2074,7 +2074,11 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
     # rimasta v2: le voci salvate prima continuavano a essere servite senza i
     # campi nuovi, e la ricerca mostrava titoli senza locandina ne' anno pur
     # avendo il codice corretto in produzione.
-    cache_key = f"search_movie_v4:{q_lower}:{limit}"
+    # ⚠️ v5: cambiato il criterio di ordinamento (vedi score() piu' sotto). La
+    # chiave DEVE cambiare a ogni modifica della forma O DELL'ORDINE dei
+    # risultati, altrimenti per 24 ore si continua a servire la graduatoria
+    # vecchia e la correzione sembra non aver funzionato.
+    cache_key = f"search_movie_v5:{q_lower}:{limit}"
 
     # L2 cache hit?
     try:
@@ -2181,17 +2185,32 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
         except Exception:
             pass
 
-    # ── 3. Ranking custom: combina match qualitá + popolaritá ──────────
+    # ── 3. Ranking custom: combina match qualitá + fama ────────────────
+    # Articoli iniziali da ignorare nel match prefisso: senza questo "Il
+    # cavaliere oscuro" non scatta lo startsWith su "cav" e viene scavalcato da
+    # titoli oscuri. Stessa lista usata in search_tv_series.
+    _ARTICLES = ("the ", "a ", "an ", "la ", "le ", "lo ", "il ", "l'",
+                 "i ", "gli ", "un ", "una ", "uno ")
+
+    def _strip_article(s: str) -> str:
+        for art in _ARTICLES:
+            if s.startswith(art):
+                return s[len(art):]
+        return s
+
     def score(item):
         title_l = (item.get("title") or "").lower()
         disp_l  = (item.get("display_title") or "").lower()
+        title_na = _strip_article(title_l)
+        disp_na  = _strip_article(disp_l)
 
         s = 0
         # Match esatto: super boost (utente ha digitato il titolo intero)
-        if title_l == q_lower or disp_l == q_lower:
+        if q_lower in (title_l, disp_l, title_na, disp_na):
             s += 10000
-        # StartsWith: boost grande (es. "house" → "House M.D.")
-        elif title_l.startswith(q_lower) or disp_l.startswith(q_lower):
+        # StartsWith: boost grande (es. "inter" → "Interstellar")
+        elif (title_l.startswith(q_lower) or disp_l.startswith(q_lower)
+              or title_na.startswith(q_lower) or disp_na.startswith(q_lower)):
             s += 5000
         # Word-startsWith: una parola del titolo inizia col query
         elif any(w.startswith(q_lower) for w in title_l.split()) or \
@@ -2201,18 +2220,28 @@ def search_movies_fast(query: str, limit: int = 8) -> list:
         elif q_lower in title_l or q_lower in disp_l:
             s += 500
 
-        # Tie-breaker: popolarità (in scala log per non dominare)
-        pop = item.get("_popularity", 0)
-        if pop > 0:
-            import math
-            s += math.log10(pop + 1) * 100  # 100 popularity → +200, 10 → +100
-
-        # Boost piccolo per titoli con molti voti (segno di "vero film famoso")
-        vc = item.get("_vote_count", 0)
-        if vc >= 1000:
-            s += 50
-        elif vc >= 100:
-            s += 20
+        # ⚠️ Tie-breaker FAMA: vote_count, non popularity.
+        #
+        # Prima il peso stava sulla popularity (log10 * 100) con un bonus
+        # simbolico di 50 sul vote_count. Ma la popularity di TMDb e' una
+        # metrica di TENDENZA: misura quanto una scheda viene consultata in
+        # questi giorni, non quanto il film e' noto. Un film uscito ieri puo'
+        # averla a 200, "Interstellar" a 40 — e fra due titoli che iniziano
+        # entrambi per "inter" vinceva quello che nessuno conosce.
+        #
+        # vote_count sono i voti accumulati in tutta la vita del titolo: non
+        # cala, e distingue un classico da una novita' qualunque. Stessa
+        # correzione gia' applicata a search_tv_series, che qui non era mai
+        # arrivata.
+        #
+        # Il peso (log10 * 300) e' alto ma resta SOTTO i salti di match-tier:
+        # un vote_count enorme vale ~1700, il gap fra un tier e l'altro e'
+        # 2500+. Rompe i pari-merito senza mai scavalcare un match migliore.
+        import math
+        vc = int(item.get("_vote_count") or 0)
+        s += math.log10(vc + 1) * 300
+        pop = float(item.get("_popularity") or 0)
+        s += math.log10(pop + 1) * 50
 
         return s
 

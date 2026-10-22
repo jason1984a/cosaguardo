@@ -1278,6 +1278,23 @@ def search_tv_series(query: str, limit: int = 8):
             "title":         base_title,
             "display_title": display_title,
             "id":            item.get("id"),
+            # ⚠️ tmdb_id OLTRE a id, non al posto suo.
+            #
+            # L'app iOS legge "tmdb_id" (vedi Suggerimento in Modelli.swift) e
+            # qui c'era solo "id": ogni risultato di una ricerca Serie TV
+            # arrivava senza identificativo, e CercaView disegna le righe senza
+            # tmdb_id spente al 50% e non toccabili. In pratica cercando una
+            # serie si otteneva un elenco corretto e completamente inerte.
+            # "id" resta perche' lo usa l'autocomplete del sito.
+            "tmdb_id":       item.get("id"),
+            # ⚠️ Stesso discorso per locandina e anno: arrivano gia' dentro la
+            # stessa risposta TMDb, non costano una chiamata in piu', e senza
+            # di loro la ricerca serie mostrava righe grigie senza immagine —
+            # mentre quella film, che li ha, si vedeva bene. Da qui
+            # l'impressione che fossero due funzioni diverse.
+            "poster_url":    (f"https://image.tmdb.org/t/p/w185{item.get('poster_path')}"
+                              if item.get("poster_path") else ""),
+            "year":          (item.get("first_air_date") or "")[:4],
             "_score":        round(score(item), 1),  # esposto per merge client-side
         })
         if len(results) >= limit:
