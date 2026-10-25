@@ -4141,8 +4141,20 @@ def _notifica_pubblicazione(riga: dict, esiti: dict) -> None:
     except Exception:
         commento = ""
 
-    # ── didascalia TikTok: serve solo per il video, non per il carosello ──
-    didascalia = riga.get("didascalia", "") if esiti.get("tiktok_bozza") else ""
+    # ── didascalia TikTok ──
+    #
+    # ⚠️ La regola non e' "video si', carosello no", ed era quella prima.
+    # Il ragionamento di partenza era corretto: l'endpoint dei caroselli porta
+    # con se' titolo e descrizione, quello dei video no, quindi il testo
+    # serviva solo per i reel. Ma vale a patto che il carosello ARRIVI: se
+    # TikTok lo scarta, ci si ritrova senza il contenuto e senza il testo per
+    # rimediare a mano — il peggiore dei due casi.
+    #
+    # Quindi: si manda quando a TikTok serve incollarlo (bozza video) OPPURE
+    # quando a TikTok non e' arrivato niente e tocca pubblicare a mano.
+    _tiktok_fallito = bool(esiti.get("tiktok_errore"))
+    _serve_didascalia = bool(esiti.get("tiktok_bozza")) or _tiktok_fallito
+    didascalia = riga.get("didascalia", "") if _serve_didascalia else ""
 
     # ── commento: dove e' andato da solo e dove no ──
     da_incollare = ""
