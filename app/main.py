@@ -3689,12 +3689,19 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
         # Instagram costa molto piu' di una bozza TikTok da rifare a mano.
         try:
             if e_video:
-                esiti["tiktok_bozza"] = _tiktok_carica_bozza(url[0])
+                pid = _tiktok_carica_bozza(url[0])
+                # ⚠️ Non basta avere il publish_id: quello dice solo che TikTok
+                # ha accettato la richiesta, non che il contenuto sia arrivato.
+                # Vedi _tiktok_attendi_esito.
+                _tiktok_attendi_esito(pid)
+                esiti["tiktok_bozza"] = pid
             else:
                 # Il carosello di foto passa da un endpoint diverso, che a
                 # differenza di quello video porta con se' anche il testo.
-                esiti["tiktok_foto"] = _tiktok_carica_foto(
+                pid = _tiktok_carica_foto(
                     url, extra.get("titolo_tiktok", ""), didascalia)
+                _tiktok_attendi_esito(pid)
+                esiti["tiktok_foto"] = pid
         except Exception as e:
             log.warning("coda_social: TikTok fallito: %s", e)
             esiti["tiktok_errore"] = str(e)[:200]
@@ -4404,6 +4411,81 @@ def _tiktok_stato(publish_id: str) -> dict:
             return json.loads(r.read().decode("utf-8"))
     except _ue.HTTPError as e:
         return {"error": {"message": e.read().decode("utf-8", "replace")[:400]}}
+
+
+# ⚠️ I motivi di scarto che TikTok restituisce in fail_reason, tradotti in
+# qualcosa su cui si puo' agire. Quelli non elencati passano cosi' come sono:
+# meglio una sigla inglese che "errore sconosciuto".
+_TIKTOK_MOTIVI = {
+    "picture_size_check_failed":
+        "le immagini non rispettano le dimensioni accettate (lato minimo 360px, "
+        "massimo 1080x1920 per slide)",
+    "file_format_check_failed":
+        "formato non accettato: per le foto servono JPEG o WEBP, per i video MP4",
+    "photo_pull_failed":
+        "TikTok non e' riuscito a scaricare le immagini dall'indirizzo fornito",
+    "video_pull_failed":
+        "TikTok non e' riuscito a scaricare il video dall'indirizzo fornito",
+    "duration_check_failed":    "la durata del video non rientra nei limiti",
+    "frame_rate_check_failed":  "il frame rate del video non e' accettato",
+    "auth_removed":             "l'autorizzazione TikTok e' stata revocata",
+    "spam_risk_too_many_posts": "troppe pubblicazioni ravvicinate: TikTok ha "
+                                "bloccato temporaneamente per sospetto spam",
+    "spam_risk_user_banned_from_posting":
+        "l'account non puo' pubblicare in questo momento",
+    "unaudited_client_can_only_post_to_private_accounts":
+        "l'app non e' ancora approvata da TikTok e puo' pubblicare solo su "
+        "account privati",
+}
+
+
+def _tiktok_attendi_esito(publish_id: str, secondi: int = 60) -> str:
+    """
+    Aspetta che TikTok dica com'e' finita davvero, e solleva se e' finita male.
+
+    ⚠️ PERCHE' SERVE, ed e' il difetto che ha reso invisibili i caroselli
+    mancanti per giorni. L'init risponde SUBITO con un publish_id: a quel punto
+    TikTok non ha ancora scaricato niente. Se lo scaricamento o l'elaborazione
+    falliscono — formato sbagliato, immagini fuori misura, indirizzo non
+    raggiungibile — succede DOPO, in modo asincrono. Noi registravamo
+    "tiktok_foto: <publish_id>", Telegram annunciava "TikTok (carosello in
+    casella)", e su TikTok non compariva mai niente. Nessun errore da nessuna
+    parte.
+
+    `_tiktok_stato` esisteva gia' con questo commento in testa, ma era
+    collegata solo a una rotta di diagnostica: nel percorso di pubblicazione
+    non la chiamava nessuno.
+
+    ⚠️ Se allo scadere dell'attesa e' ancora in elaborazione NON si solleva:
+    potrebbe benissimo andare a buon fine un minuto dopo, e dichiarare un
+    fallimento che non c'e' e' peggio del difetto che stiamo correggendo. Si
+    registra un avviso nei log e si prosegue.
+    """
+    import time as _t
+    scadenza = _t.monotonic() + max(5, secondi)
+    stato = ""
+    while True:
+        risposta = _tiktok_stato(publish_id) or {}
+        dati = risposta.get("data") or {}
+        stato = (dati.get("status") or "").upper()
+
+        # Stati terminali buoni: in casella (bozza da pubblicare a mano)
+        # oppure pubblicato.
+        if stato in ("SEND_TO_USER_INBOX", "PUBLISH_COMPLETE"):
+            return stato
+
+        if stato == "FAILED":
+            grezzo = (dati.get("fail_reason") or "").strip()
+            spiegato = _TIKTOK_MOTIVI.get(grezzo, grezzo or "motivo non indicato")
+            raise RuntimeError(f"TikTok ha scartato il contenuto: {spiegato}")
+
+        if _t.monotonic() >= scadenza:
+            log.warning("tiktok: %s ancora in stato '%s' dopo %ds — non lo "
+                        "dichiaro fallito, potrebbe completarsi dopo",
+                        publish_id, stato or "sconosciuto", secondi)
+            return stato or "IN_ELABORAZIONE"
+
+        _t.sleep(5)
 
 
 def _tiktok_carica_bozza(url_video: str) -> str:
