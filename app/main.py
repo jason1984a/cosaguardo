@@ -3605,6 +3605,27 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
         if not (_MEDIA_TEMP_DIR / n).is_file():
             raise RuntimeError(f"il file {n} non c'e' piu'")
 
+    # ⚠️ Instagram puo' avere un set di immagini SUO.
+    #
+    # I caroselli di Instagram non accettano il 9:16: il rapporto piu' alto
+    # ammesso e' 4:5. Dandogli le slide 1080x1920 pensate per TikTok, la
+    # decisione su cosa farne restava sua — a volte le ritagliava (post a
+    # tutta larghezza), a volte le rimpiccioliva (bande scure ai lati, il
+    # post al 70% della larghezza). Due caroselli della stessa serie
+    # uscivano diversi.
+    #
+    # Ora carosello.py genera anche un set 1080x1350 e pubblica.py lo manda
+    # qui dentro `extra`. Se manca — contenuti accodati prima di questo
+    # cambio — si usano le slide normali come sempre.
+    nomi_ig = [n for n in (extra.get("media_instagram") or []) if n]
+    if nomi_ig and all((_MEDIA_TEMP_DIR / n).is_file() for n in nomi_ig):
+        url_ig = [f"https://cosaguardo.com/media-temp/{n}" for n in nomi_ig]
+    else:
+        if nomi_ig:
+            log.warning("coda_social: slide Instagram dedicate indicate ma non "
+                        "piu' sul disco, uso quelle normali")
+        url_ig = url
+
     esiti = {}
     e_video = nomi_media and nomi_media[0].lower().endswith((".mp4", ".mov"))
 
@@ -3618,7 +3639,9 @@ def _social_pubblica(formato: str, piattaforme: str, didascalia: str,
             contenitore = dati["id"]
         else:
             figli = []
-            for u in url:
+            # url_ig e non url: le slide 4:5 quando ci sono. Vedi in cima
+            # alla funzione.
+            for u in url_ig:
                 dati, err = _social_graph("POST", f"/{_SOCIAL_IG_ID}/media", {
                     "image_url": u, "is_carousel_item": "true",
                     "access_token": _SOCIAL_PAGINA_TOKEN})
