@@ -771,6 +771,159 @@
         </div>
     </div>
 
+    {# ── RICHIESTA DI VALUTAZIONE SU GOOGLE PLAY ─────────────────────────
+       La scheda Play non ha NESSUNA valutazione, e una scheda senza stelle
+       converte peggio nella ricerca dello store. Questa e' la leva piu'
+       economica sul 16% di conversione della scheda.
+
+       ⚠️ Non si usa la In-App Review API di Android: vuole codice nativo nel
+       guscio TWA, che PWABuilder rigenera da zero a ogni aggiornamento del
+       target SDK. Se lo porterebbe via al primo giro e non te ne accorgeresti.
+       Qui sta lato web, quindi sopravvive a ogni ripacchettamento.
+
+       Regole scelte, e perche':
+       - solo contesto android_app: chi usa la PWA o iOS non puo' valutare
+         questa scheda, chiederglielo sarebbe solo fastidio
+       - solo dopo 3 GIORNI DISTINTI di uso e dopo un momento positivo (un
+         clic su una piattaforma), mai al primo avvio
+       - "Valuta" non torna mai piu', "Non ora" rimanda di 60 giorni
+       - ⚠️ NESSUN filtro sul sentiment: mostrare la richiesta solo a chi si
+         dichiara soddisfatto viola le linee guida degli store. Si chiede a
+         tutti o a nessuno.
+    #}
+    <style>
+        #cg-rate {
+            position: fixed; left: 12px; right: 12px;
+            bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+            z-index: 9998; display: none;
+            background: #141a2e; color: #e8ecf4;
+            border: 1px solid rgba(255,255,255,0.14); border-radius: 14px;
+            padding: 14px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+            font-size: 0.9rem; line-height: 1.45;
+            max-width: 460px; margin: 0 auto;
+        }
+        #cg-rate.is-on { display: block; }
+        #cg-rate p { margin: 0 0 12px; }
+        #cg-rate .cg-rate-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        #cg-rate button {
+            font: inherit; font-weight: 600; cursor: pointer;
+            border-radius: 999px; padding: 8px 16px; border: 1px solid transparent;
+            -webkit-tap-highlight-color: transparent;
+        }
+        #cg-rate .cg-rate-no  { background: transparent; color: #9fb0d0; border-color: rgba(255,255,255,0.18); }
+        #cg-rate .cg-rate-si  { background: linear-gradient(90deg, #6ea8fe, #a78bfa); color: #0b1020; }
+        #cg-rate button:active { transform: scale(0.97); }
+    </style>
+    <div id="cg-rate" role="dialog" aria-label="Valuta CosaGuardo">
+        <p>Stai usando CosaGuardo da qualche giorno. Ti va di lasciare una valutazione sul Play Store? Serve a farlo trovare a più persone.</p>
+        <div class="cg-rate-actions">
+            <button type="button" class="cg-rate-no" id="cg-rate-no">Non ora</button>
+            <button type="button" class="cg-rate-si" id="cg-rate-si">Valuta</button>
+        </div>
+    </div>
+    <script>
+    (function () {
+        var K_GIORNI  = 'cg_giorni_uso';
+        var K_ULTIMO  = 'cg_ultimo_giorno';
+        var K_MOMENTO = 'cg_momento_buono';
+        var K_STATO   = 'cg_recensione';
+        var GIORNI_MINIMI = 3;
+        var RINVIO_MS = 60 * 24 * 60 * 60 * 1000;
+        var URL_APP = 'market://details?id=com.cosaguardo.app';
+        var URL_WEB = 'https://play.google.com/store/apps/details?id=com.cosaguardo.app';
+
+        function leggi(k)    { try { return localStorage.getItem(k); } catch (_) { return null; } }
+        function scrivi(k,v) { try { localStorage.setItem(k, v); } catch (_) {} }
+
+        // ⚠️ Si contano i GIORNI DISTINTI, non i caricamenti di pagina: dieci
+        // pagine in una sera sono una giornata sola. Con i caricamenti la
+        // richiesta sarebbe uscita alla prima sessione un po' lunga.
+        function contaGiorno() {
+            var oggi = new Date().toISOString().slice(0, 10);
+            if (leggi(K_ULTIMO) === oggi) return parseInt(leggi(K_GIORNI) || '1', 10);
+            var n = parseInt(leggi(K_GIORNI) || '0', 10) + 1;
+            scrivi(K_ULTIMO, oggi);
+            scrivi(K_GIORNI, String(n));
+            return n;
+        }
+
+        function puoChiedere(giorni, adesso) {
+            if (typeof cgAppContext !== 'function' || cgAppContext() !== 'android_app') return false;
+            if (giorni < GIORNI_MINIMI) return false;
+            if (leggi(K_MOMENTO) !== '1') return false;
+            var st = leggi(K_STATO);
+            if (st === 'fatto') return false;
+            if (st && st.indexOf('rimandato:') === 0) {
+                var quando = parseInt(st.slice('rimandato:'.length), 10);
+                if (!isNaN(quando) && (adesso - quando) < RINVIO_MS) return false;
+            }
+            return true;
+        }
+
+        // Il "momento buono" si segna al clic su una piattaforma, ma la
+        // richiesta si mostra al caricamento SUCCESSIVO: chiedere mentre
+        // l'utente sta aprendo Netflix significa farsi ignorare.
+        document.addEventListener('click', function (e) {
+            if (e.target && e.target.closest &&
+                e.target.closest('[data-cg-track="select_provider"]')) {
+                scrivi(K_MOMENTO, '1');
+            }
+        }, true);
+
+        function chiudi(stato) {
+            scrivi(K_STATO, stato);
+            var el = document.getElementById('cg-rate');
+            if (el) el.classList.remove('is-on');
+        }
+
+        function mostra() {
+            var el = document.getElementById('cg-rate');
+            if (!el) return;
+            el.classList.add('is-on');
+            if (window.cgTrack) cgTrack('rating_prompt_shown');
+            document.getElementById('cg-rate-no').addEventListener('click', function () {
+                chiudi('rimandato:' + Date.now());
+                if (window.cgTrack) cgTrack('rating_prompt_dismissed');
+            });
+            document.getElementById('cg-rate-si').addEventListener('click', function () {
+                chiudi('fatto');
+                if (window.cgTrack) cgTrack('rating_prompt_clicked');
+                // market:// apre l'app Play Store senza passare dal browser.
+                // ⚠️ Il ripiego su https deve partire SOLO se lo schema non e'
+                // stato gestito, cioe' se dopo 800 ms siamo ancora su questa
+                // pagina. Se il Play Store si apre, la pagina diventa nascosta
+                // e visibilitychange annulla il ripiego: senza quel controllo
+                // chi ha il Play Store si ritroverebbe aperta anche la pagina
+                // web, dietro all'app.
+                var apertoAltrove = false;
+                function annulla() { apertoAltrove = true; }
+                document.addEventListener('visibilitychange', annulla, { once: true });
+                window.addEventListener('pagehide', annulla, { once: true });
+                setTimeout(function () {
+                    document.removeEventListener('visibilitychange', annulla);
+                    if (!apertoAltrove && !document.hidden) window.location.href = URL_WEB;
+                }, 800);
+                window.location.href = URL_APP;
+            });
+        }
+
+        function avvia() {
+            var giorni = contaGiorno();
+            if (puoChiedere(giorni, Date.now())) mostra();
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', avvia);
+        } else {
+            avvia();
+        }
+
+        // Esposto per poter provare la scheda senza aspettare tre giorni:
+        // da console, cgRateDebug() la mostra comunque.
+        window.cgRateDebug = mostra;
+    })();
+    </script>
+
     {% block scripts %}{% endblock %}
 
 
