@@ -104,6 +104,23 @@
         function loadGA4() {
             if (cgIsOptedOut()) return;
             if (document.getElementById('ga4-script')) return;
+
+            // ⚠️ L'UPDATE DEL CONSENSO VA QUI, PRIMA DI config — NON IN FONDO.
+            //
+            // config e' cio' che fa partire il primo page_view. Con l'update
+            // in fondo alla funzione, gtag processava la coda in ordine:
+            //   consent default (denied) -> js -> set -> config -> update
+            // e quindi il page_view veniva valutato mentre il consenso era
+            // ancora 'denied', cioe' senza identificatore persistente. Gli
+            // eventi successivi (scroll, clic) partivano dopo l'update e il
+            // cookie ce l'avevano: da qui il quadro che si vedeva in GA4,
+            // utenti nuovi pari agli utenti totali e retention settimanale
+            // al 2,6% — un difetto di misurazione, non di prodotto.
+            //
+            // La documentazione Google e' esplicita: il default vale finche'
+            // non arriva l'update, e l'update va chiamato il prima possibile.
+            gtag('consent', 'update', {'analytics_storage': 'granted'});
+
             var s = document.createElement('script');
             s.id = 'ga4-script';
             s.async = true;
@@ -115,7 +132,6 @@
             var __cgCtx = cgAppContext();
             gtag('set', 'user_properties', { app_context: __cgCtx });
             gtag('config', 'G-HMNFXJ98H1', { app_context: __cgCtx });
-            gtag('consent', 'update', {'analytics_storage': 'granted'});
         }
 
         // ── Meta Pixel (Facebook/Instagram) — DISATTIVATO ────────────────
