@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
-{% block title %}Installa CosaGuardo come app — CosaGuardo{% endblock %}
-{% block meta_description %}Installa CosaGuardo come app sul tuo iPhone, Android o computer. Accesso rapido ai consigli, niente App Store.{% endblock %}
-{% block og_title %}Installa CosaGuardo come app{% endblock %}
-{% block og_description %}Aggiungi CosaGuardo alla schermata Home in 2 tap. Accesso rapido, lavora in offline.{% endblock %}
+{% block title %}Scarica CosaGuardo — l'app per sapere cosa guardare{% endblock %}
+{% block meta_description %}Scarica CosaGuardo su Android dal Play Store, o aggiungila alla schermata Home su iPhone. Consigli su film e serie TV, gratis.{% endblock %}
+{% block og_title %}Scarica l'app CosaGuardo{% endblock %}
+{% block og_description %}Film e serie scelti per te, in un tocco. Su Android dal Play Store, su iPhone dalla schermata Home.{% endblock %}
 
 {% block content %}
 <style>
@@ -52,6 +52,7 @@
         border: none;
         border-radius: 14px;
         cursor: pointer;
+        text-decoration: none;
         transition: transform 0.18s, filter 0.18s;
     }
     .install-cta-btn:hover {
@@ -126,8 +127,8 @@
     }
     .install-store-btn {
         display: inline-block;
-        padding: 11px 22px;
-        font-size: 0.98rem;
+        padding: 13px 26px;
+        font-size: 1.02rem;
         font-weight: 800;
         background: linear-gradient(135deg, #6ea8fe, #a78bfa);
         color: #08101f;
@@ -136,6 +137,22 @@
         transition: transform 0.18s, filter 0.18s;
     }
     .install-store-btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+    .install-store-req {
+        margin: 12px 0 0;
+        font-size: 0.82rem;
+        color: var(--muted);
+        opacity: 0.85;
+    }
+    /* Riga mostrata a chi sta gia' usando l'app Android: proporgli di
+       scaricare quello che ha gia' aperto e' il modo piu' rapido per
+       sembrare sciatti. */
+    .install-gia-dentro {
+        display: none;
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+        line-height: 1.6;
+    }
 
     .install-benefits {
         background: linear-gradient(135deg, rgba(110,168,254,0.07), rgba(167,139,250,0.07));
@@ -172,20 +189,45 @@
 </style>
 
 <div class="install-page">
+    {# ⚠️ Il titolo diceva "niente App Store". Era vero quando questa pagina
+       serviva solo la PWA, ma oggi ci atterra la campagna Meta che porta
+       all'app Android: la prima riga diceva all'utente che lo store non
+       serve, mentre l'obiettivo e' portarcelo. #}
     <div class="install-hero">
         <div class="install-hero-icon" aria-hidden="true"></div>
-        <h1>Installa CosaGuardo</h1>
-        <p>Aggiungi l'app alla schermata Home: accesso rapido, niente App Store, gratis.</p>
+        <h1>Scarica CosaGuardo</h1>
+        <p>Film e serie scelti per te, in un tocco. Gratis, senza abbonamenti.</p>
     </div>
 
+    {# Il pulsante grande fa cose diverse a seconda del dispositivo: su Android
+       porta al Play Store, su iPhone scorre alle istruzioni, altrove chiede
+       l'installazione della PWA. Vedi lo script in fondo. #}
     <div class="install-cta">
-        <button class="install-cta-btn" onclick="cgShowInstallPrompt()">📲 Installa ora</button>
-        <div class="install-cta-hint">Su Android si apre il Play Store · su iPhone segui i passi qui sotto</div>
+        <a class="install-cta-btn" id="cg-cta-installa" href="#cg-android" role="button">📲 Installa ora</a>
+        <div class="install-cta-hint" id="cg-cta-hint">Scegli il tuo dispositivo qui sotto</div>
     </div>
 
     <div class="install-platforms">
-        <div class="install-platform">
-            <h2><span class="install-platform-emoji">📱</span> iPhone / iPad (Safari)</h2>
+
+        {# Android per PRIMO: e' l'unica piattaforma con un'app vera, ed e' da
+           dove arriva quasi tutto il traffico di questa pagina. Nel file
+           precedente un commento diceva gia' che doveva stare per prima, ma
+           nel markup era seconda. #}
+        <div class="install-platform install-platform--store" id="cg-android">
+            <h2><span class="install-platform-emoji">🤖</span> Android — l'app ufficiale</h2>
+            <div id="cg-android-scarica">
+                <p class="install-store-text">L'app vera, scaricabile dal Play Store. Si apre a schermo intero, si aggiorna da sola e occupa pochissimo spazio.</p>
+                <a class="install-store-btn" id="cg-play-link"
+                   href="https://play.google.com/store/apps/details?id=com.cosaguardo.app&amp;referrer=utm_source%3Dsito%26utm_medium%3Dpagina_installa%26utm_campaign%3Dinstall"
+                   target="_blank" rel="noopener">Scarica su Google Play</a>
+                <p class="install-store-req">Richiede Android 7.0 o successivo.</p>
+            </div>
+            <p class="install-gia-dentro" id="cg-gia-dentro">Stai già usando l'app: sei a posto così. 👍</p>
+        </div>
+
+        <div class="install-platform" id="cg-ios">
+            <h2><span class="install-platform-emoji">📱</span> iPhone / iPad</h2>
+            <p class="install-store-text">Su iPhone CosaGuardo si aggiunge alla schermata Home e funziona come un'app, senza passare dall'App Store.</p>
             <ol>
                 <li>Apri questo sito su <strong>Safari</strong> (non Chrome)</li>
                 <li>Tocca il bottone <span class="platform-icon-share">⬆</span> <strong>Condividi</strong> in fondo allo schermo (un quadrato con freccia in alto)</li>
@@ -194,18 +236,7 @@
             </ol>
         </div>
 
-        {# Android ha un'app vera sul Play Store dal 26/08/2026: la PWA qui
-           non si propone piu'. Sta per prima perche' e' l'unica piattaforma
-           con un'app nativa, ed e' l'opzione migliore fra tutte. #}
-        <div class="install-platform install-platform--store">
-            <h2><span class="install-platform-emoji">🤖</span> Android — app ufficiale</h2>
-            <p class="install-store-text">Su Android c'è l'app vera, scaricabile dal Play Store.</p>
-            <a class="install-store-btn"
-               href="https://play.google.com/store/apps/details?id=com.cosaguardo.app&amp;referrer=utm_source%3Dsito%26utm_medium%3Dpagina_installa%26utm_campaign%3Dinstall"
-               target="_blank" rel="noopener">Scarica su Google Play</a>
-        </div>
-
-        <div class="install-platform">
+        <div class="install-platform" id="cg-desktop">
             <h2><span class="install-platform-emoji">💻</span> PC / Mac (Chrome, Edge)</h2>
             <ol>
                 <li>Tocca il bottone <strong>📲 Installa ora</strong> qui sopra</li>
@@ -216,14 +247,85 @@
     </div>
 
     <div class="install-benefits">
-        <h2>Perché installare l'app</h2>
+        <h2>Perché installarla</h2>
         <ul>
-            <li>Si apre più velocemente di un browser, a tutto schermo</li>
-            <li>Icona dedicata sulla schermata Home, come una vera app</li>
-            <li>Nessuno spazio occupato dall'App Store: ~1 MB totale</li>
-            <li>Aggiornamenti automatici, sempre l'ultima versione</li>
-            <li>Gratis, niente account richiesto per usarla</li>
+            <li>Si apre a schermo intero, più veloce del browser</li>
+            <li>Icona dedicata sulla schermata Home</li>
+            <li>Leggerissima: meno di 1 MB</li>
+            <li>Si aggiorna da sola, sempre all'ultima versione</li>
+            <li>Gratis, e non serve un account per usarla</li>
         </ul>
     </div>
 </div>
+
+<script>
+(function () {
+    var ctx = (typeof cgAppContext === 'function') ? cgAppContext() : 'web';
+    var ua  = navigator.userAgent || '';
+    var isAndroid = /Android/i.test(ua);
+    var isIOS = /iPhone|iPad|iPod/i.test(ua) ||
+                (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
+
+    // ── 1. Attribuzione delle installazioni ───────────────────────────
+    // Il parametro referrer del link Play arriva in Play Console sotto
+    // "Acquisizioni di dispositivi". Era fisso su sito/pagina_installa:
+    // con la campagna Meta che atterra qui, TUTTE le installazioni
+    // risultavano organiche da sito e non si distinguevano da quelle di
+    // chi arrivava per conto suo. Ora le UTM della pagina, se ci sono,
+    // passano al link — cosi' in Console si vede quale campagna installa.
+    try {
+        var q = new URLSearchParams(window.location.search);
+        var src = q.get('utm_source'), med = q.get('utm_medium'), cmp = q.get('utm_campaign');
+        if (src || med || cmp) {
+            var ref = 'utm_source=' + (src || 'sito') +
+                      '&utm_medium=' + (med || 'pagina_installa') +
+                      '&utm_campaign=' + (cmp || 'install');
+            var a = document.getElementById('cg-play-link');
+            if (a) a.href = 'https://play.google.com/store/apps/details?id=com.cosaguardo.app' +
+                            '&referrer=' + encodeURIComponent(ref);
+        }
+    } catch (_) {}
+
+    // ── 2. Chi e' gia' dentro l'app non deve vedersi proporre l'app ──
+    if (ctx === 'android_app') {
+        var box = document.getElementById('cg-android-scarica');
+        var gia = document.getElementById('cg-gia-dentro');
+        if (box) box.style.display = 'none';
+        if (gia) gia.style.display = 'block';
+    }
+
+    // ── 3. Il pulsante grande fa la cosa giusta per il dispositivo ───
+    var cta  = document.getElementById('cg-cta-installa');
+    var hint = document.getElementById('cg-cta-hint');
+    if (!cta) return;
+
+    if (isAndroid && ctx !== 'android_app') {
+        cta.textContent = '▶ Scarica su Google Play';
+        cta.href = (document.getElementById('cg-play-link') || {}).href || cta.href;
+        cta.target = '_blank';
+        cta.rel = 'noopener';
+        if (hint) hint.textContent = 'Gratis · richiede Android 7.0 o successivo';
+        cta.addEventListener('click', function () {
+            if (window.cgTrack) cgTrack('install_banner_clicked', { origine: 'pagina_installa_cta' });
+        });
+    } else if (isIOS) {
+        cta.textContent = '📲 Aggiungi alla schermata Home';
+        cta.href = '#cg-ios';
+        if (hint) hint.textContent = 'Due tocchi da Safari, le istruzioni sono qui sotto';
+    } else if (ctx === 'android_app') {
+        cta.style.display = 'none';
+        if (hint) hint.style.display = 'none';
+    } else {
+        // Desktop: resta il comportamento di prima, la richiesta PWA.
+        cta.href = '#cg-desktop';
+        if (hint) hint.textContent = 'Chrome o Edge su PC e Mac';
+        cta.addEventListener('click', function (e) {
+            if (typeof cgShowInstallPrompt === 'function') {
+                e.preventDefault();
+                cgShowInstallPrompt();
+            }
+        });
+    }
+})();
+</script>
 {% endblock %}
