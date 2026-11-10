@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Assistenza — CosaGuardo{% endblock %}
+{% block meta_description %}Hai bisogno di aiuto con CosaGuardo? Scrivici, o trova qui la risposta alle domande più frequenti.{% endblock %}
+{% block og_title %}Assistenza CosaGuardo{% endblock %}
+{% block og_description %}Domande frequenti e contatti per l'assistenza su CosaGuardo.{% endblock %}
+
+{# Questa pagina e' indicizzabile, a differenza di /privacy e /termini: e'
+   l'URL di assistenza dichiarato sull'App Store e sul Play Store, e deve
+   essere raggiungibile e trovabile. Apple la apre davvero in fase di
+   revisione e si aspetta di trovarci un recapito. #}
+
+{% block content %}
+<div style="max-width:720px;margin:0 auto;padding-bottom:48px;">
+
+    <h1 style="font-size:1.8rem;font-weight:900;margin-bottom:6px;">Assistenza</h1>
+    <p style="color:var(--muted);font-size:0.95rem;margin-bottom:32px;">Scrivici quando vuoi, oppure cerca qui sotto: le domande che riceviamo più spesso hanno già una risposta.</p>
+
+    <div class="privacy-body">
+
+        <div class="sup-contatto">
+            <h2 style="margin-top:0;">Scrivici</h2>
+            <p>Per qualsiasi domanda, segnalazione o problema:</p>
+            <p class="sup-mail"><a href="mailto:info@cosaguardo.com">info@cosaguardo.com</a></p>
+            <p>Rispondiamo di solito entro due giorni lavorativi. Se ci scrivi per un problema tecnico, indicaci il dispositivo che usi (iPhone, Android o browser) e cosa stavi facendo: ci fa risparmiare un giro di domande.</p>
+        </div>
+
+        <h2>Domande frequenti</h2>
+
+        <h3>CosaGuardo è gratuito?</h3>
+        <p>Sì, completamente. Non ci sono abbonamenti né acquisti nell'app. Gli abbonamenti alle piattaforme di streaming sono delle piattaforme, non nostri: CosaGuardo ti dice soltanto dove un titolo è disponibile.</p>
+
+        <h3>Devo registrarmi per usarlo?</h3>
+        <p>No. Puoi cercare titoli, leggere le schede e vedere dove guardarli senza alcun account. La registrazione serve solo se vuoi salvare i titoli nella tua raccolta, seguire le serie e ricevere consigli basati sui tuoi gusti.</p>
+
+        <h3>Un titolo risulta su una piattaforma ma non lo trovo</h3>
+        <p>I cataloghi delle piattaforme cambiano in continuazione e un titolo può uscire da un servizio senza preavviso. Noi aggiorniamo i dati regolarmente, ma uno scarto di qualche giorno è possibile. Se trovi un'informazione sbagliata segnalacela: ci aiuti a correggerla.</p>
+
+        <h3>I consigli non mi convincono</h3>
+        <p>L'algoritmo migliora man mano che gli dici cosa ti è piaciuto e cosa no. Le prime volte è normale che proponga titoli generici: più valutazioni dai, più i suggerimenti diventano tuoi.</p>
+
+        <h3>Non ricevo le notifiche sulle serie che seguo</h3>
+        <p>Controlla che le notifiche siano attive nelle impostazioni del tuo dispositivo per CosaGuardo, e che la serie risulti effettivamente fra quelle che segui nella tua raccolta. Se il problema resta, scrivici indicando il dispositivo.</p>
+
+        <h3>Come elimino il mio account?</h3>
+        <p>Dalla pagina <a href="/elimina-account">Elimina account</a>, raggiungibile anche dal menu del sito e dell'app. La cancellazione rimuove l'account e i dati associati; i dettagli sono nella <a href="/privacy">Privacy Policy</a>.</p>
+
+        <h3>Da dove arrivano i dati su film e serie?</h3>
+        <p>Le informazioni sui titoli (locandine, trame, voti) provengono da <strong>The Movie Database (TMDb)</strong> tramite API pubblica. CosaGuardo non è affiliata né approvata da TMDb, e non produce né distribuisce contenuti audiovisivi.</p>
+
+        <h2>Link utili</h2>
+        <ul>
+            <li><a href="/come-funziona">Come funziona CosaGuardo</a> — il servizio spiegato in tre passi</li>
+            <li><a href="/installa">Installa l'app</a> — Android, iPhone, computer</li>
+            <li><a href="/privacy">Privacy Policy</a></li>
+            <li><a href="/termini">Termini di Servizio</a></li>
+            <li><a href="/elimina-account">Elimina account</a></li>
+        </ul>
+
+    </div>
+</div>
+
+<style>
+.privacy-body h2 {
+    font-size: 0.8rem;
+    font-weight: 800;
+    margin: 32px 0 10px;
+    color: #93c5fd;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.privacy-body h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 22px 0 6px;
+}
+.privacy-body p, .privacy-body li {
+    font-size: 0.93rem;
+    line-height: 1.7;
+    color: #cbd5e1;
+}
+.privacy-body ul {
+    padding-left: 20px;
+    margin: 8px 0 16px;
+}
+.privacy-body li { margin-bottom: 6px; }
+.privacy-body a { color: #93c5fd; }
+.privacy-body strong { color: var(--text); }
+
+.sup-contatto {
+    background: linear-gradient(135deg, rgba(110,168,254,0.10), rgba(167,139,250,0.08));
+    border: 1px solid rgba(110,168,254,0.22);
+    border-radius: 16px;
+    padding: 20px 22px;
+    margin-bottom: 8px;
+}
+.sup-mail {
+    font-size: 1.15rem !important;
+    font-weight: 800;
+    margin: 10px 0 14px !important;
+}
+.sup-mail a { color: #6ea8fe; text-decoration: none; }
+.sup-mail a:hover { text-decoration: underline; }
+</style>
+{% endblock %}

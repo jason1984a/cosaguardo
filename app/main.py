@@ -6907,6 +6907,24 @@ def installa(request: Request):
     )
 
 
+@app.get("/supporto", response_class=HTMLResponse)
+def supporto(request: Request):
+    """
+    Pagina di assistenza: e' l'URL dichiarato su App Store e Play Store.
+
+    ⚠️ A differenza di /privacy e /termini questa pagina e' indicizzabile, di
+    proposito: Apple la apre davvero durante la revisione e si aspetta di
+    trovarci un recapito. Prima dell'App Store nessuna pagina del sito
+    mostrava un contatto — l'email compariva solo dentro il paragrafo 13 dei
+    termini — ed e' il genere di dettaglio su cui i revisori rimandano indietro.
+    """
+    return templates.TemplateResponse(
+        request=request,
+        name="supporto.html",
+        context={"request": request},
+    )
+
+
 @app.get("/dove-vedere", response_class=HTMLResponse)
 def dove_vedere_hub(request: Request, tipo: str = "", p: int = 1):
     """Hub paginato di tutti i titoli con pagine SEO /dove-vedere/{slug}."""
@@ -7637,6 +7655,7 @@ def sitemap():
         ("/dove-vedere?tipo=film",  "daily", "0.7"),
         ("/dove-vedere?tipo=serie", "daily", "0.7"),
         ("/installa",        "monthly", "0.5"),
+        ("/supporto",        "monthly", "0.5"),
         ("/privacy",         "yearly",  "0.3"),
         ("/termini",         "yearly",  "0.3"),
     ]
