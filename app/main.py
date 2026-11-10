@@ -509,7 +509,12 @@ _DATACENTER_NETS = [_ipaddress.ip_network(c) for c in _DATACENTER_CIDRS]
 _EDGE_GUARD = os.environ.get("EDGE_GUARD", "1") == "1"
 # /api/v1/ espone in JSON gli STESSI dati delle schede: senza aggiungerlo qui
 # offrirebbe agli scraper una porta piu' comoda di quella che abbiamo chiuso.
-# Gli utenti dell'app sono in Italia, quindi per loro non cambia nulla.
+#
+# ⚠️ CORREZIONE 10/11/2026 — "gli utenti dell'app sono in Italia, quindi per
+# loro non cambia nulla" era vero per gli utenti e falso per chi l'app la deve
+# approvare: App Review prova dalla California e prendeva 403 su OGNI chiamata,
+# cioe' vedeva una home vuota. Da ora l'app passa con la sua chiave
+# (_is_app_client), e il carico lo tiene _rate_limited, non la geografia.
 _EDGE_PROTECTED_PREFIXES = ("/film/", "/serie/", "/persona/", "/api/v1/")
 
 # Geo-restrizione delle pagine profonde: CosaGuardo serve l'Italia. Su /film,
@@ -817,12 +822,110 @@ def _is_datacenter_ip(ip: str) -> bool:
     return any(addr in net for net in _DATACENTER_NETS)
 
 
+# ── CHIAVE DELL'APP ─────────────────────────────────────────────────────────
+# Serve a una cosa sola: far passare l'app iOS sul geo-guard di /api/v1/.
+# App Review prova le app dalla California, e con la sola restrizione
+# geografica il revisore vedeva una home vuota e una ricerca muta.
+#
+# ⚠️ NON E' UN SEGRETO, ed e' importante non raccontarsela: la chiave viaggia
+# dentro il binario dell'app, e chi scarica l'IPA la estrae con `strings`.
+# Quello che cambia e' l'economia dell'attacco. Oggi /api/v1/ si scopre
+# leggendo il sito e si chiama da qualunque parte del mondo; con la chiave uno
+# scraper deve prima decidere di prendersela con CosaGuardo nello specifico.
+# Ferma lo scraping opportunistico, che e' quello che ci aveva travolti; non
+# ferma chi ci tiene.
+#
+# Per questo la chiave NON basta da sola: il freno vero e' _rate_limited piu'
+# sotto, che si applica ANCHE a chi la chiave ce l'ha.
+#
+# Piu' chiavi separate da virgola: una rotazione costa una release sull'App
+# Store, e finche' gli utenti non aggiornano la vecchia deve restare valida.
+_APP_KEYS = tuple(
+    k.strip() for k in os.environ.get("APP_API_KEYS", "").split(",") if k.strip()
+)
+_APP_KEY_HEADER = "x-cg-app"
+
+
+def _is_app_client(request: Request) -> bool:
+    """True se la richiesta porta una chiave dell'app valida."""
+    if not _APP_KEYS:
+        return False
+    offerta = (request.headers.get(_APP_KEY_HEADER) or "").strip()
+    if not offerta:
+        return False
+    # Si confrontano TUTTE le chiavi senza uscire alla prima che corrisponde:
+    # un confronto che si ferma prima misura un tempo diverso, e il tempo si
+    # legge da fuori.
+    esito = False
+    for k in _APP_KEYS:
+        if _hmac.compare_digest(offerta, k):
+            esito = True
+    return esito
+
+
+# ── LIMITE DI FREQUENZA SU /api/v1/ ─────────────────────────────────────────
+# Finestra scorrevole per IP. Fino a oggi l'unica difesa contro i bot era la
+# geografia: aprendo /api/v1/ all'app senza questo, non resterebbe niente.
+#
+# ⚠️ GLI OPERATORI MOBILI ITALIANI USANO CGNAT: centinaia di utenti dietro lo
+# stesso IP pubblico. Un limite stretto non ferma gli scraper, ferma gli
+# utenti in 4G. Il default e' volutamente largo: si stringe guardando i 429
+# nei log, non a indovinare.
+#
+# ⚠️ Il conteggio vive NEL PROCESSO. Con un'istanza sola e' corretto; con due
+# worker il limite reale raddoppia, e va spostato su uno store condiviso.
+from collections import deque as _deque
+
+_RL_FINESTRA = float(os.environ.get("API_RATE_WINDOW", "60"))
+_RL_MAX = int(os.environ.get("API_RATE_MAX", "300"))
+_RL_POTA_OGNI = 500
+_rl_colpi: dict = {}
+_rl_dalla_potatura = 0
+
+
+def _rate_limited(ip: str) -> bool:
+    """True se questo IP ha gia' superato il limite nella finestra corrente."""
+    global _rl_dalla_potatura
+    if not ip or _RL_MAX <= 0:
+        return False
+    ora = _time.monotonic()
+    taglio = ora - _RL_FINESTRA
+
+    coda = _rl_colpi.get(ip)
+    if coda is None:
+        coda = _deque()
+        _rl_colpi[ip] = coda
+    while coda and coda[0] < taglio:
+        coda.popleft()
+
+    # Potatura periodica: senza, il dizionario cresce per sempre con un IP per
+    # ogni visitatore mai passato di qui.
+    _rl_dalla_potatura += 1
+    if _rl_dalla_potatura >= _RL_POTA_OGNI:
+        _rl_dalla_potatura = 0
+        for k in [k for k, v in _rl_colpi.items() if not v or v[-1] < taglio]:
+            _rl_colpi.pop(k, None)
+
+    if len(coda) >= _RL_MAX:
+        return True
+    coda.append(ora)
+    return False
+
+
 @app.middleware("http")
 async def block_direct_origin(request: Request, call_next):
     # Token passato in query su una qualsiasi pagina: vale per questa richiesta
     # e viene depositato come cookie in fondo, cosi' le successive passano.
     _grant_bypass = _edge_token_matches(request.query_params.get("access", ""))
     _bypass = _grant_bypass or _has_edge_bypass(request)
+
+    _e_api = request.url.path.startswith("/api/v1/")
+
+    # Limite di frequenza PRIMA di ogni altro controllo, e valido anche per chi
+    # porta la chiave dell'app. E' il punto del disegno: il giorno in cui la
+    # chiave esce dal binario, questa riga e' l'unica cosa che resta in piedi.
+    if _e_api and not _bypass and _rate_limited(_real_client_ip(request)):
+        return _PlainTextResponse("Too Many Requests", status_code=429)
 
     if _EDGE_GUARD and not _bypass and request.url.path.startswith(_EDGE_PROTECTED_PREFIXES):
         _ip = _real_client_ip(request)
@@ -841,6 +944,17 @@ async def block_direct_origin(request: Request, call_next):
         #        NB: deve stare PRIMA del filtro datacenter, perche' gli IP
         #        Meta sono a tutti gli effetti IP di datacenter.
         if await _is_verified_meta_crawler(request, _ip):
+            return await call_next(request)
+
+        # 0-ter) Client dell'app con chiave valida, solo su /api/v1/.
+        #
+        #        ⚠️ Passa PRIMA del filtro datacenter, e non per distrazione:
+        #        la rete da cui App Review prova le app e' aziendale e puo'
+        #        benissimo risultare un IP di datacenter. Mettendolo dopo
+        #        avremmo riaperto il mondo e tenuto fuori proprio l'unico che
+        #        deve entrare. Su questa corsia il freno e' il limite di
+        #        frequenza qui sopra, non la geografia.
+        if _e_api and _is_app_client(request):
             return await call_next(request)
 
         # 1) IP di datacenter noto → blocca
