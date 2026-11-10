@@ -3371,6 +3371,36 @@ PROVIDER_META = {
 }
 
 
+# ⚠️ I provider "canale" di TMDb portano nel nome DUE marchi: il servizio vero
+# e il negozio che lo rivende. "Apple TV Plus Amazon Channel" e' Apple TV+
+# venduto dentro Amazon, non Prime Video.
+#
+# Il riconoscimento per sottostringa qui sotto incontrava "amazon" per primo e
+# lo chiamava "Prime Video": nella scheda compariva una riga "Prime Video" con
+# il logo di Apple, e due righe per lo stesso abbonamento. Non era un caso
+# isolato — OGNI "X Amazon Channel" (Paramount+, Starz, Crunchyroll, Discovery+)
+# finiva chiamato Prime Video.
+#
+# Si toglie il suffisso del negozio PRIMA di cercare il marchio, cosi' resta il
+# nome del servizio vero. L'elenco e' chiuso di proposito: un generico "channel"
+# rovinerebbe i nomi che lo contengono per davvero (Hallmark Channel).
+_SUFFISSI_CANALE = (
+    "amazon channel",
+    "apple tv channel",
+    "roku premium channel",
+)
+
+
+def _togli_suffisso_canale(nome: str) -> str:
+    """"Apple TV Plus Amazon Channel" -> "Apple TV Plus". Invariato se non e' un canale."""
+    n = (nome or "").strip()
+    basso = n.lower()
+    for suff in _SUFFISSI_CANALE:
+        if basso.endswith(suff):
+            return n[: len(n) - len(suff)].strip(" -\u2013\u2014")
+    return n
+
+
 def _normalize_provider_name(raw_name: str, pid: int = None) -> tuple[str, str]:
     """
     Restituisce (nome_canonico, colore) per un provider TMDb.
@@ -3389,7 +3419,10 @@ def _normalize_provider_name(raw_name: str, pid: int = None) -> tuple[str, str]:
         return (meta["name"], meta.get("color", "#444"))
 
     # 2. Pattern matching sul nome (case-insensitive)
-    name_lower = (raw_name or "").lower()
+    # ⚠️ Sul nome RIPULITO dal suffisso del negozio, non su quello grezzo:
+    # vedi la nota sopra _SUFFISSI_CANALE.
+    pulito = _togli_suffisso_canale(raw_name)
+    name_lower = pulito.lower()
 
     # Amazon (tutte le varianti: with Ads, Prime, Channels, ...)
     if "amazon" in name_lower or "prime video" in name_lower:
@@ -3411,8 +3444,10 @@ def _normalize_provider_name(raw_name: str, pid: int = None) -> tuple[str, str]:
     if "paramount" in name_lower:
         return ("Paramount+", "#0064FF")
 
-    # Default: usa il nome originale TMDb
-    return (raw_name or "", "#444")
+    # Default: il nome TMDb senza il suffisso del negozio. Un canale di un
+    # servizio che non sta nelle regole qui sopra esce col suo nome vero
+    # ("Starz Amazon Channel" -> "Starz") invece che con quello di Amazon.
+    return (pulito or raw_name or "", "#444")
 # ──────────────────────────────────────────────────────────────────────────
 
 
