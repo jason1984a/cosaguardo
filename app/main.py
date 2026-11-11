@@ -2085,6 +2085,33 @@ def login_page(request: Request):
         },
     )
 
+def _data_massima_nascita() -> str:
+    """La data di nascita piu' recente compatibile con i 16 anni richiesti.
+
+    ⚠️ Esiste perche' i moduli web calcolavano quel limite per ANNO, con un
+    valore scritto a mano nel template (`max="2009-12-31"`). Scritto nel 2025
+    era giusto; nel 2026 blocca nel browser chiunque sia nato nel 2010, cioe'
+    **i sedicenni veri**, e la finestra di persone respinte cresce di un anno
+    ogni anno senza che nessuno tocchi niente. Un limite di eta' si calcola,
+    non si scrive.
+
+    ⚠️ E' solo l'aiuto del modulo: la regola vera resta la verifica lato
+    server, che e' l'unica che conta e che nessun browser puo' aggirare. Per
+    questo, se qualcosa qui andasse storto, e' meglio nessun limite che un
+    limite sbagliato: un `max` troppo stretto respinge persone che hanno
+    diritto a registrarsi, e lo fa senza nemmeno un messaggio.
+    """
+    from datetime import date
+    oggi = date.today()
+    try:
+        return oggi.replace(year=oggi.year - 16).isoformat()
+    except ValueError:
+        # 29 febbraio di un anno bisestile il cui -16 non lo e'. Si arretra al
+        # 28: stessa scelta che fa il confronto lato server, che per un nato
+        # il 29 febbraio non considera compiuti i 16 anni fino al giorno dopo.
+        return oggi.replace(year=oggi.year - 16, day=28).isoformat()
+
+
 @app.get("/register", response_class=HTMLResponse)
 def register_page(request: Request):
     if request.session.get("user_id"):
@@ -2096,7 +2123,10 @@ def register_page(request: Request):
         context={
             "request": request,
             "error": None,
-            "email": ""
+            "email": "",
+            # ⚠️ Mancava. Senza, il template usava il `max` scritto a mano e
+            # il modulo rifiutava i sedicenni nati nell'anno in corso meno 16.
+            "data_max_nascita": _data_massima_nascita(),
         },
     )
 
@@ -2142,6 +2172,7 @@ def register_submit(
                 "birth_date": birth_date,
                 "content_pref": content_pref, "platforms": platforms,
                 "now": datetime.now().isoformat(),
+                "data_max_nascita": _data_massima_nascita(),
             },
         )
 
@@ -2268,6 +2299,7 @@ def completa_profilo_page(request: Request):
             "first_name": user["first_name"] if "first_name" in user.keys() else "",
             "last_name":  user["last_name"] if "last_name" in user.keys() else "",
             "now": datetime.now().isoformat(),
+            "data_max_nascita": _data_massima_nascita(),
         },
     )
 
@@ -2294,7 +2326,8 @@ def completa_profilo_submit(
             context={"request": request, "error": msg,
                      "first_name": first_name, "last_name": last_name,
                      "birth_date": birth_date, "content_pref": content_pref,
-                     "platforms": platforms, "now": datetime.now().isoformat()},
+                     "platforms": platforms, "now": datetime.now().isoformat(),
+                     "data_max_nascita": _data_massima_nascita()},
         )
 
     if not first_name.strip():
