@@ -3262,8 +3262,18 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
     # Formato ufficiale: https://geo.tv.apple.com/<region>/<path>?at=<token>&ct=<campaign>
     # Il dominio geo.tv.apple.com fa redirect automatico al market dell'utente.
     # ct = campaign token (max 40 char, no '?', '!', '&') — utile per tracking.
+    # ⚠️ Vale per ENTRAMBI i nomi Apple. Il programma Apple paga soprattutto
+    # su noleggi e acquisti, che sono esattamente le righe del negozio
+    # "Apple TV": lasciare qui il solo "Apple TV+" avrebbe tolto il link
+    # affiliato proprio a quelle, come effetto collaterale della correzione del
+    # nome qui sopra.
+    #
+    # ⚠️ Verificato l'11/11: AFFILIATE_APPLE NON e' impostata in produzione. Su
+    # /api/v1/detail/movie/299534 la riga Apple esce con "affiliato": false e
+    # col link di ricerca normale. Finche' resta cosi' questo ramo non scatta
+    # mai e i clic verso Apple non rendono niente.
     apple_token = os.environ.get("AFFILIATE_APPLE", "")
-    if provider_name == "Apple TV+" and apple_token:
+    if provider_name in ("Apple TV+", "Apple TV") and apple_token:
         return (
             f"https://geo.tv.apple.com/it/search?term={title_enc}"
             f"&at={apple_token}&ct=cosaguardo_recs"
@@ -3310,6 +3320,10 @@ _RICERCA_PIATTAFORMA = {
     "Netflix":    "https://www.netflix.com/search?q={q}",
     "Paramount+": "https://www.paramountplus.com/it/search/?query={q}",
     "Apple TV+":  "https://tv.apple.com/it/search?term={q}",
+    # Il negozio Apple vive sullo stesso dominio e la stessa ricerca lo copre.
+    # ⚠️ Senza questa riga la correzione del nome avrebbe spedito le righe di
+    # noleggio e acquisto su JustWatch.
+    "Apple TV":   "https://tv.apple.com/it/search?term={q}",
     # ⚠️ Disney+ NON va qui: /it-it/search?q= risponde "pagina non trovata".
     # Resta sulla home, dove almeno l'utente atterra sulla piattaforma giusta.
 }
@@ -3321,6 +3335,7 @@ _HOME_PIATTAFORMA = {
     "Disney+":     "https://www.disneyplus.com/it-it",
     "Paramount+":  "https://www.paramountplus.com/it/",
     "Apple TV+":   "https://tv.apple.com/it",
+    "Apple TV":    "https://tv.apple.com/it",
     "NOW":         "https://www.nowtv.it/",
     "Rakuten TV":  "https://rakuten.tv/it",
     "Chili":       "https://it.chili.com/",
@@ -3428,9 +3443,34 @@ def _normalize_provider_name(raw_name: str, pid: int = None) -> tuple[str, str]:
     if "amazon" in name_lower or "prime video" in name_lower:
         return ("Prime Video", "#00A8E0")
 
-    # Apple (qualunque variante)
-    if "apple tv" in name_lower:
+    # ⚠️ "Apple TV Plus" / "Apple TV+" e' l'ABBONAMENTO. "Apple TV" da solo
+    # e' il NEGOZIO dove si noleggia e si compra (l'ex iTunes Store): TMDb li
+    # elenca come due provider distinti, e il secondo compare sotto noleggio e
+    # acquisto. Con un unico controllo su "apple tv" il negozio diventava
+    # "Apple TV+", e la scheda scriveva **"Apple TV+ - noleggio"**: un prodotto
+    # che non esiste, perche' l'abbonamento non si noleggia a titolo.
+    # Visto dal vivo l'11/11 su /api/v1/detail/movie/299534.
+    #
+    # ⚠️ L'ordine conta: il piu' specifico per primo. Invertendoli, "Apple TV
+    # Plus" verrebbe catturato dalla riga del negozio e si romperebbe l'altro
+    # verso.
+    if "apple tv plus" in name_lower or "apple tv+" in name_lower:
         return ("Apple TV+", "#555555")
+    if "apple tv" in name_lower:
+        return ("Apple TV", "#555555")
+
+    # ⚠️ AGGIUNTA NON RICHIESTA, trovata guardando la stessa risposta.
+    # TMDb scrive "Timvision" sulle righe di noleggio e acquisto, con un
+    # provider_id diverso dal 235 che sta in PROVIDER_META: il confronto per id
+    # falliva, il nome non era in nessuna regola, e la riga usciva col nome
+    # grezzo e il colore di ripiego. Da li' nessuna tabella la riconosceva piu'
+    # — ne' gli affiliati, ne' i link diretti — e il link finiva su
+    # themoviedb.org, cioe' esattamente il ripiego JustWatch che le tabelle qui
+    # sotto esistono per evitare.
+    # ⚠️ E quando l'affiliazione TIMVision su Awin verra' attivata, quella riga
+    # NON la userebbe comunque: `awin_programs` cerca "TIMVISION" esatto.
+    if "timvision" in name_lower:
+        return ("TIMVISION", "#E60000")
 
     # Disney
     if "disney" in name_lower:
