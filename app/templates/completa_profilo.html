@@ -48,9 +48,23 @@
             <!-- DATA DI NASCITA -->
             <div>
                 <label class="reg-label">Data di nascita <span style="color:var(--muted);font-weight:400;font-size:0.8rem;">(min. 16 anni)</span></label>
+                {# ⚠️ Il limite arriva dal server e NON si scrive a mano.
+                   Prima il valore era `now[:10] if now else '2009-12-31'`,
+                   copiato da register.html. Qui pero' `now` veniva passato da
+                   entrambe le rotte, quindi il ramo di scorta non scattava mai
+                   e il limite era sempre OGGI: cioe' nessun limite: il modulo
+                   accettava la data di ieri e lasciava tutto il no al server.
+                   (In register.html lo stesso codice falliva al contrario,
+                   bloccando i sedicenni veri. Stessa riga, due danni opposti,
+                   e il motivo e' lo stesso: un limite di eta' si calcola.)
+                   Se la variabile mancasse si preferisce NESSUN limite a uno
+                   sbagliato: la verifica lato server e' quella che conta, e un
+                   `max` troppo stretto respinge in silenzio chi ha diritto a
+                   registrarsi. Il `min` evita anni battuti per sbaglio. #}
                 <input type="date" name="birth_date" required
                     value="{{ birth_date if birth_date else '' }}"
-                    max="{{ now[:10] if now else '2009-12-31' }}"
+                    {% if data_max_nascita %}max="{{ data_max_nascita }}"{% endif %}
+                    min="1900-01-01"
                     class="reg-input" autocomplete="bday"
                     style="color-scheme:dark;">
             </div>
