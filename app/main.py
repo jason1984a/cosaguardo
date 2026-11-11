@@ -6372,7 +6372,19 @@ def api_novita(request: Request, tipo: str = "film", limite: int = 10):
 @app.get("/api/v1/trending", response_class=JSONResponse)
 def api_trending(request: Request, limit: int = Query(12)):
     """
-    I titoli piu' visti del momento, per la striscia in cima all'app.
+    I titoli DI TENDENZA OGGI, per la striscia in cima all'app.
+
+    ⚠️ Questa riga diceva "i piu' visti del momento". Non e' quello che sono:
+    la fonte e' `trending/all/day` di TMDb, cioe' popolarita' del giorno —
+    ricerche e visite di scheda mescolate — e ne' TMDb ne' noi sappiamo cosa
+    la gente abbia davvero guardato.
+    ⚠️ E soprattutto non sono "i piu' apprezzati": quelli esistono per davvero
+    e sono un'altra cosa (`get_top_rated_recent`: usciti negli ultimi 6 mesi,
+    almeno 500 voti, media >= 7.0), ed e' cio' che il sito mostra in home sotto
+    quel nome. L'app iOS aveva copiato quell'etichetta su QUESTI dati, e per
+    mesi ha promesso una classifica di qualita' mostrando una di popolarita'.
+    Corretto in 1.0.1. Una descrizione sbagliata non resta dov'e' scritta: da
+    qui era arrivata fino allo schermo.
 
     Stessa fonte di /api/v1/daily — get_trending_cached, che ha la sua cache e
     non tocca il DB — ma restituisce la lista invece del singolo titolo del
