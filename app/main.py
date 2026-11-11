@@ -1122,6 +1122,202 @@ async def perf_logger(request: Request, call_next):
         print(f"[perf] {request.method} {path} status={status} dur={dur_ms}ms ua={ua_kind}{slow_marker}")
 
 
+# ─── CONTATORE UTM LATO SERVER ──────────────────────────────────────────
+# Perche' esiste: il volume delle campagne NON si puo' leggere da GA4.
+# `loadGA4()` parte solo se il visitatore accetta i cookie, e il traffico a
+# pagamento arriva dentro il browser interno di Instagram e Facebook, dove il
+# localStorage spesso non persiste e il banner ricompare ogni volta. Misurato
+# l'11/11: Meta consegnava 125 atterraggi al giorno sul sito e GA4 ne vedeva
+# 6. La quota visibile era scesa dal 17% al 5% senza che il traffico calasse.
+#
+# ⚠️ QUESTO CONTATORE NON IDENTIFICA NESSUNO, ed e' esattamente il motivo per
+# cui non ha bisogno del consenso: non salva IP, non salva user-agent, non
+# salva utente, non legge e non scrive cookie. Salva solo QUANTI arrivi ha
+# avuto una campagna in un giorno. Chi un domani fosse tentato di aggiungerci
+# l'IP "per fare meglio" trasformerebbe uno strumento che non ha bisogno di
+# consenso in uno che ne ha bisogno: non farlo.
+#
+# Per disattivare: UTM_COUNTER=0.
+_UTM_ATTIVO = os.environ.get("UTM_COUNTER", "1") != "0"
+_UTM_FLUSH_SECONDI = int(os.environ.get("UTM_FLUSH_SECONDI", "60"))
+_UTM_MAX_CHIAVI = 500      # tetto di cardinalita' in memoria
+_UTM_MAX_LUNGHEZZA = 64    # tetto per ogni singolo valore
+
+# ⚠️ Un annuncio puo' atterrare SENZA utm e col solo identificativo del clic.
+# E' una delle ipotesi aperte sul crollo di meta/cpc in GA4, ed e' il motivo
+# per cui questi si contano a parte invece di ignorarli: se la riga "(fbclid)"
+# cresce mentre "meta" resta a zero, la risposta e' li'.
+_UTM_PARAMETRI_CLIC = ("fbclid", "gclid", "ttclid", "msclkid")
+
+_UTM_DDL = """
+CREATE TABLE IF NOT EXISTS utm_arrivi (
+    giorno    TEXT    NOT NULL,
+    sorgente  TEXT    NOT NULL,
+    mezzo     TEXT    NOT NULL,
+    campagna  TEXT    NOT NULL,
+    contenuto TEXT    NOT NULL,
+    arrivi    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (giorno, sorgente, mezzo, campagna, contenuto)
+)
+"""
+
+_utm_buffer: dict = {}
+_utm_lock = _perf_threading.Lock()
+
+
+def _utm_db():
+    import sqlite3 as _sql
+    return _sql.connect(
+        os.environ.get("DATABASE_PATH") or "app/cosaguardo.db", timeout=10
+    )
+
+
+def _utm_pulisci(valore) -> str:
+    """Normalizza un valore UTM. Vuoto -> stringa vuota."""
+    v = (valore or "").strip().lower()[:_UTM_MAX_LUNGHEZZA]
+    # Solo caratteri prevedibili: un utm_campaign arriva da fuori e puo'
+    # contenere qualunque cosa, compresa roba messa li' per rompere qualcosa.
+    return "".join(c if (c.isalnum() or c in "-_.+ ") else "_" for c in v).strip()
+
+
+def _utm_chiave(request: Request):
+    """(sorgente, mezzo, campagna, contenuto) se la richiesta porta un
+    riferimento di campagna, altrimenti None."""
+    if not request.url.query:
+        return None
+    q = request.query_params
+    sorgente = _utm_pulisci(q.get("utm_source"))
+    if sorgente:
+        return (
+            sorgente,
+            _utm_pulisci(q.get("utm_medium")) or "(non impostato)",
+            _utm_pulisci(q.get("utm_campaign")) or "(non impostato)",
+            _utm_pulisci(q.get("utm_content")) or "(non impostato)",
+        )
+    for par in _UTM_PARAMETRI_CLIC:
+        if q.get(par):
+            return (f"({par})", "(senza utm)", "(senza utm)", "(senza utm)")
+    return None
+
+
+def _utm_oggi() -> str:
+    """Data di Roma, non UTC: i giorni devono combaciare con quelli di Meta."""
+    try:
+        from zoneinfo import ZoneInfo
+        from datetime import datetime as _dt
+        return _dt.now(ZoneInfo("Europe/Rome")).strftime("%Y-%m-%d")
+    except Exception:
+        from datetime import datetime as _dt
+        return _dt.utcnow().strftime("%Y-%m-%d")
+
+
+def _utm_registra(chiave) -> None:
+    k = (_utm_oggi(),) + chiave
+    with _utm_lock:
+        if k not in _utm_buffer and len(_utm_buffer) >= _UTM_MAX_CHIAVI:
+            return  # tetto raggiunto: meglio perdere una campagna ignota che la RAM
+        _utm_buffer[k] = _utm_buffer.get(k, 0) + 1
+
+
+def _utm_flush() -> int:
+    """Scarica il buffer su disco. Ritorna quante righe ha scritto."""
+    with _utm_lock:
+        if not _utm_buffer:
+            return 0
+        da_scrivere = list(_utm_buffer.items())
+        _utm_buffer.clear()
+    try:
+        conn = _utm_db()
+        try:
+            conn.execute(_UTM_DDL)
+            conn.executemany(
+                "INSERT INTO utm_arrivi "
+                "(giorno, sorgente, mezzo, campagna, contenuto, arrivi) "
+                "VALUES (?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(giorno, sorgente, mezzo, campagna, contenuto) "
+                "DO UPDATE SET arrivi = arrivi + excluded.arrivi",
+                [(g, so, me, ca, co, n) for (g, so, me, ca, co), n in da_scrivere],
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return len(da_scrivere)
+    except Exception as e:
+        # ⚠️ I conteggi tornano nel buffer invece di sparire. Perderli in
+        # silenzio darebbe un grafico che scende senza che nessuno sappia
+        # perche' — cioe' lo stesso identico problema che questo contatore
+        # esiste per risolvere.
+        with _utm_lock:
+            for k, n in da_scrivere:
+                _utm_buffer[k] = _utm_buffer.get(k, 0) + n
+        log.warning("utm_flush fallito, conteggi rimessi in coda: %s", e)
+        return 0
+
+
+def _utm_worker():
+    import time as _t
+    while True:
+        _t.sleep(_UTM_FLUSH_SECONDI)
+        try:
+            _utm_flush()
+        except Exception:
+            pass
+
+
+@app.on_event("startup")
+def _utm_avvia():
+    if not _UTM_ATTIVO:
+        return
+    try:
+        conn = _utm_db()
+        try:
+            conn.execute(_UTM_DDL)
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log.warning("utm: creazione tabella fallita: %s", e)
+    import threading as _th
+    _th.Thread(target=_utm_worker, daemon=True).start()
+    log.info("utm: contatore avviato (flush ogni %ss)", _UTM_FLUSH_SECONDI)
+
+
+@app.on_event("shutdown")
+def _utm_chiudi():
+    # ⚠️ Il processo si riavvia DA SOLO ogni AUTO_RESTART_HOURS (6 di default).
+    # Senza questo si perderebbe fino a un minuto di conteggi quattro volte al
+    # giorno, sempre alla stessa ora: un buco regolare che sembrerebbe un
+    # andamento e non un difetto.
+    try:
+        n = _utm_flush()
+        if n:
+            log.info("utm: %d righe scaricate allo spegnimento", n)
+    except Exception:
+        pass
+
+
+@app.middleware("http")
+async def utm_counter(request: Request, call_next):
+    if not _UTM_ATTIVO or request.method != "GET":
+        return await call_next(request)
+
+    chiave = _utm_chiave(request)
+    response = await call_next(request)
+    if chiave is None:
+        return response
+
+    try:
+        # Solo pagine vere servite davvero. Un 403 del geo-guard o un asset
+        # non sono un atterraggio.
+        if response.status_code < 400 and not _is_bot(request):
+            if "text/html" in (response.headers.get("content-type") or ""):
+                _utm_registra(chiave)
+    except Exception:
+        # Volutamente broad: un contatore non deve MAI poter rompere la pagina.
+        pass
+    return response
+
+
 # ─── HEAD → GET fallback middleware ──────────────────────────────────────
 # UptimeRobot (free tier) e molti uptime checker mandano richieste HEAD per
 # risparmiare banda. FastAPI di default non risponde alle HEAD su route @app.get
@@ -1216,6 +1412,15 @@ async def cloudflare_cache_headers(request: Request, call_next):
 
     # Solo GET (POST/PUT/DELETE mai cachabili)
     if request.method != "GET":
+        return response
+
+    # ⚠️ Gli atterraggi con UTM o identificativo di clic NON vanno in cache
+    # di bordo. Cloudflare tiene la query string dentro la chiave di cache, e
+    # l'URL di un annuncio e' lo STESSO per tutti quelli che ci cliccano:
+    # dopo il primo arrivo la pagina uscirebbe dal bordo, il server non la
+    # vedrebbe piu' e il contatore conterebbe 1 al giorno per campagna.
+    # Sono ~125 atterraggi al giorno, cioe' niente in termini di banda.
+    if _utm_chiave(request) is not None:
         return response
 
     # Solo se path è in whitelist cachable
@@ -8475,6 +8680,72 @@ def admin_run_alerts(request: Request):
     if not _check_admin(request):
         raise HTTPException(status_code=403, detail="non autorizzato")
     return check_and_notify_alerts()
+
+
+@app.get("/admin/utm-stats", response_class=JSONResponse)
+def admin_utm_stats(request: Request, giorni: int = 30, sorgente: str = ""):
+    """Arrivi per campagna, giorno per giorno. Solo admin.
+
+    Questo e' il numero che NON dipende dal consenso ai cookie: va confrontato
+    con i landing page view di Meta, non con le sessioni di GA4.
+    """
+    if not _check_admin(request):
+        raise HTTPException(status_code=403, detail="non autorizzato")
+
+    giorni = max(1, min(int(giorni or 30), 365))
+    try:
+        from zoneinfo import ZoneInfo
+        from datetime import datetime as _dt, timedelta as _td
+        da = (_dt.now(ZoneInfo("Europe/Rome")) - _td(days=giorni - 1)).strftime("%Y-%m-%d")
+    except Exception:
+        from datetime import datetime as _dt, timedelta as _td
+        da = (_dt.utcnow() - _td(days=giorni - 1)).strftime("%Y-%m-%d")
+
+    sql = ("SELECT giorno, sorgente, mezzo, campagna, contenuto, arrivi "
+           "FROM utm_arrivi WHERE giorno >= ?")
+    par = [da]
+    if sorgente:
+        sql += " AND sorgente = ?"
+        par.append(_utm_pulisci(sorgente))
+    sql += " ORDER BY giorno DESC, arrivi DESC"
+
+    righe = []
+    try:
+        conn = _utm_db()
+        try:
+            conn.execute(_UTM_DDL)
+            for r in conn.execute(sql, par).fetchall():
+                righe.append({"giorno": r[0], "sorgente": r[1], "mezzo": r[2],
+                              "campagna": r[3], "contenuto": r[4], "arrivi": r[5]})
+        finally:
+            conn.close()
+    except Exception as e:
+        log.exception("admin_utm_stats: %s", e)
+        return {"errore": str(e)}
+
+    # Totali per sorgente/mezzo e per giorno, che e' quello che si guarda.
+    per_fonte: dict = {}
+    per_giorno: dict = {}
+    for r in righe:
+        k = f"{r['sorgente']} / {r['mezzo']}"
+        per_fonte[k] = per_fonte.get(k, 0) + r["arrivi"]
+        per_giorno[r["giorno"]] = per_giorno.get(r["giorno"], 0) + r["arrivi"]
+
+    with _utm_lock:
+        in_attesa = sum(_utm_buffer.values())
+
+    return {
+        "da": da,
+        "giorni": giorni,
+        "totale": sum(r["arrivi"] for r in righe),
+        # ⚠️ Conteggi non ancora scritti su disco: senza questa riga un
+        # controllo fatto subito dopo un clic sembrerebbe dire che non e'
+        # arrivato niente.
+        "in_attesa_di_scrittura": in_attesa,
+        "per_fonte": dict(sorted(per_fonte.items(), key=lambda x: -x[1])),
+        "per_giorno": dict(sorted(per_giorno.items(), reverse=True)),
+        "righe": righe,
+    }
 
 
 @app.get("/admin", response_class=HTMLResponse)
