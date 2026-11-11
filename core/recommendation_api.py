@@ -3356,6 +3356,7 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
             # quindi indirizziamo i click di Sky Go allo stesso programma Awin di NOW.
             "Sky Go":    (os.environ.get("AWIN_MID_NOW", ""),       "https://www.nowtv.it/"),
             "TIMVISION": (os.environ.get("AWIN_MID_TIMVISION", ""), "https://www.timvision.it/"),
+            "DAZN":      (os.environ.get("AWIN_MID_DAZN", ""),      "https://www.dazn.com/it-IT/"),
         }
         if provider_name in awin_programs:
             ref = _awin_clickref(tmdb_id, title)
@@ -3375,6 +3376,7 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
             link_ufficiali = {
                 "TIMVISION": os.environ.get("AWIN_LINK_TIMVISION", ""),
                 "NOW":       os.environ.get("AWIN_LINK_NOW", ""),
+                "DAZN":      os.environ.get("AWIN_LINK_DAZN", ""),
             }
             ufficiale = link_ufficiali.get(provider_name, "").strip()
             if ufficiale:
@@ -3426,6 +3428,10 @@ _HOME_PIATTAFORMA = {
     "Rakuten TV":  "https://rakuten.tv/it",
     "Chili":       "https://it.chili.com/",
     "TIMVISION":   "https://www.timvision.it/",
+    # ⚠️ Solo la home, NON una ricerca: il catalogo DAZN e' fatto di eventi
+    # con una data, non di titoli, e un URL di ricerca inventato finirebbe in
+    # pagina di errore. Vale la regola scritta sopra questa tabella.
+    "DAZN":        "https://www.dazn.com/it-IT/",
     "Canal+":      "https://www.canalplus.com/",
     "Amazon Video": "https://www.primevideo.com/",
     "Prime Video": "https://www.primevideo.com/",
@@ -3557,6 +3563,17 @@ def _normalize_provider_name(raw_name: str, pid: int = None) -> tuple[str, str]:
     # NON la userebbe comunque: `awin_programs` cerca "TIMVISION" esatto.
     if "timvision" in name_lower:
         return ("TIMVISION", "#E60000")
+
+    # ⚠️ DAZN non sta in PROVIDER_META e il suo provider_id su TMDb non e'
+    # verificato: senza questa regola la riga uscirebbe col nome grezzo e il
+    # colore di ripiego, e da li' nessuna tabella a valle la riconoscerebbe —
+    # ne' il link diretto ne' l'affiliazione. E' lo stesso difetto che aveva
+    # TIMVISION, trovato il giorno prima dell'approvazione.
+    #
+    # Il colore e' il giallo del marchio: se non corrisponde al brand kit e'
+    # solo cosmetica, si cambia qui e basta.
+    if "dazn" in name_lower:
+        return ("DAZN", "#F8FF13")
 
     # Disney
     if "disney" in name_lower:
