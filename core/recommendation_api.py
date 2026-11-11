@@ -3233,6 +3233,67 @@ def get_popular_by_genre_tmdb(genre_id: int, content_type: str = "movie", limit:
 #   AFFILIATE_APPLE    = il_tuo_token_apple
 # Se non configurati, i link puntano direttamente alle piattaforme (no commissione).
 
+# ── clickref: da QUALE pagina e' partito il clic ───────────────────────────
+# Awin lo riporta nei report accanto a ogni transazione. Finora sapevamo
+# quanti clic arrivavano, non da dove: con questo si scopre quali schede
+# convertono davvero, e quindi su cosa vale la pena lavorare.
+#
+# ⚠️ NIENTE DATI PERSONALI QUI DENTRO, MAI. Il clickref viaggia nell'URL e
+# finisce nei report dell'advertiser, cioe' fuori da casa nostra. Un id TMDb
+# identifica un titolo, non una persona: va bene. Un id utente, una email o
+# un identificativo di sessione no, in nessun caso e per nessun motivo.
+def _awin_clickref(tmdb_id=None, title: str = "") -> str:
+    """Etichetta corta e stabile per capire da dove arriva il clic."""
+    if tmdb_id:
+        # "t299534" — compatto, univoco, e si risale al titolo quando serve.
+        try:
+            return f"t{int(tmdb_id)}"
+        except (TypeError, ValueError):
+            pass
+    if title:
+        # Ripiego quando l'id non c'e' (ricerca, strisce). Solo caratteri
+        # sicuri in un URL, e corto: Awin tronca le etichette lunghe.
+        #
+        # ⚠️ Non basta `isalnum()`: per Python la "è" di "C'è ancora domani" e'
+        # alfanumerica, e finirebbe cosi' com'e' dentro un URL. Il browser la
+        # percentualizza, il report dell'advertiser mostra una cosa illeggibile
+        # e nel caso peggiore l'etichetta si rompe.
+        #
+        # Si traslittera invece di buttarla via: "è" → "e", non "-". Altrimenti
+        # "C'e' ancora domani" diventerebbe "c-ancora-domani", che nel report
+        # non si riconosce — e un'etichetta illeggibile vale quanto nessuna.
+        import unicodedata
+        piatto = (
+            unicodedata.normalize("NFKD", title.lower())
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+        pulito = "".join(c if c.isalnum() else "-" for c in piatto)
+        while "--" in pulito:
+            pulito = pulito.replace("--", "-")
+        return pulito.strip("-")[:40] or ""
+    return ""
+
+
+def _con_clickref(url: str, ref: str) -> str:
+    """Infila il clickref in un link Awin.
+
+    ⚠️ I link forniti dal program manager finiscono gia' con `clickref=`
+    VUOTO. Aggiungerne un altro in coda creerebbe due parametri uguali, e
+    quale dei due vinca lo decide il loro server: si riempie quello che c'e'
+    invece di accodarne un secondo.
+    """
+    if not url or not ref:
+        return url
+    if "clickref=" in url:
+        prima, dopo = url.split("clickref=", 1)
+        coda = dopo.split("&", 1)
+        resto = ("&" + coda[1]) if len(coda) > 1 else ""
+        return f"{prima}clickref={ref}{resto}"
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}clickref={ref}"
+
+
 def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = None) -> str:
     """
     Costruisce link affiliato per la piattaforma.
@@ -3297,10 +3358,35 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
             "TIMVISION": (os.environ.get("AWIN_MID_TIMVISION", ""), "https://www.timvision.it/"),
         }
         if provider_name in awin_programs:
+            ref = _awin_clickref(tmdb_id, title)
+
+            # ⚠️ LINK UFFICIALI del program manager: quando ci sono vincono sul
+            # link costruito a mano. Sono legati a una creativita' precisa ed
+            # e' su quelli che l'advertiser fa l'attribuzione.
+            #
+            # ⚠️ Qui va il link alla HOME della piattaforma, NON quello di una
+            # promozione. Sulle schede l'utente sta cercando dove vedere un
+            # titolo: mandarlo su un'offerta bundle vuol dire farlo atterrare
+            # su una cosa che non c'entra. I link promozionali hanno senso
+            # dove la domanda e' "quale abbonamento prendo", non qui.
+            #
+            # Stanno in variabile d'ambiente perche' li cambia il partner, non
+            # noi: cosi' si aggiornano senza un deploy.
+            link_ufficiali = {
+                "TIMVISION": os.environ.get("AWIN_LINK_TIMVISION", ""),
+                "NOW":       os.environ.get("AWIN_LINK_NOW", ""),
+            }
+            ufficiale = link_ufficiali.get(provider_name, "").strip()
+            if ufficiale:
+                return _con_clickref(ufficiale, ref)
+
             mid, dest_url = awin_programs[provider_name]
             if mid:
                 dest_enc = urllib.parse.quote_plus(dest_url)
-                return f"https://www.awin1.com/cread.php?awinmid={mid}&awinaffid={awin_id}&ued={dest_enc}"
+                return _con_clickref(
+                    f"https://www.awin1.com/cread.php?awinmid={mid}&awinaffid={awin_id}&ued={dest_enc}",
+                    ref,
+                )
 
     return ""  # Nessun affiliato configurato → si usa _link_diretto_piattaforma
 
