@@ -1,0 +1,467 @@
+meta:
+  compilato: 2026-11-11
+  stagione: 2026/27
+  scadenza_avviso_giorni: 90
+competizioni:
+- slug: serie-a
+  nome: Serie A
+  sport: calcio
+  verificato: 2026-11-11
+  affidabilita: alta
+  piattaforme:
+  - nome: DAZN
+    cosa: tutte le 380 partite, 266 in esclusiva
+    chiaro: false
+  - nome: Sky Go
+    cosa: 114 partite in co-esclusiva, 3 per giornata
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse partite di Sky, senza parabola
+    chiaro: false
+  note: 'Contratto fino alla stagione 2028/29. Per vedere TUTTO servono due abbonamenti: e'' il punto
+    che la pagina deve dire subito, ed e'' anche quello che rende utile il confronto.'
+  fonti:
+  - https://it.wikipedia.org/wiki/Diritti_televisivi_del_calcio_in_Italia
+  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+- slug: champions-league
+  nome: UEFA Champions League
+  sport: calcio
+  verificato: 2026-11-11
+  affidabilita: alta
+  piattaforme:
+  - nome: Sky Go
+    cosa: 185 partite su 203, finale compresa
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse partite di Sky
+    chiaro: false
+  - nome: Prime Video
+    cosa: 18 partite, la scelta del mercoledi' sera
+    chiaro: false
+  - nome: TV8
+    cosa: una partita per mercoledi', scelta fra i grandi club stranieri
+    chiaro: true
+  note: '⚠️ La partita in chiaro su TV8 NON e'' quella che interessa di piu'' agli italiani: Sky sceglie
+    fra i grandi club stranieri, e le gare di Inter, Napoli, Roma e Como restano a pagamento. L''eccezione:
+    se una squadra italiana arriva in semifinale, quella partita DEVE andare in chiaro. E'' la cosa piu''
+    utile che la pagina possa dire, perche'' e'' esattamente il malinteso in cui cade chi cerca "Champions
+    in chiaro". Le 18 partite Prime salgono a 19 dal 2027/28. ⚠️ NON e'' su Mediaset Infinity: quello
+    era il ciclo 2021-2024.'
+  fonti:
+  - https://www.calcioefinanza.it/2026/08/27/dove-si-vedra-champions-league-2026-2027-tutte-le-informazioni/
+  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+  - https://it.wikipedia.org/wiki/Diritti_televisivi_del_calcio_in_Italia
+- slug: europa-league
+  nome: UEFA Europa League
+  sport: calcio
+  verificato: 2026-11-11
+  affidabilita: media
+  piattaforme:
+  - nome: Sky Go
+    cosa: tutte le partite
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse partite di Sky
+    chiaro: false
+  fonti:
+  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+- slug: conference-league
+  nome: UEFA Conference League
+  sport: calcio
+  verificato: 2026-11-11
+  affidabilita: media
+  piattaforme:
+  - nome: Sky Go
+    cosa: tutte le partite
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse partite di Sky
+    chiaro: false
+  fonti:
+  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+- slug: coppa-italia
+  nome: Coppa Italia
+  sport: calcio
+  verificato: 2026-11-11
+  affidabilita: alta
+  piattaforme:
+  - nome: Mediaset Infinity
+    cosa: tutte le partite, in diretta esclusiva
+    chiaro: true
+  note: 'Diritti estesi fino al 2027. In chiaro: e'' il punto da mettere in alto.'
+  fonti:
+  - https://it.wikipedia.org/wiki/Diritti_televisivi_del_calcio_in_Italia
+  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+- slug: serie-b
+  nome: Serie B
+  sport: calcio
+  verificato: 2026-11-11
+  affidabilita: media
+  piattaforme:
+  - nome: DAZN
+    cosa: le partite del campionato
+    chiaro: false
+  - nome: Prime Video
+    cosa: tramite il canale LaB Channel
+    chiaro: false
+  note: '⚠️ L''intesa DAZN risultava valida "fino a questa stagione": da riverificare prima di pubblicare.'
+  fonti:
+  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+- slug: premier-league
+  nome: Premier League
+  sport: calcio
+  verificato: 2026-11-11
+  affidabilita: media
+  piattaforme:
+  - nome: Sky Go
+    cosa: le partite del campionato inglese
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse partite di Sky
+    chiaro: false
+  note: Contratto fino al 2027/28.
+  fonti:
+  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+- slug: liga
+  nome: LaLiga
+  sport: calcio
+  verificato: 2026-11-11
+  affidabilita: media
+  piattaforme:
+  - nome: DAZN
+    cosa: il campionato spagnolo
+    chiaro: false
+  note: Contratto fino al 2029. Copa del Rey anch'essa su DAZN, fino al 2028/29.
+  fonti:
+  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+- slug: bundesliga
+  nome: Bundesliga
+  sport: calcio
+  verificato: 2026-11-11
+  affidabilita: media
+  piattaforme:
+  - nome: Sky Go
+    cosa: il campionato tedesco
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse partite di Sky
+    chiaro: false
+  note: Contratto fino al 2028/29.
+  fonti:
+  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+- slug: formula-1
+  nome: Formula 1
+  sport: motori
+  verificato: 2026-11-11
+  affidabilita: alta
+  piattaforme:
+  - nome: Sky Go
+    cosa: tutti i 24 GP e le 6 sprint, in esclusiva
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse gare di Sky
+    chiaro: false
+  - nome: TV8
+    cosa: una selezione di gare (il GP di Monza e' confermato)
+    chiaro: true
+  note: 'Sky ha rinnovato l''esclusiva fino al 2032. ⚠️ Il NUMERO esatto di gare su TV8 e se siano in
+    diretta o differita non e'' confermato dalle fonti consultate: da chiarire prima di scriverlo. E''
+    esattamente il dato che la gente cerca ("quali gare in chiaro"), quindi vale la pena trovarlo.'
+  fonti:
+  - https://www.motorbox.com/auto/sport/f1/news/f1-motogp-stagione-motori-2026-diretta-su-sky-now-chiaro-tv8
+  - https://www.automoto.it/formula1/f1-diritti-tv-sky-rinnovo-ufficiale-2032-now-tv8.html
+- slug: motogp
+  nome: MotoGP
+  sport: motori
+  verificato: 2026-11-11
+  affidabilita: media
+  piattaforme:
+  - nome: Sky Go
+    cosa: tutti i 22 GP e le sprint, in esclusiva
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse gare di Sky
+    chiaro: false
+  note: ⚠️ Presenza di gare in chiaro su TV8 non confermata dalle fonti consultate per il 2026. Da verificare.
+  fonti:
+  - https://www.motorbox.com/auto/sport/f1/news/f1-motogp-stagione-motori-2026-diretta-su-sky-now-chiaro-tv8
+- slug: australian-open
+  nome: Australian Open
+  articolo: gli
+  sport: tennis
+  verificato: '2026-11-12'
+  affidabilita: alta
+  quando: 'A gennaio. Melbourne è dieci ore avanti, quindi in Italia si gioca di notte e di mattina: il
+    programma diurno parte verso l''una di notte, quello serale verso le nove del mattino.'
+  piattaforme:
+  - nome: DAZN
+    cosa: il canale Eurosport è compreso nell'abbonamento
+    chiaro: false
+    accesso: inclusa
+  - nome: TIMVISION
+    cosa: il canale Eurosport è compreso nell'abbonamento
+    chiaro: false
+    accesso: inclusa
+  - nome: Prime Video
+    cosa: serve il canale Eurosport fra i Prime Video Channels, a pagamento
+    chiaro: false
+    accesso: inclusa
+  - nome: Discovery+
+    cosa: tutto il torneo
+    chiaro: false
+    accesso: diretta
+  - nome: HBO Max
+    cosa: tutto il torneo, con i canali Eurosport
+    chiaro: false
+    accesso: diretta
+  - nome: Nove
+    cosa: semifinali e finali, ma solo se ci sono italiani in gara
+    chiaro: true
+    accesso: chiaro
+  spiegazione: 'Se cercavi l''Australian Open su Sky non lo troverai: lo Slam australiano è passato a
+    Eurosport in esclusiva. È il cambio che spiazza più persone, perché per anni è stato su Sky. Oggi
+    Eurosport si raggiunge da più strade, e se hai già DAZN o TIMVISION ce l''hai incluso senza pagare
+    altro.'
+  nota: 'Il chiaro su Nove è una SCELTA COMMERCIALE di Discovery, non un obbligo: l''AGCOM ha inserito
+    semifinali e finali fra gli eventi di interesse pubblico, ma l''obbligo scatta solo dal prossimo ciclo,
+    dopo la scadenza del contratto nel 2031. Nel 2026 è andata così; per l''edizione successiva va RIVERIFICATO
+    e non dato per scontato. Eurosport incluso per abbonati DAZN/TIMVISION è il punto commercialmente
+    più importante del file.'
+  faq:
+  - d: L'Australian Open si vede su Sky?
+    r: No. Dal 2026 è su Eurosport in esclusiva, quindi su Discovery+, HBO Max o tramite i canali Eurosport
+      inclusi in DAZN e TIMVISION.
+  - d: Si vede qualcosa in chiaro?
+    r: 'Su Nove, ma solo semifinali e finali e solo se ci sono italiani in gara. È una scelta dell''emittente,
+      non un obbligo di legge: non darla per scontata.'
+  - d: Ho già DAZN, devo pagare altro?
+    r: No. Il canale Eurosport è compreso nell'abbonamento DAZN, come in quello TIMVISION.
+  fonti:
+  - https://it.wikipedia.org/wiki/Australian_Open
+  - https://www.eurosport.it/
+- slug: roland-garros
+  nome: Roland Garros
+  articolo: il
+  sport: tennis
+  verificato: '2026-11-12'
+  affidabilita: alta
+  quando: 'Fra fine maggio e inizio giugno. Parigi è nello stesso fuso orario dell''Italia: si gioca dalle
+    11 del mattino fino a sera.'
+  piattaforme:
+  - nome: DAZN
+    cosa: il canale Eurosport è compreso nell'abbonamento
+    chiaro: false
+    accesso: inclusa
+  - nome: TIMVISION
+    cosa: il canale Eurosport è compreso nell'abbonamento
+    chiaro: false
+    accesso: inclusa
+  - nome: Prime Video
+    cosa: serve il canale Eurosport fra i Prime Video Channels, a pagamento
+    chiaro: false
+    accesso: inclusa
+  - nome: Discovery+
+    cosa: tutto il torneo
+    chiaro: false
+    accesso: diretta
+  - nome: HBO Max
+    cosa: tutto il torneo, con i canali Eurosport
+    chiaro: false
+    accesso: diretta
+  spiegazione: 'Il Roland Garros è su Eurosport, che è il riferimento storico dello Slam francese. Non
+    c''è niente in chiaro: se non hai già DAZN o TIMVISION, la strada più diretta è Discovery+.'
+  nota: Nessuna copertura in chiaro confermata per il 2026. Se in futuro arrivasse un obbligo AGCOM, va
+    aggiornato.
+  faq:
+  - d: Il Roland Garros si vede in chiaro?
+    r: No, serve un abbonamento a una delle piattaforme che trasmettono Eurosport.
+  - d: Ho già TIMVISION, mi basta?
+    r: Sì. Il canale Eurosport è compreso nell'abbonamento TIMVISION.
+  fonti:
+  - https://it.wikipedia.org/wiki/Open_di_Francia
+  - https://www.eurosport.it/
+- slug: wimbledon
+  nome: Wimbledon
+  articolo: ''
+  sport: tennis
+  verificato: '2026-11-12'
+  affidabilita: alta
+  quando: 'Fra fine giugno e metà luglio. Londra è un''ora indietro rispetto all''Italia: i campi aprono
+    verso mezzogiorno, il Centrale verso le due e mezza del pomeriggio.'
+  piattaforme:
+  - nome: Sky Go
+    cosa: tutto il torneo, se sei già cliente Sky
+    chiaro: false
+    accesso: inclusa
+  - nome: NOW
+    cosa: tutto il torneo, senza parabola e senza vincoli
+    chiaro: false
+    accesso: diretta
+  spiegazione: Wimbledon è di Sky in esclusiva, e lo resta fino al 2030. Se non sei cliente Sky la strada
+    è NOW, che è lo stesso contenuto in streaming senza parabola. In chiaro non c'è nulla.
+  nota: Contratto Sky fino al 2030. Nessun obbligo di chiaro.
+  faq:
+  - d: Wimbledon si vede in chiaro in Italia?
+    r: No. I diritti sono di Sky in esclusiva fino al 2030.
+  - d: Qual è il modo più semplice se non ho Sky?
+    r: 'NOW: è il servizio in streaming di Sky, si attiva subito e non richiede parabola né contratti
+      lunghi.'
+  fonti:
+  - https://it.wikipedia.org/wiki/Torneo_di_Wimbledon
+  - https://www.sky.it/sport/tennis
+- slug: us-open
+  nome: US Open
+  articolo: gli
+  sport: tennis
+  verificato: '2026-11-12'
+  affidabilita: alta
+  quando: 'Fra fine agosto e inizio settembre. New York è sei ore indietro: il programma diurno parte
+    verso le cinque del pomeriggio, quello serale verso l''una di notte.'
+  piattaforme:
+  - nome: SuperTennis
+    cosa: tutto il torneo, gratis sul canale 64 del digitale terrestre
+    chiaro: true
+    accesso: chiaro
+  - nome: Sky Go
+    cosa: il torneo, se sei già cliente Sky
+    chiaro: false
+    accesso: inclusa
+  - nome: NOW
+    cosa: il torneo, in streaming
+    chiaro: false
+    accesso: diretta
+  spiegazione: 'Gli US Open si vedono gratis. SuperTennis ne ha i diritti in esclusiva per l''Italia fino
+    al 2030 e li trasmette in chiaro, sul canale 64 del digitale terrestre: non serve abbonarsi a niente.
+    Sky lo manda in onda in sub-licenza, quindi è un''alternativa se sei già cliente, non una necessità.'
+  nota: 'SuperTennis = canale gratuito FTA (LCN 64). SuperTenniX e'' l''aggiunta in streaming a pagamento:
+    NON confonderli, nella prima stesura erano la stessa riga. Sky in sub-licenza almeno fino al 2027.
+    ⚠️ NOW non e'' confermato da fonte diretta: e'' dedotto dal fatto che porta i canali Sky Sport. Da
+    verificare prima di pubblicare.'
+  faq:
+  - d: Gli US Open si vedono gratis?
+    r: Sì. SuperTennis li trasmette in chiaro sul canale 64 del digitale terrestre, senza alcun abbonamento.
+  - d: Serve Sky per vedere gli US Open?
+    r: No. Sky li trasmette in sub-licenza da SuperTennis, quindi è un'alternativa comoda se sei già cliente,
+      ma non serve.
+  - d: Fino a quando SuperTennis avrà gli US Open?
+    r: L'accordo con la federazione statunitense arriva al 2030.
+  fonti:
+  - https://www.corrieredellosport.it/news/tennis/us-open/2025/08/24-142731498/us_open_in_chiaro_su_supertennis_fino_al_2030_binaghi_svolgiamo_un_servizio_pubblico
+  - https://www.sportcal.com/newsletters/supertennis-retains-exclusive-rights-to-us-open-in-italy-until-2030
+  chiaro_completo: true
+- slug: atp-tour
+  nome: Tornei ATP e ATP Finals
+  articolo: i
+  sport: tennis
+  verificato: '2026-11-12'
+  affidabilita: alta
+  quando: Tutto l'anno, con le ATP Finals a Torino a novembre — quelle in orario italiano, fra il primo
+    pomeriggio e la sera.
+  piattaforme:
+  - nome: Sky Go
+    cosa: i tornei del circuito e le Finals, se sei già cliente Sky
+    chiaro: false
+    accesso: inclusa
+  - nome: NOW
+    cosa: gli stessi tornei, in streaming
+    chiaro: false
+    accesso: diretta
+  spiegazione: Il circuito ATP e le Finals di Torino sono su Sky, e in streaming su NOW. Al momento non
+    c'è nulla in chiaro, nemmeno per le partite degli italiani.
+  nota: ⚠️ E' previsto un obbligo di trasmettere in chiaro su Rai semifinali e finali con italiani in
+    gara, ma entra in vigore SOLO con il prossimo ciclo di diritti. Non annunciarlo come gia' valido.
+  faq:
+  - d: Le ATP Finals si vedono in chiaro?
+    r: No, al momento servono Sky o NOW. Un obbligo di trasmissione in chiaro è previsto, ma solo a partire
+      dal prossimo ciclo di diritti.
+  - d: Che differenza c'è fra Sky e NOW?
+    r: 'È lo stesso contenuto: Sky richiede un contratto e in genere la parabola, NOW è lo stesso in streaming,
+      attivabile subito.'
+  fonti:
+  - https://www.livetennis.it/post/455252/tutto-il-tennis-atp-e-wta-in-tv-e-streaming-nella-stagione-2026/
+- slug: coppa-davis
+  nome: Coppa Davis
+  articolo: la
+  sport: tennis
+  verificato: '2026-11-12'
+  affidabilita: media
+  quando: Le fasi finali si giocano a novembre, in orario europeo.
+  piattaforme:
+  - nome: SuperTennis
+    cosa: tutta la competizione, gratis sul canale 64 del digitale terrestre
+    chiaro: true
+    accesso: chiaro
+  spiegazione: La Coppa Davis si vede gratis su SuperTennis, il canale 64 del digitale terrestre. Vale
+    lo stesso per la Billie Jean King Cup, la sua versione femminile.
+  nota: '⚠️ affidabilita MEDIA: in alcune edizioni la Rai ha trasmesso le partite dell''Italia. Va verificato
+    edizione per edizione prima di dire che SuperTennis e'' l''unica strada.'
+  faq:
+  - d: La Coppa Davis si vede gratis?
+    r: Sì, su SuperTennis, canale 64 del digitale terrestre.
+  - d: E la Billie Jean King Cup?
+    r: Stessa emittente e stesse condizioni.
+  fonti:
+  - https://www.supertennis.tv/
+  chiaro_completo: true
+- slug: nba
+  nome: NBA
+  sport: basket
+  verificato: 2026-11-11
+  affidabilita: media
+  piattaforme:
+  - nome: Sky Go
+    cosa: la stagione NBA
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse partite di Sky
+    chiaro: false
+  note: 'Accordo pluriennale Sky-NBA annunciato a ottobre 2025. ⚠️ Verificare se NBA League Pass resta
+    disponibile in parallelo: e'' la domanda che si fa chi cerca "tutte le partite".'
+  fonti:
+  - https://sport.sky.it/nba/2025/10/02/nba-sky-italia
+- slug: basket-serie-a
+  nome: Basket Serie A (LBA)
+  sport: basket
+  verificato: 2026-11-11
+  affidabilita: media
+  piattaforme:
+  - nome: Sky Go
+    cosa: il campionato italiano
+    chiaro: false
+  - nome: NOW
+    cosa: le stesse partite di Sky
+    chiaro: false
+  - nome: LBA TV
+    cosa: piattaforma della Lega, in abbonamento
+    chiaro: false
+  note: Diritti Sky fino al 2028. Eurolega anch'essa su Sky.
+  fonti:
+  - https://www.sportcal.com/media/sky-italia-secures-domestic-lega-basket-serie-a-rights-to-2028/
+- slug: giro-d-italia
+  nome: Giro d'Italia
+  sport: ciclismo
+  verificato: 2026-11-11
+  affidabilita: alta
+  piattaforme:
+  - nome: Rai
+    cosa: tutte le tappe (RaiSport e Rai 2)
+    chiaro: true
+  - nome: RaiPlay
+    cosa: le stesse tappe, in streaming gratuito
+    chiaro: true
+  - nome: Eurosport
+    cosa: tutte le tappe, copertura integrale
+    chiaro: false
+  - nome: HBO Max
+    cosa: tutte le tappe
+    chiaro: false
+  - nome: Discovery+
+    cosa: tutte le tappe
+    chiaro: false
+  - nome: DAZN
+    cosa: tramite il canale Eurosport
+    chiaro: false
+  note: 'Diritti Eurosport fino almeno al 2029. ⚠️ La Rai in chiaro e'' il dato principale: la pagina
+    deve dirlo nella prima riga.'
+  fonti:
+  - https://www.oasport.it/2026/05/dove-vedere-in-tv-il-giro-ditalia-2026-la-spartizione-dei-diritti-come-vederlo-in-chiaro-e-alternative-streaming/

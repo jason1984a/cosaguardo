@@ -1,0 +1,190 @@
+{# ── Corpo della pagina "dove vedere <competizione>" ──────────────────────
+   Componente isolato: stili inline con prefisso .cg-sp-, come il footer
+   legale e le altre micro-componenti. Non tocca style.css, quindi non
+   obbliga a bumpare ?v=N.
+
+   Si aspetta nel context una voce di sport/diritti-italia.yaml come `c`, e
+   `altre` con le altre competizioni dello stesso sport.
+
+   ⚠️ IL CAMPO `nota` NON VA MAI RESO. Contiene appunti nostri — dubbi,
+   cose da riverificare, valutazioni commerciali. Al lettore va `spiegazione`.
+   Nella prima stesura il campo era uno solo e i ragionamenti interni
+   finivano online.
+
+   ⚠️ La domanda italiana e' "si vede in chiaro?", non "su quale servizio
+   e'". E' quello che i concorrenti trattano peggio: la risposta sta in alto,
+   prima di qualunque elenco.
+
+   Le piattaforme sono raggruppate per COME ci si arriva, non in ordine
+   piatto: chi ha gia' l'abbonamento giusto lo scopre subito, e il gruppo
+   "ce l'hai gia' incluso" e' anche quello che contiene le nostre
+   affiliazioni. ⚠️ Il gruppo "in chiaro" resta in fondo SOLO perche' la
+   stessa informazione e' gia' in cima nel riquadro: non va mai nascosta. #}
+
+<style>
+.cg-sp{--sp-bg:#121829;--sp-bor:#243049;--sp-txt:#e7ecf7;--sp-dim:#94a3bd;
+  --sp-si:#34d399;--sp-no:#f87171;--sp-acc:#7aa2ff;
+  color:var(--sp-txt);max-width:56rem;margin:0 auto}
+.cg-sp h1{font-size:clamp(1.5rem,4vw,2.1rem);line-height:1.2;margin:0 0 .6rem}
+.cg-sp-occhiello{color:var(--sp-acc);font-size:.8rem;letter-spacing:.08em;
+  text-transform:uppercase;font-weight:600;margin:0 0 .4rem}
+.cg-sp-secca{font-size:1.08rem;line-height:1.6;margin:0 0 1.3rem}
+.cg-sp-secca b{color:#fff}
+
+.cg-sp-chiaro{display:flex;gap:.85rem;align-items:flex-start;background:var(--sp-bg);
+  border:1px solid var(--sp-bor);border-left:4px solid var(--sp-no);
+  border-radius:12px;padding:.9rem 1.1rem;margin:0 0 1.5rem}
+.cg-sp-chiaro.si{border-left-color:var(--sp-si)}
+.cg-sp-chiaro-ico{font-size:1.35rem;line-height:1.3;flex:0 0 auto}
+.cg-sp-chiaro-t{font-weight:700;margin:0 0 .15rem}
+.cg-sp-chiaro-d{margin:0;color:var(--sp-dim);font-size:.93rem;line-height:1.5}
+
+.cg-sp h2{font-size:1.12rem;margin:1.8rem 0 .5rem}
+.cg-sp-gruppo-d{color:var(--sp-dim);font-size:.9rem;margin:0 0 .75rem;line-height:1.5}
+.cg-sp-piatt{display:grid;gap:.65rem;padding:0;margin:0;list-style:none}
+.cg-sp-p{display:flex;gap:.9rem;align-items:center;background:var(--sp-bg);
+  border:1px solid var(--sp-bor);border-radius:12px;padding:.8rem 1rem}
+.cg-sp-p.gratis{border-color:rgba(52,211,153,.45)}
+.cg-sp-p-nome{font-weight:700;flex:0 0 7.5rem}
+.cg-sp-p-cosa{color:var(--sp-dim);font-size:.93rem;line-height:1.45;flex:1}
+.cg-sp-tag{display:inline-block;font-size:.72rem;font-weight:700;
+  padding:.12rem .45rem;border-radius:5px;margin-left:.4rem;vertical-align:1px;
+  background:rgba(52,211,153,.16);color:var(--sp-si)}
+.cg-sp-vai{flex:0 0 auto;background:var(--sp-acc);color:#0b1020;text-decoration:none;
+  font-weight:700;font-size:.87rem;padding:.5rem .9rem;border-radius:9px;white-space:nowrap}
+.cg-sp-vai:hover{filter:brightness(1.08)}
+
+.cg-sp-quando{background:rgba(122,162,255,.07);border:1px solid var(--sp-bor);
+  border-radius:12px;padding:.85rem 1.1rem;margin:1.5rem 0;font-size:.95rem;
+  line-height:1.55}
+.cg-sp-quando b{color:#fff}
+
+.cg-sp-faq{margin:1.8rem 0 0}
+.cg-sp-faq details{background:var(--sp-bg);border:1px solid var(--sp-bor);
+  border-radius:12px;padding:.75rem 1rem;margin:0 0 .55rem}
+.cg-sp-faq summary{cursor:pointer;font-weight:600;list-style:none}
+.cg-sp-faq summary::-webkit-details-marker{display:none}
+.cg-sp-faq summary::after{content:"+";float:right;color:var(--sp-acc);font-weight:700}
+.cg-sp-faq details[open] summary::after{content:"−"}
+.cg-sp-faq p{margin:.6rem 0 0;color:var(--sp-dim);font-size:.94rem;line-height:1.55}
+
+.cg-sp-meta{margin:1.8rem 0 0;padding-top:1rem;border-top:1px solid var(--sp-bor);
+  font-size:.83rem;color:var(--sp-dim);line-height:1.6}
+.cg-sp-meta a{color:var(--sp-dim)}
+.cg-sp-altre{display:flex;flex-wrap:wrap;gap:.5rem;margin:.7rem 0 0;padding:0;list-style:none}
+.cg-sp-altre a{display:inline-block;background:var(--sp-bg);border:1px solid var(--sp-bor);
+  border-radius:999px;padding:.35rem .8rem;color:var(--sp-txt);text-decoration:none;font-size:.87rem}
+.cg-sp-altre a:hover{border-color:var(--sp-acc)}
+@media(max-width:560px){
+  .cg-sp-p{flex-wrap:wrap}
+  .cg-sp-p-nome{flex:0 0 100%}
+  .cg-sp-vai{width:100%;text-align:center}
+}
+</style>
+
+{%- set titolo = (c.articolo ~ " " ~ c.nome) if c.articolo else c.nome -%}
+{%- set incluse = c.piattaforme | selectattr('accesso','equalto','inclusa') | list -%}
+{%- set dirette = c.piattaforme | selectattr('accesso','equalto','diretta')  | list -%}
+{%- set gratis  = c.piattaforme | selectattr('accesso','equalto','chiaro')   | list -%}
+
+<article class="cg-sp">
+  <p class="cg-sp-occhiello">{{ c.sport|capitalize }}</p>
+  <h1>Dove vedere {{ titolo }} in streaming</h1>
+
+  {# La spiegazione scritta per il lettore. Mai `nota`. #}
+  <p class="cg-sp-secca">{{ c.spiegazione }}</p>
+
+  {% if gratis %}
+  <div class="cg-sp-chiaro si">
+    <span class="cg-sp-chiaro-ico" aria-hidden="true">📺</span>
+    <div>
+      <p class="cg-sp-chiaro-t">{% if c.chiaro_completo %}Sì, si vede gratis{% else %}In parte sì, in chiaro{% endif %}</p>
+      <p class="cg-sp-chiaro-d">
+        {% for p in gratis %}<b>{{ p.nome }}</b>: {{ p.cosa }}{% if not loop.last %} · {% endif %}{% endfor %}
+      </p>
+    </div>
+  </div>
+  {% else %}
+  <div class="cg-sp-chiaro">
+    <span class="cg-sp-chiaro-ico" aria-hidden="true">🔒</span>
+    <div>
+      <p class="cg-sp-chiaro-t">No, non si vede in chiaro</p>
+      <p class="cg-sp-chiaro-d">Serve un abbonamento a una delle piattaforme qui sotto.</p>
+    </div>
+  </div>
+  {% endif %}
+
+  {% macro elenco(piattaforme) %}
+  <ul class="cg-sp-piatt">
+    {% for p in piattaforme %}
+    <li class="cg-sp-p{% if p.chiaro %} gratis{% endif %}">
+      <span class="cg-sp-p-nome">{{ p.nome }}{% if p.chiaro %}<span class="cg-sp-tag">GRATIS</span>{% endif %}</span>
+      <span class="cg-sp-p-cosa">{{ p.cosa }}</span>
+      {# Il link arriva da _build_affiliate_link, cosi' clickref e programmi
+         Awin restano in un posto solo. #}
+      {% if p.link %}<a class="cg-sp-vai" href="{{ p.link }}" rel="sponsored nofollow" target="_blank">Vai a {{ p.nome }}</a>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endmacro %}
+
+  {% if incluse %}
+  <h2>Se hai già uno di questi, ce l'hai incluso</h2>
+  <p class="cg-sp-gruppo-d">Non devi comprare nulla in più: la competizione è già compresa nell'abbonamento.</p>
+  {{ elenco(incluse) }}
+  {% endif %}
+
+  {% if dirette %}
+  <h2>Se parti da zero</h2>
+  <p class="cg-sp-gruppo-d">Le strade più dirette per chi non ha ancora nessun abbonamento.</p>
+  {{ elenco(dirette) }}
+  {% endif %}
+
+  {% if gratis %}
+  <h2>Senza pagare nulla</h2>
+  {{ elenco(gratis) }}
+  {% endif %}
+
+  {% if c.quando %}
+  <div class="cg-sp-quando"><b>Quando si gioca.</b> {{ c.quando }}</div>
+  {% endif %}
+
+  {% if c.faq %}
+  <h2>Domande frequenti</h2>
+  <div class="cg-sp-faq">
+    {% for f in c.faq %}
+    <details{% if loop.first %} open{% endif %}>
+      <summary>{{ f.d }}</summary>
+      <p>{{ f.r }}</p>
+    </details>
+    {% endfor %}
+  </div>
+  {# Stessa marcatura usata su /come-funziona per i rich snippet.
+     ⚠️ Jinja non ha le list comprehension: il JSON si costruisce con un
+     ciclo, e `tojson` va applicato a OGNI stringa — e' quello che mette le
+     virgolette e fa l'escape di apici e accenti. Concatenarle a mano
+     produrrebbe JSON rotto al primo apostrofo. #}
+  <script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{%- for f in c.faq %}{"@type":"Question","name":{{ f.d|tojson }},"acceptedAnswer":{"@type":"Answer","text":{{ f.r|tojson }}}}{% if not loop.last %},{% endif %}{%- endfor %}]}
+  </script>
+  {% endif %}
+
+  {% if altre %}
+  <h2>Altre competizioni di {{ c.sport }}</h2>
+  <ul class="cg-sp-altre">
+    {% for a in altre %}<li><a href="/sport/{{ a.slug }}">{{ a.nome }}</a></li>{% endfor %}
+  </ul>
+  {% endif %}
+
+  {# ⚠️ La data non e' decorazione: nello sport i diritti cambiano e una
+     pagina senza data invecchia senza dirlo. Oltre i 90 giorni va
+     ricontrollata. #}
+  <p class="cg-sp-meta">
+    Diritti verificati il {{ c.verificato }}.
+    {%- if c.fonti %} Fonti:
+      {% for f in c.fonti %}<a href="{{ f }}" rel="nofollow noopener" target="_blank">{{ loop.index }}</a>{% if not loop.last %}, {% endif %}{% endfor %}.
+    {%- endif %}
+    I diritti televisivi cambiano: se trovi un'informazione superata, segnalacela.
+  </p>
+</article>
