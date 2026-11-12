@@ -8015,8 +8015,13 @@ def sitemap():
     static_urls = [
         ("",                 "daily",   "1.0"),
         ("/dove-vedere",     "daily",   "0.9"),
-        ("/dove-vedere?tipo=film",  "daily", "0.7"),
-        ("/dove-vedere?tipo=serie", "daily", "0.7"),
+        # ⚠️ /dove-vedere?tipo=film e ?tipo=serie sono stati tolti dalla
+        # sitemap il 12/11/2026. Sono filtri della stessa pagina, non pagine
+        # distinte, e da quando base.html emette il canonical su
+        # `request.url.path` entrambe dichiarano /dove-vedere come originale.
+        # Lasciarle qui vorrebbe dire dichiararle pagine a se' nella sitemap e
+        # negarlo nell'HTML: Google segue il canonical e conta la sitemap come
+        # inaffidabile.
         ("/installa",        "monthly", "0.5"),
         ("/supporto",        "monthly", "0.5"),
         ("/privacy",         "yearly",  "0.3"),

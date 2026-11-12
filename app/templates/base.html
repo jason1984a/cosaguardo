@@ -258,6 +258,34 @@
        context e questa avrà la precedenza sul default 'index, follow'. #}
     <meta name="robots" content="{% block meta_robots %}{{ meta_robots if meta_robots is defined and meta_robots else 'index, follow' }}{% endblock %}">
 
+    {# ── canonical ────────────────────────────────────────────────────────
+       ⚠️ MANCAVA SU TUTTO IL SITO tranne /piattaforma/: ~1.940 pagine su
+       1.957 non dichiaravano quale fosse l'originale, e Search Console le
+       contava sotto "Pagina duplicata senza URL canonico selezionato
+       dall'utente" (1.583 pagine al 12/11/2026). Senza questa riga Google
+       decide da solo quale versione tenere, e spesso non ne tiene nessuna:
+       e' la causa piu' probabile delle 39 pagine indicizzate su ~1.950.
+
+       Si usa `request.url.path` e NON l'URL completo. Cosi' una variante con
+       parametri — /dove-vedere?tipo=film — dichiara come originale la pagina
+       pulita /dove-vedere invece di spacciarsi per una pagina a se'. E' anche
+       il motivo per cui quelle due varianti sono state tolte dalla sitemap:
+       dichiararle la' e canonicalizzarle qui sarebbe dire a Google due cose
+       opposte.
+
+       ⚠️ Se `request` non fosse nel context non si emette NIENTE. Un
+       canonical sbagliato — per esempio ogni pagina che punta a "/" — fa
+       molto piu' danno di un canonical assente, e l'assenza e' esattamente
+       la situazione di prima: nessuna regressione.
+
+       Un template figlio o una route possono imporre il proprio valore
+       passando `canonical_url` nel context. #}
+    {%- if canonical_url is defined and canonical_url %}
+    <link rel="canonical" href="{{ canonical_url }}">
+    {%- elif request is defined %}
+    <link rel="canonical" href="https://cosaguardo.com{{ request.url.path }}">
+    {%- endif %}
+
     {# Open Graph (WhatsApp, Telegram, Facebook) #}
     <meta property="og:site_name" content="CosaGuardo">
     <meta property="og:title" content="{% block og_title %}CosaGuardo — Scopri cosa guardare{% endblock %}">
