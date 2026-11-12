@@ -1387,7 +1387,6 @@ _CACHEABLE_PATH_PATTERNS = [
     _re_cache.compile(r"^/serie/\d+"),         # /serie/{tmdb_id}
     _re_cache.compile(r"^/persona/\d+"),       # /persona/{tmdb_id}
     _re_cache.compile(r"^/come-funziona$"),    # /come-funziona (statica)
-    _re_cache.compile(r"^/cosa-serve$"),       # /cosa-serve (statica)
 ]
 
 
@@ -8118,15 +8117,35 @@ def come_funziona(request: Request):
     )
 
 
-@app.get("/cosa-serve", response_class=HTMLResponse)
-def cosa_serve(request: Request):
+@app.get("/cosa-serve")
+def cosa_serve():
+    """Pagina rimossa (12/11/2026).
+
+    Era raggiungibile solo dal menu laterale e non portava valore: il tipo di
+    pagina che Google marca "Scansionata, attualmente non indicizzata" e che
+    pesa sul giudizio di tutto il dominio.
+
+    ⚠️ Risponde 410 e non 404: 404 significa "non trovata, forse torna" e
+    Google la ritenta a lungo, 410 significa "rimossa" e la toglie
+    dall'indice prima. La rotta va quindi TENUTA cosi' com'e': cancellarla
+    la farebbe tornare un 404 e vanificherebbe la rimozione.
+
+    ⚠️ Non era nella sitemap, quindi non c'e' niente da togliere la'.
     """
-    Pagina "Cosa serve per guardare": spiega cosa serve (abbonamenti,
-    dispositivi, ecc.) per guardare i contenuti suggeriti da CosaGuardo.
-    Route statico, mancava (il link nel menu portava a 404).
-    """
-    return templates.TemplateResponse(
-        request=request, name="cosa_serve.html", context={"request": request}
+    return HTMLResponse(
+        content=(
+            "<!doctype html><html lang=\"it\"><head><meta charset=\"utf-8\">"
+            "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+            "<meta name=\"robots\" content=\"noindex\">"
+            "<title>Pagina rimossa — CosaGuardo</title></head>"
+            "<body style=\"font-family:system-ui,sans-serif;max-width:32rem;"
+            "margin:4rem auto;padding:0 1rem;line-height:1.6\">"
+            "<h1>Questa pagina non c'è più</h1>"
+            "<p>L'abbiamo rimossa. Per trovare dove vedere un film o una serie, "
+            "parti da <a href=\"/\">CosaGuardo</a>.</p>"
+            "</body></html>"
+        ),
+        status_code=410,
     )
 
 
