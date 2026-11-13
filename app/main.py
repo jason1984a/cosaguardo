@@ -7200,11 +7200,26 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
                 first_name=(userinfo.get("given_name") or "").strip(),
                 last_name=(userinfo.get("family_name") or "").strip(),
                 onboarding_done=False,
-                # ⚠️ La sessione sopravvive al giro su Google e torna qui:
-                # l'origine e' quella dell'accesso al sito, non "google".
-                # Il METODO di registrazione e' un'altra cosa e si legge
-                # altrove; qui interessa da dove e' arrivata la persona.
-                signup_source=request.session.get("cg_signup_source", "") or "sito",
+                # ⚠️ CORRETTO IL 13/11/2026. Prima qui c'era solo la lettura
+                # della sessione, col commento "la sessione sopravvive al giro
+                # su Google e torna qui". Vale per il web, NON per l'app: l'app
+                # usa ASWebAuthenticationSession, che isola i cookie, e infatti
+                # la provenienza viaggia nello `state` col prefisso "app-"
+                # proprio perche' la sessione puo' non sopravvivere.
+                #
+                # Risultato: chi si registrava dall'app iOS con Google veniva
+                # contato come "sito". Il difetto falsava esattamente il
+                # confronto fra iOS e Android che serve per decidere dove
+                # spendere in pubblicita'.
+                #
+                # L'informazione era gia' qui: tre righe sotto il codice fa
+                # `crea_api_token(user_id, "iOS")` sullo stesso `state`.
+                # Il METODO (Google) e' un'altra cosa e si legge altrove; qui
+                # interessa DA DOVE e' arrivata la persona.
+                signup_source=(
+                    "ios-google" if (state or "").startswith("app-")
+                    else (request.session.get("cg_signup_source", "") or "sito")
+                ),
             )
         else:
             user_id = user["id"]
