@@ -51,7 +51,11 @@
   padding:.12rem .45rem;border-radius:5px;margin-left:.4rem;vertical-align:1px;
   background:rgba(52,211,153,.16);color:var(--sp-si)}
 .cg-sp-vai{flex:0 0 auto;background:var(--sp-acc);color:#0b1020;text-decoration:none;
-  font-weight:700;font-size:.87rem;padding:.5rem .9rem;border-radius:9px;white-space:nowrap}
+  font-weight:700;font-size:.87rem;padding:.5rem .9rem;border-radius:9px;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:.45rem}
+/* Altezza fissa, larghezza libera: un logo stretto e uno largo occupano la
+   stessa riga e il bottone non cambia altezza. */
+.cg-sp-logo{height:18px;width:auto;max-width:72px;display:block}
 .cg-sp-vai:hover{filter:brightness(1.08)}
 
 .cg-sp-quando{background:rgba(122,162,255,.07);border:1px solid var(--sp-bor);
@@ -129,7 +133,10 @@
       <span class="cg-sp-p-cosa">{{ p.cosa }}</span>
       {# Il link arriva da _build_affiliate_link, cosi' clickref e programmi
          Awin restano in un posto solo. #}
-      {% if p.link %}<a class="cg-sp-vai" href="{{ p.link }}" rel="sponsored nofollow" target="_blank">Vai a {{ p.nome }}</a>{% endif %}
+      {# Il logo compare solo se il file esiste (lo decide il caricatore).
+         ⚠️ Altezza fissa a 18px e larghezza automatica: il bottone non
+         cresce, nemmeno da telefono dove e' gia' a larghezza piena. #}
+      {% if p.link %}<a class="cg-sp-vai" href="{{ p.link }}" rel="sponsored nofollow" target="_blank">{% if p.logo %}<img class="cg-sp-logo" src="{{ p.logo }}" alt="" loading="lazy">{% endif %}Vai a {{ p.nome }}</a>{% endif %}
     </li>
     {% endfor %}
   </ul>

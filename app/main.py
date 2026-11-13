@@ -7314,6 +7314,28 @@ def _sport_competizioni() -> list:
                 if not link and _link_diretto_piattaforma:
                     link = _link_diretto_piattaforma(nome, "") or ""
                 pf["link"] = link
+
+                # Logo della piattaforma, se il file c'e'.
+                #
+                # ⚠️ Solo loghi delle PIATTAFORME, mai dei campionati: Serie A,
+                # UEFA, Premier League, F1 e NBA sono marchi registrati e i
+                # loro titolari fra i piu' attivi nel farli rispettare. I
+                # loghi delle piattaforme si prendono invece dalle creativita'
+                # ufficiali di Awin e Amazon Associates, che sono concesse in
+                # licenza proprio per l'uso in affiliazione.
+                #
+                # Il nome del file si ricava dal nome della piattaforma, e si
+                # mostra solo se esiste davvero: cosi' aggiungerne uno e'
+                # copiare un file in static/loghi/, senza toccare il codice, e
+                # se manca la pagina resta corretta col solo testo.
+                _slugl = (nome.lower().replace("+", "-plus")
+                          .replace(" ", "-").replace(".", ""))
+                for _est in ("svg", "png"):
+                    _rel = f"static/loghi/{_slugl}.{_est}"
+                    if os.path.exists(os.path.join(
+                            os.path.dirname(os.path.abspath(__file__)), _rel)):
+                        pf["logo"] = "/" + _rel
+                        break
         _sport_cache = voci
     except Exception as e:
         log.exception("sport: mappa diritti non caricata: %s", e)
