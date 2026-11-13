@@ -82,7 +82,14 @@
 }
 </style>
 
-{%- set titolo = (c.articolo ~ " " ~ c.nome) if c.articolo else c.nome -%}
+{# ⚠️ L'articolo elidato non vuole lo spazio: "l'NBA", non "l' NBA".
+   Con la concatenazione secca usciva il secondo, ed e' il tipo di errore
+   che in un titolo H1 si nota subito. #}
+{%- if not c.articolo -%}{%- set titolo = c.nome -%}
+{%- elif c.articolo.endswith("'") or c.articolo.endswith("’") -%}
+{%- set titolo = c.articolo ~ c.nome -%}
+{%- else -%}{%- set titolo = c.articolo ~ " " ~ c.nome -%}
+{%- endif -%}
 {%- set incluse = c.piattaforme | selectattr('accesso','equalto','inclusa') | list -%}
 {%- set dirette = c.piattaforme | selectattr('accesso','equalto','diretta')  | list -%}
 {%- set gratis  = c.piattaforme | selectattr('accesso','equalto','chiaro')   | list -%}

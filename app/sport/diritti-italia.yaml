@@ -5,186 +5,329 @@ meta:
 competizioni:
 - slug: serie-a
   nome: Serie A
+  articolo: la
   sport: calcio
-  verificato: 2026-11-11
+  verificato: '2026-11-13'
   affidabilita: alta
+  quando: Da agosto a maggio, con le partite distribuite fra sabato, domenica e lunedì.
   piattaforme:
   - nome: DAZN
-    cosa: tutte le 380 partite, 266 in esclusiva
+    cosa: tutte le 380 partite del campionato
     chiaro: false
+    accesso: diretta
   - nome: Sky Go
-    cosa: 114 partite in co-esclusiva, 3 per giornata
+    cosa: tre partite a giornata, se sei già cliente Sky
     chiaro: false
+    accesso: inclusa
   - nome: NOW
-    cosa: le stesse partite di Sky, senza parabola
+    cosa: le stesse tre partite di Sky, in streaming
     chiaro: false
-  note: 'Contratto fino alla stagione 2028/29. Per vedere TUTTO servono due abbonamenti: e'' il punto
-    che la pagina deve dire subito, ed e'' anche quello che rende utile il confronto.'
+    accesso: diretta
+  spiegazione: 'Per vedere tutta la Serie A serve DAZN: ha tutte e 380 le partite. Sky ne trasmette tre
+    a giornata in co-esclusiva, quindi da solo non basta a seguire una squadra per intero.'
+  nota: 'DAZN potrebbe riproporre fino a cinque partite in chiaro, come nelle stagioni scorse: NON confermato
+    per il 2026/27 e il canale non e'' indicato dalle fonti. Non annunciarlo finche'' non e'' ufficiale.'
+  faq:
+  - d: Basta Sky per vedere tutta la Serie A?
+    r: No. Sky ha tre partite a giornata; le altre sette sono solo su DAZN.
+  - d: Qual è il modo più economico per seguire una squadra?
+    r: DAZN, perché è l'unico che ha tutte le partite di tutte le squadre.
   fonti:
-  - https://it.wikipedia.org/wiki/Diritti_televisivi_del_calcio_in_Italia
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: champions-league
   nome: UEFA Champions League
+  articolo: la
   sport: calcio
-  verificato: 2026-11-11
+  verificato: '2026-11-13'
   affidabilita: alta
+  quando: Da settembre a maggio, il martedì e il mercoledì sera.
   piattaforme:
   - nome: Sky Go
-    cosa: 185 partite su 203, finale compresa
+    cosa: 185 partite su 203, se sei già cliente Sky
     chiaro: false
+    accesso: inclusa
   - nome: NOW
-    cosa: le stesse partite di Sky
+    cosa: le stesse 185 partite, in streaming
     chiaro: false
+    accesso: diretta
   - nome: Prime Video
-    cosa: 18 partite, la scelta del mercoledi' sera
+    cosa: 18 partite, la scelta del mercoledì, incluse nell'abbonamento Prime
     chiaro: false
+    accesso: inclusa
   - nome: TV8
-    cosa: una partita per mercoledi', scelta fra i grandi club stranieri
+    cosa: una partita il mercoledì, ma mai una squadra italiana
     chiaro: true
-  note: '⚠️ La partita in chiaro su TV8 NON e'' quella che interessa di piu'' agli italiani: Sky sceglie
-    fra i grandi club stranieri, e le gare di Inter, Napoli, Roma e Como restano a pagamento. L''eccezione:
-    se una squadra italiana arriva in semifinale, quella partita DEVE andare in chiaro. E'' la cosa piu''
-    utile che la pagina possa dire, perche'' e'' esattamente il malinteso in cui cade chi cerca "Champions
-    in chiaro". Le 18 partite Prime salgono a 19 dal 2027/28. ⚠️ NON e'' su Mediaset Infinity: quello
-    era il ciclo 2021-2024.'
+    accesso: chiaro
+  spiegazione: 'Quasi tutta la Champions è su Sky e NOW; Prime Video ha 18 partite, una per mercoledì,
+    incluse nell''abbonamento Prime. Su TV8 c''è una partita a settimana in chiaro, ma è sempre fra due
+    squadre straniere: le partite delle italiane si vedono solo a pagamento.'
+  nota: '⚠️ IL DATO PIU'' IMPORTANTE DELLA SEZIONE CALCIO. Le partite di Inter, Napoli, Roma, Como, Milan,
+    Juventus e Atalanta NON vanno in chiaro. Unica deroga: se un''italiana arriva in semifinale o finale,
+    le regole AGCOM sugli eventi di particolare rilevanza nazionale impongono il chiaro. Le partite in
+    chiaro si scelgono dopo i sorteggi.'
+  faq:
+  - d: La partita dell'Inter si vede in chiaro su TV8?
+    r: No. TV8 trasmette una partita a settimana, ma sempre fra due squadre straniere. Le italiane sono
+      solo su Sky, NOW o Prime Video.
+  - d: C'è un caso in cui un'italiana va in chiaro?
+    r: 'Sì: se arriva in semifinale o in finale. In quel caso la trasmissione in chiaro è obbligatoria
+      per legge.'
+  - d: 'Ho Prime: devo pagare altro?'
+    r: No, le 18 partite del mercoledì sono incluse nell'abbonamento Prime.
   fonti:
-  - https://www.calcioefinanza.it/2026/08/27/dove-si-vedra-champions-league-2026-2027-tutte-le-informazioni/
+  - https://www.calcioefinanza.it/?p=231224
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
-  - https://it.wikipedia.org/wiki/Diritti_televisivi_del_calcio_in_Italia
 - slug: europa-league
   nome: UEFA Europa League
+  articolo: la
   sport: calcio
-  verificato: 2026-11-11
-  affidabilita: media
+  verificato: '2026-11-13'
+  affidabilita: alta
+  quando: Da settembre a maggio, il giovedì sera.
   piattaforme:
   - nome: Sky Go
-    cosa: tutte le partite
+    cosa: tutte le partite, se sei già cliente Sky
     chiaro: false
+    accesso: inclusa
   - nome: NOW
-    cosa: le stesse partite di Sky
+    cosa: tutte le partite, in streaming
     chiaro: false
+    accesso: diretta
+  - nome: TV8
+    cosa: una partita il giovedì, divisa con la Conference League e mai una squadra italiana
+    chiaro: true
+    accesso: chiaro
+  spiegazione: L'Europa League è un'esclusiva Sky, quindi si vede su Sky o su NOW. In chiaro su TV8 va
+    una sola partita del giovedì, che però è condivisa con la Conference League e non riguarda mai le
+    squadre italiane.
+  nota: 'Una sola slot in chiaro il giovedi'' per DUE competizioni: alcune settimane tocca alla Conference.
+    Stesso vincolo della Champions sulle italiane, stessa deroga da semifinale in poi.'
+  faq:
+  - d: L'Europa League si vede in chiaro?
+    r: Una partita a giornata su TV8, ma mai delle italiane, e in alcune settimane la scelta va alla Conference
+      League.
+  - d: Serve Sky o basta NOW?
+    r: 'È lo stesso contenuto: NOW è la versione in streaming, senza parabola.'
   fonti:
-  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+  - https://www.calcioefinanza.it/?p=231224
 - slug: conference-league
   nome: UEFA Conference League
+  articolo: la
   sport: calcio
-  verificato: 2026-11-11
-  affidabilita: media
+  verificato: '2026-11-13'
+  affidabilita: alta
+  quando: Da settembre a maggio, il giovedì sera.
   piattaforme:
   - nome: Sky Go
-    cosa: tutte le partite
+    cosa: tutte le partite, se sei già cliente Sky
     chiaro: false
+    accesso: inclusa
   - nome: NOW
-    cosa: le stesse partite di Sky
+    cosa: tutte le partite, in streaming
     chiaro: false
+    accesso: diretta
+  - nome: TV8
+    cosa: la partita del giovedì quando la scelta non va all'Europa League, e mai un'italiana
+    chiaro: true
+    accesso: chiaro
+  spiegazione: Come l'Europa League, la Conference è un'esclusiva Sky. La partita in chiaro del giovedì
+    su TV8 è una sola per entrambe le competizioni, quindi non c'è ogni settimana — e non riguarda mai
+    le squadre italiane.
+  nota: Condivide la slot in chiaro con l'Europa League. Stesso vincolo sulle italiane e stessa deroga
+    AGCOM da semifinale in poi.
+  faq:
+  - d: La Conference League è in chiaro?
+    r: Solo quando la partita del giovedì su TV8 viene assegnata a lei invece che all'Europa League, e
+      mai per le squadre italiane.
   fonti:
-  - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
+  - https://www.calcioefinanza.it/?p=231224
 - slug: coppa-italia
   nome: Coppa Italia
+  articolo: la
   sport: calcio
-  verificato: 2026-11-11
+  verificato: '2026-11-13'
   affidabilita: alta
+  quando: Da agosto a maggio, con la finale in primavera.
   piattaforme:
   - nome: Mediaset Infinity
-    cosa: tutte le partite, in diretta esclusiva
+    cosa: tutta la competizione, gratis sui canali Mediaset e in streaming
     chiaro: true
-  note: 'Diritti estesi fino al 2027. In chiaro: e'' il punto da mettere in alto.'
+    accesso: chiaro
+  spiegazione: 'La Coppa Italia si vede gratis: i diritti sono di Mediaset, che la trasmette in chiaro
+    sui suoi canali e in streaming su Mediaset Infinity. Vale anche per la Supercoppa Italiana.'
+  nota: 'Mediaset ha anche la Supercoppa. Il canale preciso (Canale 5 o Italia 1) cambia da partita a
+    partita: non indicarlo come fisso.'
+  chiaro_completo: true
+  faq:
+  - d: La Coppa Italia si vede gratis?
+    r: Sì, è su Mediaset in chiaro e in streaming su Mediaset Infinity.
+  - d: E la Supercoppa Italiana?
+    r: Stessa emittente, stesse condizioni.
   fonti:
-  - https://it.wikipedia.org/wiki/Diritti_televisivi_del_calcio_in_Italia
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: serie-b
   nome: Serie B
+  articolo: la
   sport: calcio
-  verificato: 2026-11-11
-  affidabilita: media
+  verificato: '2026-11-13'
+  affidabilita: alta
+  quando: Da agosto a maggio, con molte partite al sabato.
   piattaforme:
   - nome: DAZN
-    cosa: le partite del campionato
+    cosa: tutte le partite del campionato
     chiaro: false
+    accesso: diretta
   - nome: Prime Video
-    cosa: tramite il canale LaB Channel
+    cosa: tramite il canale LaB, a pagamento fra i Prime Video Channels
     chiaro: false
-  note: '⚠️ L''intesa DAZN risultava valida "fino a questa stagione": da riverificare prima di pubblicare.'
+    accesso: inclusa
+  spiegazione: La Serie B è su DAZN. In alternativa si vede su Prime Video attraverso il canale LaB, che
+    però è un canale a pagamento da aggiungere all'abbonamento Prime.
+  nota: '⚠️ LaB su Prime Video e'' un canale AGGIUNTIVO a pagamento, non compreso in Prime: scriverlo
+    come ''incluso'' sarebbe un errore che l''utente scopre alla cassa.'
+  faq:
+  - d: La Serie B è inclusa in Amazon Prime?
+    r: No. Su Prime Video serve il canale LaB, che si paga a parte.
+  - d: Si vede qualcosa in chiaro?
+    r: No, serve DAZN o il canale LaB.
   fonti:
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: premier-league
   nome: Premier League
+  articolo: la
   sport: calcio
-  verificato: 2026-11-11
-  affidabilita: media
+  verificato: '2026-11-13'
+  affidabilita: alta
+  quando: 'Da agosto a maggio. Londra è un''ora indietro: le partite del primo pomeriggio inglese in Italia
+    sono a metà pomeriggio.'
   piattaforme:
   - nome: Sky Go
-    cosa: le partite del campionato inglese
+    cosa: il campionato inglese, se sei già cliente Sky
     chiaro: false
+    accesso: inclusa
   - nome: NOW
-    cosa: le stesse partite di Sky
+    cosa: lo stesso, in streaming
     chiaro: false
-  note: Contratto fino al 2027/28.
+    accesso: diretta
+  spiegazione: La Premier League in Italia è di Sky, con i diritti rinnovati fino al 2027/28. Chi non
+    è cliente Sky la vede su NOW. Niente in chiaro.
+  nota: Diritti Sky fino al 2027/28.
+  faq:
+  - d: La Premier si vede in chiaro in Italia?
+    r: No, serve Sky o NOW.
   fonti:
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: liga
   nome: LaLiga
+  articolo: ''
   sport: calcio
-  verificato: 2026-11-11
-  affidabilita: media
+  verificato: '2026-11-13'
+  affidabilita: alta
+  quando: Da agosto a maggio. La Spagna è nello stesso fuso dell'Italia, ma le partite serali finiscono
+    tardi.
   piattaforme:
   - nome: DAZN
     cosa: il campionato spagnolo
     chiaro: false
-  note: Contratto fino al 2029. Copa del Rey anch'essa su DAZN, fino al 2028/29.
+    accesso: diretta
+  spiegazione: LaLiga in Italia è su DAZN, con i diritti fino al 2029. Non c'è nessuna alternativa e niente
+    in chiaro.
+  nota: Diritti DAZN fino al 2029.
+  faq:
+  - d: Dove si vedono Real Madrid e Barcellona in Italia?
+    r: 'Su DAZN: è l''unica piattaforma che trasmette LaLiga.'
   fonti:
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: bundesliga
   nome: Bundesliga
+  articolo: la
   sport: calcio
-  verificato: 2026-11-11
-  affidabilita: media
+  verificato: '2026-11-13'
+  affidabilita: alta
+  quando: Da agosto a maggio, con molte partite al sabato pomeriggio.
   piattaforme:
   - nome: Sky Go
-    cosa: il campionato tedesco
+    cosa: il campionato tedesco, se sei già cliente Sky
     chiaro: false
+    accesso: inclusa
   - nome: NOW
-    cosa: le stesse partite di Sky
+    cosa: lo stesso, in streaming
     chiaro: false
-  note: Contratto fino al 2028/29.
+    accesso: diretta
+  spiegazione: La Bundesliga è su Sky, con i diritti rinnovati fino al 2028/29, e in streaming su NOW.
+    Niente in chiaro.
+  nota: Diritti Sky fino al 2028/29.
+  faq:
+  - d: La Bundesliga si vede in chiaro?
+    r: No, serve Sky o NOW.
   fonti:
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: formula-1
   nome: Formula 1
+  articolo: la
   sport: motori
-  verificato: 2026-11-11
+  verificato: '2026-11-13'
   affidabilita: alta
+  quando: 'Da marzo a dicembre. Gli orari cambiano molto: i gran premi asiatici sono di mattina presto,
+    quelli americani di notte.'
   piattaforme:
   - nome: Sky Go
-    cosa: tutti i 24 GP e le 6 sprint, in esclusiva
+    cosa: tutti i gran premi in diretta, se sei già cliente Sky
     chiaro: false
+    accesso: inclusa
   - nome: NOW
-    cosa: le stesse gare di Sky
+    cosa: tutti i gran premi in diretta, in streaming
     chiaro: false
+    accesso: diretta
   - nome: TV8
-    cosa: una selezione di gare (il GP di Monza e' confermato)
+    cosa: alcune gare in diretta, le altre in differita
     chiaro: true
-  note: 'Sky ha rinnovato l''esclusiva fino al 2032. ⚠️ Il NUMERO esatto di gare su TV8 e se siano in
-    diretta o differita non e'' confermato dalle fonti consultate: da chiarire prima di scriverlo. E''
-    esattamente il dato che la gente cerca ("quali gare in chiaro"), quindi vale la pena trovarlo.'
+    accesso: chiaro
+  spiegazione: 'Tutta la Formula 1 è su Sky e su NOW. In chiaro c''è TV8, che però trasmette solo una
+    parte dei gran premi in diretta: gli altri arrivano in differita, qualche ora dopo.'
+  nota: 'Quante gare TV8 dia in diretta cambia di stagione in stagione: non indicare un numero fisso.
+    La differita e'' la regola, la diretta l''eccezione.'
+  faq:
+  - d: La Formula 1 si vede gratis?
+    r: 'In parte: TV8 trasmette alcune gare in diretta e le altre in differita. Per vederle tutte in diretta
+      servono Sky o NOW.'
+  - d: TV8 dà la gara allo stesso orario di Sky?
+    r: Solo per alcuni gran premi. Per gli altri la trasmette qualche ora dopo la fine.
   fonti:
   - https://www.motorbox.com/auto/sport/f1/news/f1-motogp-stagione-motori-2026-diretta-su-sky-now-chiaro-tv8
-  - https://www.automoto.it/formula1/f1-diritti-tv-sky-rinnovo-ufficiale-2032-now-tv8.html
 - slug: motogp
   nome: MotoGP
+  articolo: la
   sport: motori
-  verificato: 2026-11-11
-  affidabilita: media
+  verificato: '2026-11-13'
+  affidabilita: alta
+  quando: Da marzo a novembre, con gare in tutti i fusi orari.
   piattaforme:
   - nome: Sky Go
-    cosa: tutti i 22 GP e le sprint, in esclusiva
+    cosa: tutto il motomondiale in diretta, se sei già cliente Sky
     chiaro: false
+    accesso: inclusa
   - nome: NOW
-    cosa: le stesse gare di Sky
+    cosa: tutto il motomondiale in diretta, in streaming
     chiaro: false
-  note: ⚠️ Presenza di gare in chiaro su TV8 non confermata dalle fonti consultate per il 2026. Da verificare.
+    accesso: diretta
+  - nome: TV8
+    cosa: le gare in differita, e alcuni weekend anche in diretta
+    chiaro: true
+    accesso: chiaro
+  spiegazione: 'La MotoGP è su Sky e NOW, con i diritti fino al 2027. In chiaro c''è TV8: di norma manda
+    la gara in differita qualche ora dopo, ma in alcuni weekend trasmette qualifiche, sprint o la gara
+    stessa in diretta.'
+  nota: '⚠️ TV8 MANCAVA DEL TUTTO dalla versione precedente di questo file. Quali weekend siano in diretta
+    si decide di volta in volta (al Mugello 2026 era tutto gratis): non dare un calendario fisso.'
+  faq:
+  - d: La MotoGP si vede gratis?
+    r: Sì su TV8, ma quasi sempre in differita. In alcuni weekend qualifiche, sprint o gara vanno anche
+      in diretta.
+  - d: Per vedere tutto in diretta cosa serve?
+    r: Sky oppure NOW, che è la stessa cosa in streaming.
   fonti:
-  - https://www.motorbox.com/auto/sport/f1/news/f1-motogp-stagione-motori-2026-diretta-su-sky-now-chiaro-tv8
+  - https://www.motorbox.com/moto/sport/motogp/news/motogp-resta-su-sky-continuita-e-spettacolo-fino-al-2027
 - slug: australian-open
   nome: Australian Open
   articolo: gli
@@ -335,8 +478,7 @@ competizioni:
     Sky lo manda in onda in sub-licenza, quindi è un''alternativa se sei già cliente, non una necessità.'
   nota: 'SuperTennis = canale gratuito FTA (LCN 64). SuperTenniX e'' l''aggiunta in streaming a pagamento:
     NON confonderli, nella prima stesura erano la stessa riga. Sky in sub-licenza almeno fino al 2027.
-    ⚠️ NOW non e'' confermato da fonte diretta: e'' dedotto dal fatto che porta i canali Sky Sport. Da
-    verificare prima di pubblicare.'
+    NOW confermato da Marco il 12/11/2026 (non da fonte pubblicata): trasmette anche lui il torneo.'
   faq:
   - d: Gli US Open si vedono gratis?
     r: Sì. SuperTennis li trasmette in chiaro sul canale 64 del digitale terrestre, senza alcun abbonamento.
@@ -405,63 +547,121 @@ competizioni:
   chiaro_completo: true
 - slug: nba
   nome: NBA
+  articolo: l'
   sport: basket
-  verificato: 2026-11-11
-  affidabilita: media
+  verificato: '2026-11-13'
+  affidabilita: alta
+  quando: 'Da ottobre a giugno. Gli Stati Uniti sono sei ore indietro: quasi tutte le partite si giocano
+    di notte in Italia.'
   piattaforme:
+  - nome: Prime Video
+    chiaro: false
+    accesso: inclusa
+    cosa: 87 partite di regular season più Play-In, playoff e finali, incluse nell'abbonamento Prime senza
+      costi aggiuntivi
   - nome: Sky Go
-    cosa: la stagione NBA
     chiaro: false
+    accesso: inclusa
+    cosa: una selezione di partite, se sei già cliente Sky
   - nome: NOW
-    cosa: le stesse partite di Sky
     chiaro: false
-  note: 'Accordo pluriennale Sky-NBA annunciato a ottobre 2025. ⚠️ Verificare se NBA League Pass resta
-    disponibile in parallelo: e'' la domanda che si fa chi cerca "tutte le partite".'
+    accesso: diretta
+    cosa: le stesse partite di Sky, in streaming
+  - nome: NBA League Pass
+    chiaro: false
+    accesso: diretta
+    cosa: tutte le partite della stagione, ma è un canale a pagamento da aggiungere a Prime Video
+  spiegazione: 'Dal 2025 l''NBA è su Prime Video: 87 partite di regular season più Play-In, playoff e
+    finali, comprese nell''abbonamento Prime senza pagare altro. Se però vuoi seguire una squadra precisa
+    per tutta la stagione quelle 87 non bastano, e serve NBA League Pass, che si paga a parte.'
+  nota: '⚠️ Due cose diverse dentro la stessa app, ed e'' l''equivoco piu'' facile: le 87 partite sono
+    INCLUSE in Prime, NBA League Pass e'' un canale AGGIUNTIVO a pagamento per averle tutte. Verificato
+    il 13/11/2026 su due fonti: ''senza costi aggiuntivi per gli abbonati Prime''. Il dubbio l''ha sollevato
+    Marco, e pur non essendo fondato ha scoperto che mancava League Pass. Accordo Sky annunciato a ottobre
+    2025.'
+  faq:
+  - d: L'NBA è inclusa in Amazon Prime?
+    r: 'Sì: 87 partite di regular season più Play-In, playoff e finali, senza costi aggiuntivi rispetto
+      all''abbonamento Prime.'
+  - d: Posso seguire la mia squadra per tutta la stagione?
+    r: Con le partite incluse in Prime no, sono una selezione. Per averle tutte serve NBA League Pass,
+      che è un canale a pagamento da aggiungere a Prime Video.
+  - d: Serve anche Sky?
+    r: Solo per le partite che Prime Video non trasmette. Se hai già Prime, parti da lì.
   fonti:
+  - https://www.hdblog.it/amazon/articoli/n632655/nba-prime-video-italia/
+  - https://www.nbapassion.com/nba/news-nba/prime-video-20-partite-in-piu-in-prima-serata-per-la-regular-season-nba-in-italia-308757/
   - https://sport.sky.it/nba/2025/10/02/nba-sky-italia
 - slug: basket-serie-a
   nome: Basket Serie A (LBA)
+  articolo: il
   sport: basket
-  verificato: 2026-11-11
-  affidabilita: media
+  verificato: '2026-11-13'
+  affidabilita: alta
+  quando: Da settembre a giugno, con le partite soprattutto nel weekend.
   piattaforme:
   - nome: Sky Go
-    cosa: il campionato italiano
+    cosa: il meglio del campionato, se sei già cliente Sky
     chiaro: false
+    accesso: inclusa
   - nome: NOW
-    cosa: le stesse partite di Sky
+    cosa: le stesse partite, in streaming
     chiaro: false
+    accesso: diretta
   - nome: LBA TV
-    cosa: piattaforma della Lega, in abbonamento
+    cosa: il servizio della lega, per le partite non prese da Sky
     chiaro: false
-  note: Diritti Sky fino al 2028. Eurolega anch'essa su Sky.
+    accesso: diretta
+  spiegazione: La Serie A di basket è su Sky, con i diritti acquisiti per il triennio 2025-2028, e in
+    streaming su NOW. Le partite che Sky non trasmette restano su LBA TV, il servizio della lega.
+  nota: Diritti Sky 2025-2028. La ripartizione esatta fra Sky e LBA TV cambia di giornata in giornata.
+  faq:
+  - d: Tutte le partite sono su Sky?
+    r: No, Sky ne trasmette una selezione. Le altre sono su LBA TV.
   fonti:
-  - https://www.sportcal.com/media/sky-italia-secures-domestic-lega-basket-serie-a-rights-to-2028/
+  - https://sport.sky.it/basket/2025/07/14/serie-a-basket-sky-diritti-tv-2025-2028
 - slug: giro-d-italia
   nome: Giro d'Italia
+  articolo: il
   sport: ciclismo
-  verificato: 2026-11-11
+  verificato: '2026-11-13'
   affidabilita: alta
+  quando: In maggio, tre settimane. Le tappe si chiudono nel pomeriggio.
   piattaforme:
   - nome: Rai
-    cosa: tutte le tappe (RaiSport e Rai 2)
+    cosa: tutte le tappe, gratis in chiaro
     chiaro: true
+    accesso: chiaro
   - nome: RaiPlay
-    cosa: le stesse tappe, in streaming gratuito
+    cosa: le stesse tappe, gratis in streaming
     chiaro: true
+    accesso: chiaro
   - nome: Eurosport
-    cosa: tutte le tappe, copertura integrale
+    cosa: la copertura integrale, con telecronaca dedicata
     chiaro: false
-  - nome: HBO Max
-    cosa: tutte le tappe
-    chiaro: false
+    accesso: diretta
   - nome: Discovery+
-    cosa: tutte le tappe
+    cosa: la copertura Eurosport in streaming
     chiaro: false
+    accesso: diretta
+  - nome: HBO Max
+    cosa: la copertura Eurosport, compresa nell'abbonamento
+    chiaro: false
+    accesso: inclusa
   - nome: DAZN
-    cosa: tramite il canale Eurosport
+    cosa: il canale Eurosport è compreso nell'abbonamento
     chiaro: false
-  note: 'Diritti Eurosport fino almeno al 2029. ⚠️ La Rai in chiaro e'' il dato principale: la pagina
-    deve dirlo nella prima riga.'
+    accesso: inclusa
+  spiegazione: 'Il Giro si vede gratis: la Rai lo trasmette in chiaro e su RaiPlay, tappa per tappa. Eurosport
+    offre una copertura più lunga e una telecronaca dedicata, per chi la preferisce.'
+  chiaro_completo: true
+  nota: 'Il gratis sulla Rai copre tutte le tappe: Eurosport e'' una scelta di gusto (copertura piu''
+    estesa), non una necessita''.'
+  faq:
+  - d: Il Giro d'Italia si vede gratis?
+    r: Sì, tutte le tappe sulla Rai e su RaiPlay, senza abbonamenti.
+  - d: Perché qualcuno lo guarda su Eurosport?
+    r: Per la copertura più lunga di ogni tappa e la telecronaca dedicata.
   fonti:
-  - https://www.oasport.it/2026/05/dove-vedere-in-tv-il-giro-ditalia-2026-la-spartizione-dei-diritti-come-vederlo-in-chiaro-e-alternative-streaming/
+  - https://www.raiplay.it/
+  - https://www.eurosport.it/

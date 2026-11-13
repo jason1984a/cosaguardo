@@ -321,6 +321,27 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="msapplication-TileColor" content="#0b1020">
 
+    {# ── Banner App Store su Safari iOS ───────────────────────────────────
+       Fa comparire in cima a Safari, su iPhone e iPad, la striscia che
+       propone di installare l'app — o di aprirla, per chi ce l'ha gia'. Si
+       rivolge a chi sta gia' leggendo il sito, cioe' il pubblico piu'
+       propenso a installarla: costa una riga e non occupa spazio in pagina.
+
+       6825374970 e' l'ID NUMERICO dell'app su App Store Connect, non il
+       bundle id (com.cosaguardo.app): sono due cose diverse e qui ci va
+       questo.
+
+       ⚠️ Niente `app-argument`. Servirebbe a far aprire l'app sulla pagina
+       equivalente a quella che si sta guardando, ma funziona solo con gli
+       Universal Links configurati (dominio associato + file
+       apple-app-site-association). L'app oggi ha il solo schema `cosaguardo`,
+       che serve al widget: un app-argument verrebbe ignorato. Si aggiunge
+       qui il giorno in cui gli Universal Links ci saranno.
+
+       ⚠️ Compare SOLO su Safari. Su Chrome per iOS no: e' un limite di Apple,
+       non una nostra dimenticanza. #}
+    <meta name="apple-itunes-app" content="app-id=6825374970">
+
     <link rel="stylesheet" href="{{ url_for('static', path='css/components.css') }}?v=1">
 
     <link rel="stylesheet" href="{{ url_for('static', path='css/style.css') }}?v=18">
@@ -620,6 +641,11 @@
                     <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="13" rx="2"/><polyline points="8 3 12 7 16 3"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>Dove vedere</strong><small>Su quale piattaforma è disponibile</small></span>
                 </a>
+                <a href="/sport" class="cg-drawer-link">
+                    <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a15 15 0 0 1 0 20"/><path d="M12 2a15 15 0 0 0 0 20"/><path d="M2 12h20"/></svg></span>
+                    <span class="cg-drawer-link-txt"><strong>Sport in streaming</strong><small>Calcio, tennis, F1 e MotoGP: dove vederli</small></span>
+                </a>
+
                 <a href="/migliori" class="cg-drawer-link">
                     <span class="cg-drawer-ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg></span>
                     <span class="cg-drawer-link-txt"><strong>I migliori</strong><small>Le classifiche per genere e piattaforma</small></span>

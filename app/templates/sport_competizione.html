@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{# Il titolo con l'articolo giusto: "gli US Open", "l'NBA", "LaLiga".
+   Stessa logica del componente, perche' serve anche nel <title> e nell'og. #}
+{%- if not c.articolo -%}{%- set nome = c.nome -%}
+{%- elif c.articolo.endswith("'") or c.articolo.endswith("’") -%}
+{%- set nome = c.articolo ~ c.nome -%}
+{%- else -%}{%- set nome = c.articolo ~ " " ~ c.nome -%}
+{%- endif -%}
+{%- set gratis = c.piattaforme | selectattr('chiaro') | list -%}
+
+{% block title %}Dove vedere {{ nome }} in streaming e in TV — CosaGuardo{% endblock %}
+{% block meta_description %}Dove vedere {{ nome }}: su quali piattaforme è
+{%- if gratis %}, e cosa si vede gratis in chiaro{% else %} in Italia{% endif %}.
+Aggiornato al {{ c.verificato }}.{% endblock %}
+{% block og_title %}Dove vedere {{ nome }} in streaming{% endblock %}
+{% block og_description %}{{ c.spiegazione }}{% endblock %}
+
+{% block content %}
+{% include "_sport_competizione_corpo.html" %}
+{% endblock %}

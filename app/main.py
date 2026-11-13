@@ -1386,7 +1386,8 @@ _CACHEABLE_PATH_PATTERNS = [
     _re_cache.compile(r"^/film/\d+"),          # /film/{tmdb_id}
     _re_cache.compile(r"^/serie/\d+"),         # /serie/{tmdb_id}
     _re_cache.compile(r"^/persona/\d+"),       # /persona/{tmdb_id}
-    _re_cache.compile(r"^/come-funziona$"),    # /come-funziona (statica)
+    _re_cache.compile(r"^/come-funziona$"),
+    _re_cache.compile(r"^/sport(/[a-z0-9-]+)?$"),   # sezione sport    # /come-funziona (statica)
 ]
 
 
@@ -7252,6 +7253,114 @@ def google_callback(request: Request, code: str = "", state: str = "", error: st
         return _uscita_oauth_errore(request, "error")
 # ──────────────────────────────────────────────────────────────────────────
 
+# ─── Sezione sport: la mappa dei diritti TV ───────────────────────────────
+#
+# I dati stanno in sport/diritti-italia.yaml, scritti e verificati a mano.
+# Nessuna API: i fornitori che danno i broadcaster italiani costano 35 €/mese
+# e nessuno dichiara di coprire l'Italia (handover 48).
+#
+# ⚠️ PyYAML NON ERA fra le dipendenze. E' stato aggiunto a requirements.txt,
+# ma l'import resta protetto di proposito: se l'installazione fallisse deve
+# spegnersi la sezione sport, non l'intero sito. Il guasto resta visibile —
+# le rotte rispondono 404 e il log dice perche' — quindi non e' silenzioso.
+try:
+    import yaml as _yaml
+except Exception as _e_yaml:
+    _yaml = None
+    log.error("sport: PyYAML non disponibile, sezione disattivata: %s", _e_yaml)
+
+_SPORT_PERCORSO = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "sport", "diritti-italia.yaml")
+_sport_cache = None
+
+
+def _sport_competizioni() -> list:
+    """Le competizioni, caricate una volta sola e tenute in memoria.
+
+    ⚠️ Il campo `nota` viene TOLTO qui, all'ingresso. Contiene appunti interni
+    — dubbi, cose da riverificare, valutazioni commerciali — e in una prima
+    versione del template finiva renderizzato in pagina. Rimuoverlo alla fonte
+    e' piu' sicuro che ricordarsi di non stamparlo in ogni template futuro.
+    """
+    global _sport_cache
+    if _sport_cache is not None:
+        return _sport_cache
+    if _yaml is None:
+        _sport_cache = []
+        return _sport_cache
+
+    try:
+        from core.recommendation_api import (_build_affiliate_link,
+                                             _link_diretto_piattaforma)
+    except (ImportError, AttributeError) as e:
+        log.warning("sport: link affiliati non disponibili: %s", e)
+        _build_affiliate_link = _link_diretto_piattaforma = None
+
+    try:
+        with open(_SPORT_PERCORSO, encoding="utf-8") as f:
+            dati = _yaml.safe_load(f) or {}
+        voci = dati.get("competizioni") or []
+        for c in voci:
+            c.pop("nota", None)
+            slug = c.get("slug") or ""
+            for pf in c.get("piattaforme") or []:
+                nome = pf.get("nome", "")
+                link = ""
+                if _build_affiliate_link:
+                    # ⚠️ Lo slug della competizione fa da clickref: nei report
+                    # Awin si vede QUALE pagina ha portato il clic. Non e' un
+                    # dato personale, e' il nome di un torneo.
+                    link = _build_affiliate_link(nome, title=slug) or ""
+                if not link and _link_diretto_piattaforma:
+                    link = _link_diretto_piattaforma(nome, "") or ""
+                pf["link"] = link
+        _sport_cache = voci
+    except Exception as e:
+        log.exception("sport: mappa diritti non caricata: %s", e)
+        _sport_cache = []
+    return _sport_cache
+
+
+def _sport_per_slug(slug: str):
+    for c in _sport_competizioni():
+        if c.get("slug") == slug:
+            return c
+    return None
+
+
+@app.get("/sport", response_class=HTMLResponse)
+def sport_hub(request: Request):
+    """Indice della sezione, raggruppato per disciplina.
+
+    ⚠️ Serve soprattutto a non lasciare orfane le pagine competizione: senza
+    un hub che le colleghi sarebbero raggiungibili solo dalla sitemap, che per
+    Google e' un suggerimento e non un percorso.
+    """
+    comp = _sport_competizioni()
+    if not comp:
+        raise HTTPException(status_code=404)
+    per_sport = {}
+    for c in comp:
+        per_sport.setdefault(c.get("sport", "altro"), []).append(c)
+    return templates.TemplateResponse(
+        request=request, name="sport_hub.html",
+        context={"request": request, "per_sport": per_sport, "totale": len(comp)},
+    )
+
+
+@app.get("/sport/{slug}", response_class=HTMLResponse)
+def sport_competizione(request: Request, slug: str):
+    c = _sport_per_slug(slug)
+    if not c:
+        raise HTTPException(status_code=404)
+    altre = [x for x in _sport_competizioni()
+             if x.get("sport") == c.get("sport") and x.get("slug") != slug]
+    return templates.TemplateResponse(
+        request=request, name="sport_competizione.html",
+        context={"request": request, "c": c, "altre": altre},
+    )
+
+
 # ─── Sitemap.xml ──────────────────────────────────────────────────────────
 from fastapi.responses import Response, FileResponse
 
@@ -8054,6 +8163,7 @@ def sitemap():
 
     # Pagine /migliori-* — 60 pagine SEO programmatiche
     static_urls.append(("/migliori", "weekly", "0.7"))
+    static_urls.append(("/sport", "weekly", "0.8"))
     try:
         from core.recommendation_api import iter_all_best_combos
         for slug, _, _, _ in iter_all_best_combos():
@@ -8074,10 +8184,43 @@ def sitemap():
                  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
 
     # 1. Pagine statiche
+    #
+    # ⚠️ Il `lastmod` NON e' piu' `today` per tutte. Lo era, e significava
+    # dichiarare a Google "modificata oggi" ogni singolo giorno anche per
+    # /privacy e /termini, che nella riga accanto dichiarano changefreq
+    # "yearly": una contraddizione dentro la stessa riga XML.
+    #
+    # Google usa l'affidabilita' del lastmod per decidere se fidarsi del
+    # lastmod di TUTTO il sito. Rovinarlo qui vuol dire rovinarlo anche per le
+    # ~1.900 pagine dal DB, che il loro `updated_at` vero ce l'hanno — ed e'
+    # proprio il segnale che serve adesso che la sitemap ha ripreso a essere
+    # letta dopo sei mesi.
+    #
+    # Regola: il lastmod si dichiara SOLO dove e' vero. Le pagine "daily" si
+    # rigenerano davvero ogni giorno da TMDb, quindi per loro `today` e'
+    # corretto. Per le altre non sappiamo quando sono cambiate l'ultima volta,
+    # e il tag si omette: nelle specifiche e' facoltativo, e un lastmod
+    # assente vale piu' di uno falso.
     for path, freq, priority in static_urls:
+        _lastmod = f"<lastmod>{today}</lastmod>" if freq == "daily" else ""
         xml_parts.append(
-            f"  <url><loc>{base}{path}</loc><lastmod>{today}</lastmod>"
+            f"  <url><loc>{base}{path}</loc>{_lastmod}"
             f"<changefreq>{freq}</changefreq><priority>{priority}</priority></url>"
+        )
+
+    # 1b. Sezione sport.
+    # ⚠️ `lastmod` e' il campo `verificato`, cioe' il giorno in cui i diritti
+    # sono stati controllati a mano — NON la data di oggi. Dichiarare "cambiata
+    # oggi" ogni giorno e' il modo piu' rapido per far ignorare a Google il
+    # lastmod di tutto il sito, proprio il segnale che qui serve.
+    for _c in _sport_competizioni():
+        _slug = _c.get("slug")
+        if not _slug:
+            continue
+        _ver = str(_c.get("verificato") or "")[:10] or today
+        xml_parts.append(
+            f"  <url><loc>{base}/sport/{_slug}</loc><lastmod>{_ver}</lastmod>"
+            f"<changefreq>monthly</changefreq><priority>0.7</priority></url>"
         )
 
     # 2. Pagine /dove-vedere/{slug}

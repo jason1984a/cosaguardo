@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Sport in streaming: dove vedere calcio, tennis e motori — CosaGuardo{% endblock %}
+{% block meta_description %}Per ogni competizione ti diciamo su quale piattaforma si vede in Italia, e se c'è qualcosa in chiaro. Calcio, tennis, Formula 1, MotoGP, basket e ciclismo.{% endblock %}
+{% block og_title %}Sport in streaming — CosaGuardo{% endblock %}
+{% block og_description %}Dove vedere le grandi competizioni in Italia, e cosa si vede gratis.{% endblock %}
+
+{% block content %}
+{# Stili inline con prefisso proprio, come il footer legale e la pagina
+   competizione: non tocca style.css e non obbliga a bumpare ?v=N. #}
+<style>
+.cg-sh{--sh-bg:#121829;--sh-bor:#243049;--sh-txt:#e7ecf7;--sh-dim:#94a3bd;
+  --sh-si:#34d399;--sh-acc:#7aa2ff;color:var(--sh-txt);max-width:56rem;margin:0 auto}
+.cg-sh h1{font-size:clamp(1.5rem,4vw,2.1rem);line-height:1.15;margin:0 0 .6rem}
+.cg-sh-intro{color:var(--sh-dim);font-size:1.02rem;line-height:1.6;margin:0 0 2rem;max-width:44rem}
+.cg-sh h2{font-size:1.1rem;margin:2rem 0 .8rem;text-transform:capitalize}
+.cg-sh-griglia{display:grid;gap:.7rem;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));
+  padding:0;margin:0;list-style:none}
+.cg-sh-card{display:block;background:var(--sh-bg);border:1px solid var(--sh-bor);
+  border-radius:12px;padding:.9rem 1rem;text-decoration:none;color:var(--sh-txt);
+  transition:border-color .15s}
+.cg-sh-card:hover{border-color:var(--sh-acc)}
+.cg-sh-nome{font-weight:700;display:block;margin-bottom:.25rem}
+.cg-sh-dove{color:var(--sh-dim);font-size:.87rem;line-height:1.4}
+.cg-sh-gratis{display:inline-block;font-size:.7rem;font-weight:800;margin-left:.4rem;
+  padding:.1rem .4rem;border-radius:5px;background:rgba(52,211,153,.16);color:var(--sh-si)}
+/* ⚠️ Etichetta distinta per il chiaro PARZIALE. Marcare "GRATIS" la Champions
+   — dove in chiaro va una sola partita fra squadre straniere — sarebbe la
+   stessa semplificazione che le pagine di dettaglio evitano apposta. */
+.cg-sh-parziale{display:inline-block;font-size:.7rem;font-weight:800;margin-left:.4rem;
+  padding:.1rem .4rem;border-radius:5px;background:rgba(148,163,189,.16);color:var(--sh-dim)}
+</style>
+
+<div class="cg-sh">
+  <h1>Sport in streaming</h1>
+  <p class="cg-sh-intro">
+    Per ognuna delle {{ totale }} competizioni ti diciamo su quale piattaforma
+    si vede in Italia — e, quando c'è, cosa puoi vedere <strong>gratis in
+    chiaro</strong>. I diritti cambiano spesso: ogni pagina porta la data in
+    cui è stata verificata.
+  </p>
+
+  {% for sport, lista in per_sport.items() %}
+  <h2>{{ sport }}</h2>
+  <ul class="cg-sh-griglia">
+    {% for c in lista %}
+    {%- set gratis = c.piattaforme | selectattr('chiaro') | list -%}
+    <li>
+      <a class="cg-sh-card" href="/sport/{{ c.slug }}">
+        <span class="cg-sh-nome">{{ c.nome }}
+          {%- if gratis and c.chiaro_completo %}<span class="cg-sh-gratis">GRATIS</span>
+          {%- elif gratis %}<span class="cg-sh-parziale">IN PARTE IN CHIARO</span>{% endif -%}
+        </span>
+        <span class="cg-sh-dove">
+          {%- set paganti = c.piattaforme | rejectattr('chiaro') | list -%}
+          {#- Se il gratis copre tutto, e' quella la risposta utile: mostrarlo
+              per primo invece delle piattaforme a pagamento. -#}
+          {%- if c.chiaro_completo and gratis %}in chiaro su {{ gratis[0].nome }}
+          {%- elif paganti %}{{ paganti[:2] | map(attribute='nome') | join(', ') }}
+          {%- if paganti|length > 2 %} e altre {{ paganti|length - 2 }}{% endif %}
+          {%- else %}in chiaro{% endif -%}
+        </span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+</div>
+{% endblock %}

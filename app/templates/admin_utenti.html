@@ -3,6 +3,26 @@
 {% block meta_robots %}noindex, nofollow{% endblock %}
 
 {% block content %}
+{# Etichette leggibili per l'origine. La chiave e' il valore grezzo salvato in
+   `signup_source`, il valore e' (etichetta, famiglia).
+
+   ⚠️ La traduzione sta QUI, a schermo, e non nei dati. Rinominare "app" in
+   "android" nel database sarebbe piu' chiaro da leggere ma spezzerebbe lo
+   storico in due serie per la stessa cosa, e /admin/crescita raggruppa
+   proprio per questo campo: il grafico risulterebbe tagliato in due nel
+   giorno del cambio.
+
+   ⚠️ "app" significa Android perche' il guscio TWA passa ?src=app. L'app iOS
+   scrive valori suoi, quindi le due piattaforme restano distinte alla fonte.
+   `ios-google` esiste dal 13/11/2026: prima quelle registrazioni finivano in
+   "sito". #}
+{% set ORIGINI = {
+    'app':        ('App Android',       'android'),
+    'ios':        ('App iOS',           'ios'),
+    'ios-apple':  ('App iOS · Apple',   'ios'),
+    'ios-google': ('App iOS · Google',  'ios'),
+    'sito':       ('Sito',              ''),
+} %}
 <div style="padding-bottom:48px;">
 
     <!-- HEADER -->
@@ -101,6 +121,11 @@
         <div id="adminCount" class="admin-count"></div>
     </div>
 
+    {# Riepilogo per origine. ⚠️ Conta TUTTE le righe, non quelle filtrate o
+       della pagina corrente: serve a rispondere "iOS o Android rende di piu'",
+       e un conteggio che cambia col filtro risponderebbe a un'altra domanda. #}
+    <div class="admin-origini" id="adminOrigini"></div>
+
     <!-- TABELLA UTENTI -->
     <div class="admin-table-wrap" id="adminTableWrap">
         <table class="admin-table">
@@ -142,11 +167,16 @@
                     <td style="font-size:0.78rem;color:var(--muted);white-space:nowrap;">
                         {{ u.created_at[:10] if u.created_at else '—' }}
                     </td>
-                    <td>
+                    <td data-origine="{{ u.signup_source or '' }}">
                         {# Vuota per gli utenti precedenti alla colonna: da dove
                            siano arrivati non e' ricostruibile. #}
                         {% if u.signup_source %}
-                        <span class="admin-badge">{{ u.signup_source }}</span>
+                        {%- set _o = ORIGINI.get(u.signup_source) -%}
+                        {# ⚠️ Il valore grezzo resta nel `title`: serve quando
+                           un'origine non e' in tabella (le utm_source delle
+                           campagne) e per non perdere il dato esatto. #}
+                        <span class="admin-badge{% if _o and _o[1] %} admin-badge--{{ _o[1] }}{% endif %}"
+                              title="{{ u.signup_source }}">{{ _o[0] if _o else u.signup_source }}</span>
                         {% else %}
                         <span style="color:var(--muted);font-size:0.75rem;">—</span>
                         {% endif %}
@@ -380,6 +410,36 @@
     color: #93c5fd;
     margin-right: 4px;
 }
+/* Due famiglie distinte a colpo d'occhio: scorrendo la colonna origine si
+   deve capire iOS da Android senza leggere. */
+.admin-badge--android {
+    background: rgba(74,222,128,0.12);
+    border-color: rgba(74,222,128,0.28);
+    color: #a7f3c0;
+}
+.admin-badge--ios {
+    background: rgba(226,232,240,0.10);
+    border-color: rgba(226,232,240,0.22);
+    color: #e2e8f0;
+}
+
+/* Riepilogo per origine, calcolato dalle righe gia' nel DOM. */
+.admin-origini {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+    font-size: 0.78rem;
+    color: var(--muted);
+}
+.admin-origini-voce {
+    padding: 5px 10px;
+    border-radius: 9px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+    white-space: nowrap;
+}
+.admin-origini-voce b { color: #93c5fd; font-weight: 800; }
 
 @media (min-width: 640px) {
     .admin-stats-grid { grid-template-columns: repeat(5, 1fr); }
@@ -488,6 +548,34 @@
     perPage.addEventListener('change', function () { page = 1; render(); });
 
     render();
+
+    /* Riepilogo per origine. Si calcola una volta sola sulle righe COMPLETE:
+       e' una fotografia della base utenti, non del filtro attivo. Le etichette
+       sono gia' nel DOM, quindi non serve ripetere la mappa qui. */
+    (function riepilogo() {
+        var box = document.getElementById('adminOrigini');
+        if (!box) return;
+        var conta = {}, etichette = {}, totale = 0;
+        rows.forEach(function (r) {
+            var td = r.querySelector('td[data-origine]');
+            if (!td) return;
+            var grezzo = td.getAttribute('data-origine') || '(non rilevata)';
+            var badge = td.querySelector('.admin-badge');
+            etichette[grezzo] = badge ? badge.textContent.trim() : grezzo;
+            conta[grezzo] = (conta[grezzo] || 0) + 1;
+            totale++;
+        });
+        Object.keys(conta)
+            .sort(function (a, b) { return conta[b] - conta[a]; })
+            .forEach(function (k) {
+                var quota = totale ? Math.round(conta[k] / totale * 100) : 0;
+                var el = document.createElement('span');
+                el.className = 'admin-origini-voce';
+                el.title = k;
+                el.innerHTML = etichette[k] + ' <b>' + conta[k] + '</b> · ' + quota + '%';
+                box.appendChild(el);
+            });
+    })();
 })();
 
 /* Conferma di eliminazione: chiede di DIGITARE l'email, non un semplice OK.
