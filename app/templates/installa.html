@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
 {% block title %}Scarica CosaGuardo — l'app per sapere cosa guardare{% endblock %}
-{% block meta_description %}Scarica CosaGuardo su Android dal Play Store, o aggiungila alla schermata Home su iPhone. Consigli su film e serie TV, gratis.{% endblock %}
+{% block meta_description %}Scarica CosaGuardo dall'App Store su iPhone e iPad o dal Play Store su Android. Consigli su film e serie TV, gratis.{% endblock %}
 {% block og_title %}Scarica l'app CosaGuardo{% endblock %}
-{% block og_description %}Film e serie scelti per te, in un tocco. Su Android dal Play Store, su iPhone dalla schermata Home.{% endblock %}
+{% block og_description %}Film e serie scelti per te, in un tocco. Su iPhone dall'App Store, su Android dal Play Store.{% endblock %}
 
 {% block content %}
 <style>
@@ -143,6 +143,28 @@
         color: var(--muted);
         opacity: 0.85;
     }
+    /* Ripiego "Aggiungi a Home" su iOS: c'e' per chi ha un telefono troppo
+       vecchio, ma chiuso, perche' per tutti gli altri l'App Store e' la
+       risposta e un elenco di passaggi sotto il pulsante confonde. */
+    .install-ios-ripiego {
+        margin-top: 18px;
+        border-top: 1px solid rgba(110,168,254,0.15);
+        padding-top: 14px;
+    }
+    .install-ios-ripiego summary {
+        cursor: pointer;
+        color: var(--muted);
+        font-size: 0.9rem;
+        list-style: none;
+    }
+    .install-ios-ripiego summary::-webkit-details-marker { display: none; }
+    .install-ios-ripiego summary::after {
+        content: " +";
+        color: #6ea8fe;
+        font-weight: 800;
+    }
+    .install-ios-ripiego[open] summary::after { content: " −"; }
+    .install-ios-ripiego .install-store-text { margin-top: 12px; }
     /* Riga mostrata a chi sta gia' usando l'app Android: proporgli di
        scaricare quello che ha gia' aperto e' il modo piu' rapido per
        sembrare sciatti. */
@@ -225,15 +247,30 @@
             <p class="install-gia-dentro" id="cg-gia-dentro">Stai già usando l'app: sei a posto così. 👍</p>
         </div>
 
-        <div class="install-platform" id="cg-ios">
-            <h2><span class="install-platform-emoji">📱</span> iPhone / iPad</h2>
-            <p class="install-store-text">Su iPhone CosaGuardo si aggiunge alla schermata Home e funziona come un'app, senza passare dall'App Store.</p>
-            <ol>
-                <li>Apri questo sito su <strong>Safari</strong> (non Chrome)</li>
-                <li>Tocca il bottone <span class="platform-icon-share">⬆</span> <strong>Condividi</strong> in fondo allo schermo (un quadrato con freccia in alto)</li>
-                <li>Nel menu che si apre, scorri verso il basso e tocca <strong>"Aggiungi a Home"</strong></li>
-                <li>Tocca <strong>"Aggiungi"</strong> in alto a destra per confermare</li>
-            </ol>
+        {# ⚠️ Riscritta il 13/11/2026, alla pubblicazione dell'app iOS. Prima
+           questa sezione diceva "senza passare dall'App Store" e insegnava
+           "Aggiungi a Home": oggi e' falso, e insegnava il giro peggiore.
+           L'App Store e' la strada principale; l'aggiunta alla Home resta
+           come ripiego per chi ha un iPhone troppo vecchio per l'app. #}
+        <div class="install-platform install-platform--store" id="cg-ios">
+            <h2><span class="install-platform-emoji">📱</span> iPhone / iPad — l'app ufficiale</h2>
+            <p class="install-store-text">L'app nativa, scaricabile dall'App Store. Ricerca, consigli personalizzati e widget sulla schermata Home.</p>
+            <a class="install-store-btn" id="cg-appstore-link"
+               href="https://apps.apple.com/it/app/id6825374970?ct=pagina_installa"
+               target="_blank" rel="noopener">Scarica su App Store</a>
+
+            {# Ripiego, chiuso di default: chi arriva qui cerca l'app, non le
+               istruzioni per la scorciatoia web. #}
+            <details class="install-ios-ripiego">
+                <summary>Il tuo iPhone è troppo vecchio per l'app?</summary>
+                <p class="install-store-text">Puoi comunque aggiungere il sito alla schermata Home e usarlo come un'app.</p>
+                <ol>
+                    <li>Apri questo sito su <strong>Safari</strong> (non Chrome)</li>
+                    <li>Tocca il bottone <span class="platform-icon-share">⬆</span> <strong>Condividi</strong> in fondo allo schermo (un quadrato con freccia in alto)</li>
+                    <li>Nel menu che si apre, scorri verso il basso e tocca <strong>"Aggiungi a Home"</strong></li>
+                    <li>Tocca <strong>"Aggiungi"</strong> in alto a destra per confermare</li>
+                </ol>
+            </details>
         </div>
 
         <div class="install-platform" id="cg-desktop">
@@ -251,7 +288,10 @@
         <ul>
             <li>Si apre a schermo intero, più veloce del browser</li>
             <li>Icona dedicata sulla schermata Home</li>
-            <li>Leggerissima: meno di 1 MB</li>
+            {# ⚠️ Diceva "meno di 1 MB": vero per la PWA e per il guscio
+               Android, falso per l'app iOS nativa, che pesa di piu'. Un
+               numero sbagliato qui si nota al primo download. #}
+            <li>Leggera: si scarica in pochi secondi</li>
             <li>Si aggiorna da sola, sempre all'ultima versione</li>
             <li>Gratis, e non serve un account per usarla</li>
         </ul>
@@ -283,6 +323,18 @@
             var a = document.getElementById('cg-play-link');
             if (a) a.href = 'https://play.google.com/store/apps/details?id=com.cosaguardo.app' +
                             '&referrer=' + encodeURIComponent(ref);
+
+            // Lo stesso per iOS. Su App Store l'attribuzione passa dal
+            // parametro `ct` (campaign token), che compare in App Analytics
+            // sotto Campagne — l'equivalente di `referrer` su Play.
+            // ⚠️ Apple lo tronca a 40 caratteri e accetta un insieme
+            // ristretto di caratteri: si ripulisce qui, altrimenti la
+            // campagna arriva spezzata o non arriva.
+            var ios = document.getElementById('cg-appstore-link');
+            if (ios && cmp) {
+                var ct = String(cmp).toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 40);
+                if (ct) ios.href = 'https://apps.apple.com/it/app/id6825374970?ct=' + encodeURIComponent(ct);
+            }
         }
     } catch (_) {}
 
@@ -309,9 +361,17 @@
             if (window.cgTrack) cgTrack('install_banner_clicked', { origine: 'pagina_installa_cta' });
         });
     } else if (isIOS) {
-        cta.textContent = '📲 Aggiungi alla schermata Home';
-        cta.href = '#cg-ios';
-        if (hint) hint.textContent = 'Due tocchi da Safari, le istruzioni sono qui sotto';
+        // ⚠️ Fino al 13/11/2026 questo portava alle istruzioni per
+        // "Aggiungi a Home". Ora esiste l'app vera: il pulsante grande deve
+        // portare all'App Store, come fa quello Android col Play Store.
+        cta.textContent = '📲 Scarica su App Store';
+        cta.href = (document.getElementById('cg-appstore-link') || {}).href || cta.href;
+        cta.target = '_blank';
+        cta.rel = 'noopener';
+        if (hint) hint.textContent = 'Gratis · richiede iPhone o iPad';
+        cta.addEventListener('click', function () {
+            if (window.cgTrack) cgTrack('install_banner_clicked', { origine: 'pagina_installa_cta_ios' });
+        });
     } else if (ctx === 'android_app') {
         cta.style.display = 'none';
         if (hint) hint.style.display = 'none';
