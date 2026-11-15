@@ -1735,6 +1735,9 @@ def home(request: Request):
             "top_rated": get_toprated_cached(limit=10),
             "news": get_news_cached(limit=8),
             "new_seasons_alert":   new_seasons_alert,
+            # Carosello sport. Legge dalla cache gia' in memoria
+            # (_sport_competizioni), quindi non aggiunge I/O alla home.
+            "sport_home": _sport_home_card(),
         },
     )
 
@@ -7348,6 +7351,46 @@ def _sport_per_slug(slug: str):
         if c.get("slug") == slug:
             return c
     return None
+
+
+# Ordine delle card nel carosello della home. Scritto a mano e non ricavato
+# dal YAML perche' e' una scelta editoriale (quanto si cerca in Italia), non
+# un dato: l'ordine alfabetico metterebbe l'ATP Tour davanti alla Serie A.
+#
+# ⚠️ Uno slug che non esiste piu' viene semplicemente saltato, la home non si
+# rompe. Se ne aggiungi uno al YAML e vuoi vederlo qui, va aggiunto anche a
+# questa lista.
+_SPORT_HOME_ORDINE = [
+    "serie-a", "champions-league", "formula-1", "motogp", "nba",
+    "premier-league", "europa-league", "wimbledon", "giro-d-italia",
+    "basket-serie-a",
+]
+
+
+def _sport_home_card() -> list:
+    """Le competizioni da mostrare nel carosello della home.
+
+    Restituisce solo i campi che servono alla card, non l'oggetto intero:
+    la home non deve portarsi dietro faq, fonti e spiegazioni che non
+    renderizza.
+    """
+    per_slug = {c.get("slug"): c for c in _sport_competizioni()}
+    fuori = []
+    for slug in _SPORT_HOME_ORDINE:
+        c = per_slug.get(slug)
+        if not c:
+            continue
+        fuori.append({
+            "slug": slug,
+            "nome": c.get("nome") or "",
+            "sport": c.get("sport") or "",
+            "chiaro_completo": bool(c.get("chiaro_completo")),
+            # Al massimo due nomi: la card e' alta 210px e la riga in fondo
+            # deve restare su una riga sola anche con "Mediaset Infinity".
+            "piattaforme": [p.get("nome", "")
+                            for p in (c.get("piattaforme") or [])][:2],
+        })
+    return fuori
 
 
 @app.get("/sport", response_class=HTMLResponse)

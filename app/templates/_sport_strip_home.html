@@ -1,28 +1,29 @@
 {# ============================================================
-   STRISCIA SPORT PER LA HOME
+   CAROSELLO SPORT PER LA HOME
    ------------------------------------------------------------
    Perche' esiste: al 15/11 la sezione /sport aveva UN SOLO link
    in tutto il sito, dentro il drawer. Ventuno pagine nuove senza
    una porta d'ingresso vera: Google le trova dalla sitemap ma non
    capisce che contano, perche' nessuna pagina forte le linka.
 
-   Questa striscia fa due cose:
-     1. porta il visitatore alla sezione, che oggi non si vede;
-     2. passa peso interno dalla home alle competizioni, con
-        l'ancora giusta ("Serie A", non "clicca qui").
+   ⚠️ PERCHE' LE CARD NON HANNO FOTO
+   Le strisce cinema hanno le immagini perche' TMDb ce le fornisce.
+   Per lo sport l'equivalente sarebbero i loghi delle competizioni
+   (Serie A, UEFA, Premier League, F1, NBA): sono marchi registrati
+   e non possiamo riprodurli. Le foto di partite e atleti sono
+   coperte da copyright e diritti d'immagine. Quindi la "copertina"
+   e' tipografica: gradiente per disciplina piu' il nome grande.
+   Non e' un ripiego grafico, e' l'unica immagine che possiamo
+   pubblicare senza prendere qualcosa che non e' nostro.
 
-   ⚠️ Le competizioni sono scritte qui a mano, non lette dal YAML:
-   la rotta della home non carica i dati sport e non vale la pena
-   farglieli caricare per sei link. Gli slug sono stabili. Se un
-   giorno se ne rinomina uno, va cambiato anche qui.
-
-   ⚠️ Sei link, non venti. Questa striscia sta su UNA pagina, ma
-   deve restare una scorciatoia, non un indice: l'elenco completo
-   e' il suo lavoro, ed e' gia' su /sport.
+   I dati arrivano da main.py (_sport_home_card), che legge il YAML
+   gia' in cache: nessuna lettura di file in piu' sulla home, e se
+   domani cambia un'emittente la card cambia da sola.
 
    Tutte le classi sono prefissate cg-sph- per non toccare nulla
    del resto della home.
    ============================================================ #}
+{% if sport_home %}
 <section class="cg-sph">
     <div class="personal-strip-header">
         <span class="personal-strip-label">⚽ Dove vedere lo sport</span>
@@ -33,22 +34,45 @@
         si vede senza pagare nulla.
     </p>
 
-    <div class="cg-sph-chips">
-        <a class="cg-sph-chip" href="/sport/serie-a">Serie A</a>
-        <a class="cg-sph-chip" href="/sport/champions-league">Champions League</a>
-        <a class="cg-sph-chip" href="/sport/formula-1">Formula 1</a>
-        <a class="cg-sph-chip" href="/sport/motogp">MotoGP</a>
-        <a class="cg-sph-chip" href="/sport/nba">NBA</a>
-        <a class="cg-sph-chip" href="/sport/premier-league">Premier League</a>
-        <a class="cg-sph-chip cg-sph-chip-tutti" href="/sport">Tutti gli sport ›</a>
+    <div class="cg-sph-wrap">
+        <button class="trend-nav trend-nav-left cg-sph-nav-left" type="button"
+                aria-label="Scorri a sinistra">‹</button>
+
+        <div class="cg-sph-row" id="cg-sph-row">
+            {% for c in sport_home %}
+            <a class="cg-sph-card cg-sph-card--{{ c.sport }}" href="/sport/{{ c.slug }}">
+                {% if c.chiaro_completo %}
+                <span class="cg-sph-badge">GRATIS</span>
+                {% endif %}
+                <span class="cg-sph-nome">{{ c.nome }}</span>
+                <span class="cg-sph-dove">
+                    {%- if c.chiaro_completo -%}
+                        In chiaro
+                    {%- else -%}
+                        {{ c.piattaforme | join(' · ') }}
+                    {%- endif -%}
+                </span>
+            </a>
+            {% endfor %}
+
+            {# Ultima card: porta all'hub. Chiude il carosello invece di
+               lasciarlo finire nel vuoto, ed e' il link alla pagina che
+               elenca tutte e venti le competizioni. #}
+            <a class="cg-sph-card cg-sph-card--tutti" href="/sport">
+                <span class="cg-sph-nome">Tutti gli sport</span>
+                <span class="cg-sph-dove">20 competizioni ›</span>
+            </a>
+        </div>
+
+        <button class="trend-nav trend-nav-right cg-sph-nav-right" type="button"
+                aria-label="Scorri a destra">›</button>
     </div>
 </section>
 
 <style>
-/* Striscia sport della home. Prefisso cg-sph-, nessuna regola globale. */
-.cg-sph {
-    margin: 28px 0 8px;
-}
+/* Carosello sport della home. Prefisso cg-sph-, nessuna regola globale. */
+.cg-sph { margin: 28px 0 8px; }
+
 .cg-sph-intro {
     margin: 2px 0 14px;
     color: var(--muted, #aab3d1);
@@ -56,37 +80,132 @@
     line-height: 1.5;
     max-width: 62ch;
 }
-.cg-sph-chips {
+
+.cg-sph-wrap { position: relative; }
+
+.cg-sph-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    scroll-snap-type: x proximity;
+    padding: 4px 2px 10px;
+    /* Barra di scorrimento nascosta: il carosello si trascina col dito su
+       mobile e con le frecce su desktop, come le altre strisce. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
-.cg-sph-chip {
-    display: inline-block;
-    padding: 9px 14px;
-    border: 1px solid var(--border, rgba(255,255,255,.10));
-    border-radius: 999px;
-    background: var(--card, #161f3d);
-    color: var(--text, #f5f7ff);
-    font-size: .92rem;
-    font-weight: 600;
+.cg-sph-row::-webkit-scrollbar { display: none; }
+
+.cg-sph-card {
+    position: relative;
+    flex: 0 0 auto;
+    width: 150px;
+    height: 210px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.10);
     text-decoration: none;
+    color: #fff;
+    scroll-snap-align: start;
+    overflow: hidden;
+    transition: transform .15s ease, border-color .15s ease;
+    /* Fondo di ripiego: sta QUI, nella regola base, e non in fondo al
+       blocco. Messo dopo i gradienti per disciplina li sovrascriverebbe
+       tutti — stessa specificita', vince l'ultima. */
+    background: linear-gradient(150deg, #2a3350, #161f3d 70%);
+}
+.cg-sph-card:hover,
+.cg-sph-card:focus-visible {
+    transform: translateY(-3px);
+    border-color: rgba(255,255,255,0.28);
+}
+
+/* Velo scuro in basso: tiene il testo leggibile su qualunque gradiente,
+   senza dover tarare il contrasto disciplina per disciplina. */
+.cg-sph-card::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 62%;
+    background: linear-gradient(to top, rgba(0,0,0,.60), rgba(0,0,0,0));
+    pointer-events: none;
+}
+
+.cg-sph-nome,
+.cg-sph-dove { position: relative; z-index: 1; }
+
+.cg-sph-nome {
+    font-size: 1.02rem;
+    font-weight: 800;
     line-height: 1.2;
-    transition: background .15s ease, border-color .15s ease;
+    letter-spacing: .1px;
 }
-.cg-sph-chip:hover,
-.cg-sph-chip:focus-visible {
-    background: var(--card-2, #1c2750);
-    border-color: var(--primary, #6ea8fe);
+.cg-sph-dove {
+    font-size: .76rem;
+    font-weight: 600;
+    color: rgba(255,255,255,0.78);
+    line-height: 1.3;
 }
-.cg-sph-chip-tutti {
+
+.cg-sph-badge {
+    position: absolute;
+    top: 10px; left: 10px;
+    z-index: 1;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(16,185,129,0.92);
+    color: #04231a;
+    font-size: .64rem;
+    font-weight: 900;
+    letter-spacing: .5px;
+}
+
+/* ── Un gradiente per disciplina ───────────────────────────────────
+   Servono a distinguere a colpo d'occhio, non a rappresentare il
+   marchio: nessuno di questi e' il colore ufficiale di un campionato,
+   e non deve diventarlo. */
+.cg-sph-card--calcio    { background: linear-gradient(150deg, #11643f, #0b3b2a 70%); }
+.cg-sph-card--tennis    { background: linear-gradient(150deg, #8a6a12, #3f3410 70%); }
+.cg-sph-card--motori    { background: linear-gradient(150deg, #8c1d1d, #3d1216 70%); }
+.cg-sph-card--basket    { background: linear-gradient(150deg, #9a4a12, #40200d 70%); }
+.cg-sph-card--ciclismo  { background: linear-gradient(150deg, #8d2060, #3c1333 70%); }
+
+.cg-sph-card--tutti {
     background: transparent;
-    color: var(--primary, #6ea8fe);
+    border-style: dashed;
+    border-color: rgba(110,168,254,0.45);
+    justify-content: center;
 }
-/* Su telefono le pillole vanno a capo da sole: nessuno scroll
-   orizzontale, cosi' restano tutte raggiungibili e tutte leggibili
-   dai crawler senza interazione. */
+.cg-sph-card--tutti::after { display: none; }
+.cg-sph-card--tutti .cg-sph-nome { color: var(--primary, #6ea8fe); }
+
+/* Le frecce ripetono la posizione delle altre strisce. Su mobile si
+   nascondono: li' si scorre col dito. */
+.cg-sph-nav-left  { left: -6px; }
+.cg-sph-nav-right { right: -6px; }
+@media (max-width: 760px) {
+    .cg-sph-nav-left, .cg-sph-nav-right { display: none; }
+}
 @media (max-width: 520px) {
-    .cg-sph-chip { font-size: .88rem; padding: 8px 12px; }
+    .cg-sph-card { width: 136px; height: 194px; }
+    .cg-sph-nome { font-size: .95rem; }
 }
 </style>
+
+<script>
+// Frecce del carosello sport. Stesso passo (440px) delle altre strisce.
+(function () {
+    var row = document.getElementById("cg-sph-row");
+    if (!row) return;
+    var l = document.querySelector(".cg-sph-nav-left");
+    var r = document.querySelector(".cg-sph-nav-right");
+    if (l) l.addEventListener("click", function () { row.scrollBy({ left: -440, behavior: "smooth" }); });
+    if (r) r.addEventListener("click", function () { row.scrollBy({ left:  440, behavior: "smooth" }); });
+})();
+</script>
+{% endif %}
