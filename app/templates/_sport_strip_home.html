@@ -1,0 +1,92 @@
+{# ============================================================
+   STRISCIA SPORT PER LA HOME
+   ------------------------------------------------------------
+   Perche' esiste: al 15/11 la sezione /sport aveva UN SOLO link
+   in tutto il sito, dentro il drawer. Ventuno pagine nuove senza
+   una porta d'ingresso vera: Google le trova dalla sitemap ma non
+   capisce che contano, perche' nessuna pagina forte le linka.
+
+   Questa striscia fa due cose:
+     1. porta il visitatore alla sezione, che oggi non si vede;
+     2. passa peso interno dalla home alle competizioni, con
+        l'ancora giusta ("Serie A", non "clicca qui").
+
+   ⚠️ Le competizioni sono scritte qui a mano, non lette dal YAML:
+   la rotta della home non carica i dati sport e non vale la pena
+   farglieli caricare per sei link. Gli slug sono stabili. Se un
+   giorno se ne rinomina uno, va cambiato anche qui.
+
+   ⚠️ Sei link, non venti. Questa striscia sta su UNA pagina, ma
+   deve restare una scorciatoia, non un indice: l'elenco completo
+   e' il suo lavoro, ed e' gia' su /sport.
+
+   Tutte le classi sono prefissate cg-sph- per non toccare nulla
+   del resto della home.
+   ============================================================ #}
+<section class="cg-sph">
+    <div class="personal-strip-header">
+        <span class="personal-strip-label">⚽ Dove vedere lo sport</span>
+    </div>
+
+    <p class="cg-sph-intro">
+        Quale abbonamento serve per seguire un campionato, e che cosa
+        si vede senza pagare nulla.
+    </p>
+
+    <div class="cg-sph-chips">
+        <a class="cg-sph-chip" href="/sport/serie-a">Serie A</a>
+        <a class="cg-sph-chip" href="/sport/champions-league">Champions League</a>
+        <a class="cg-sph-chip" href="/sport/formula-1">Formula 1</a>
+        <a class="cg-sph-chip" href="/sport/motogp">MotoGP</a>
+        <a class="cg-sph-chip" href="/sport/nba">NBA</a>
+        <a class="cg-sph-chip" href="/sport/premier-league">Premier League</a>
+        <a class="cg-sph-chip cg-sph-chip-tutti" href="/sport">Tutti gli sport ›</a>
+    </div>
+</section>
+
+<style>
+/* Striscia sport della home. Prefisso cg-sph-, nessuna regola globale. */
+.cg-sph {
+    margin: 28px 0 8px;
+}
+.cg-sph-intro {
+    margin: 2px 0 14px;
+    color: var(--muted, #aab3d1);
+    font-size: .95rem;
+    line-height: 1.5;
+    max-width: 62ch;
+}
+.cg-sph-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.cg-sph-chip {
+    display: inline-block;
+    padding: 9px 14px;
+    border: 1px solid var(--border, rgba(255,255,255,.10));
+    border-radius: 999px;
+    background: var(--card, #161f3d);
+    color: var(--text, #f5f7ff);
+    font-size: .92rem;
+    font-weight: 600;
+    text-decoration: none;
+    line-height: 1.2;
+    transition: background .15s ease, border-color .15s ease;
+}
+.cg-sph-chip:hover,
+.cg-sph-chip:focus-visible {
+    background: var(--card-2, #1c2750);
+    border-color: var(--primary, #6ea8fe);
+}
+.cg-sph-chip-tutti {
+    background: transparent;
+    color: var(--primary, #6ea8fe);
+}
+/* Su telefono le pillole vanno a capo da sole: nessuno scroll
+   orizzontale, cosi' restano tutte raggiungibili e tutte leggibili
+   dai crawler senza interazione. */
+@media (max-width: 520px) {
+    .cg-sph-chip { font-size: .88rem; padding: 8px 12px; }
+}
+</style>

@@ -833,6 +833,16 @@
     </section>
     {% endif %}
 
+    {# Striscia sport: porta d'ingresso alla sezione /sport. Vive in un file
+       a parte (_sport_strip_home.html) perche' e' autonoma e ha i suoi stili.
+       ⚠️ Niente {% if %}: e' l'unico link profondo alle competizioni dentro
+       la home, e deve esserci sempre. Le strisce qui sopra sono condizionate
+       ai dati TMDb, questa no.
+       ⚠️ Sui telefoni finisce nel gruppo order:8 insieme a cinema e news
+       (vedi le regole di reorder sopra) e rispetta l'ordine del DOM: non
+       serve aggiungerla all'elenco dei :not(). #}
+    {% include "_sport_strip_home.html" %}
+
     {% if news %}
     <section class="news-strip-section">
         <div class="personal-strip-header">

@@ -770,6 +770,16 @@
                 <div class="footer-links">
                     <a href="/">Homepage</a>
                     <a href="/come-funziona">Come funziona</a>
+                    {# Sport nel footer: e' l'unico link alla sezione presente su
+                       TUTTE le pagine, incluse le ~1.950 schede indicizzate. Il
+                       drawer da solo non basta, perche' un link dentro un menu a
+                       panino passa poco peso interno.
+                       ⚠️ UN SOLO link, non l'elenco delle competizioni: venti
+                       link uguali ripetuti su ogni pagina del sito sono
+                       boilerplate, e Google li svaluta. Le competizioni si
+                       linkano dalla home e dall'hub /sport, dove sono in
+                       contesto. #}
+                    <a href="/sport">Sport in streaming</a>
                     <a href="/installa">Installa app</a>
                     {# Assistenza raggiungibile dal footer: e' l'URL dichiarato
                        sugli store, e una pagina di assistenza che non si
