@@ -58,17 +58,32 @@
           <line x1="75" y1="46" x2="75" y2="120"/>
         </symbol>
 
-        {# Mezzo campo, canestro in alto. L'arco da 3 e' calcolato sul
-           centro del ferro (75,24) con raggio 52: i tratti dritti stanno a
-           x=26 e x=124, quindi l'arco attacca a y=39.4. ⚠️ sweep-flag 0:
-           con 1 la curva va dalla parte sbagliata. #}
+        {# Mezzo campo, canestro in alto, ricavato dalle misure vere.
+           ⚠️ Mezzo campo e' 50 x 47 PIEDI, cioe' quasi quadrato. Il primo
+           tentativo lo disegnava 110 x 150, molto piu' alto che largo, e
+           l'arco da 3 ne usciva schiacciato: l'errore stava nelle
+           proporzioni del campo, non nella curva.
+           Scala 2.8 unita'/piede -> 140 x 132. Ogni numero qui sotto e' la
+           misura reale per 2.8:
+             ferro 5'3" dal fondo, tabellone 6', area 16 x 19,
+             cerchio di tiro libero r=6', arco da 3 r=23'9",
+             tratti dritti a 22' dall'asse.
+           ⚠️ sweep-flag 0: con 1 la curva va dalla parte sbagliata. #}
         <symbol id="cg-sph-basket" viewBox="0 0 150 168">
-          <rect x="20" y="10" width="110" height="150" rx="2"/>
-          <line x1="63" y1="17" x2="87" y2="17" stroke-width="3.6"/>
-          <circle cx="75" cy="24" r="5"/>
-          <rect x="55" y="10" width="40" height="62"/>
-          <circle cx="75" cy="72" r="20"/>
-          <path d="M26 10 L26 39.4 A52 52 0 0 0 124 39.4 L124 10"/>
+          <rect x="5" y="6" width="140" height="132" rx="2"/>
+          <line x1="67" y1="17" x2="83" y2="17" stroke-width="3.6"/>
+          <circle cx="75" cy="21" r="4"/>
+          <rect x="53" y="6" width="45" height="53"/>
+          {# Semicerchio del tiro libero, non cerchio: ⚠️ sweep-flag 0, la
+             meta' disegnata e' quella OPPOSTA al canestro, fuori dall'area.
+             La meta' dentro l'area resta vuota. #}
+          <path d="M58 59 A17 17 0 0 0 92 59"/>
+          <path d="M13 6 L13 46 A66 66 0 0 0 137 46 L137 6"/>
+          {# Mezzo cerchio di centrocampo. ⚠️ sweep-flag 1: deve gonfiarsi
+             VERSO il canestro, perche' e' la meta' del cerchio che sta in
+             questa meta' campo. Con 0 finisce nella meta' avversaria, che
+             qui non e' disegnata. #}
+          <path d="M58 138 A17 17 0 0 1 92 138"/>
         </symbol>
 
         {# Griglia di partenza, non il tracciato: un circuito disegnato a
