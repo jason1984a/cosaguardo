@@ -878,6 +878,11 @@
         #cg-rate .cg-rate-si  { background: linear-gradient(90deg, #6ea8fe, #a78bfa); color: #0b1020; }
         #cg-rate button:active { transform: scale(0.97); }
     </style>
+    {# Invito a installare l'app Android. Sta accanto al dialogo di
+       valutazione perche' sono le due facce della stessa cosa: questo parla a
+       chi NON ha l'app (contesto 'web'), quello a chi ce l'ha gia' (contesto
+       'android_app'). Non possono comparire insieme. #}
+    {% include "_banner_android.html" %}
     <div id="cg-rate" role="dialog" aria-label="Valuta CosaGuardo">
         <p>Stai usando CosaGuardo da qualche giorno. Ti va di lasciare una valutazione sul Play Store? Serve a farlo trovare a più persone.</p>
         <div class="cg-rate-actions">
