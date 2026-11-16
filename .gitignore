@@ -1,2 +1,8 @@
 __pycache__/
 *.pyc
+# ── Video dei social ─────────────────────────────────────────────
+# Si rigenerano con gli script in social/ e pesano: 60 MB erano gia'
+# finiti nella cronologia prima di questa riga, e 170 MB stavano
+# fuori per caso. I testi e gli script restano tracciati.
+social/**/*.mp4
+social/**/*.mov
