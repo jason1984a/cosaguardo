@@ -1952,8 +1952,18 @@ a.detail-genre-tag--link:focus-visible {
                 </div>
                 {% endif %}
 
+                {# ⚠️ rel="nofollow" (16/11): ogni scheda genera un indirizzo
+                   diverso (/?prefill=<titolo>) che porta tutte alla stessa
+                   home. Con ~1.950 schede sono ~1.950 URL da scansionare per
+                   una pagina sola, e in Search Console se n'erano gia'
+                   indicizzati 29: su 39 pagine indicizzate in tutto, 29
+                   erano questa. Il canonical aggiunto il 12/11 le fa
+                   collassare sulla home, ma solo DOPO che Google le ha
+                   scansionate: il nofollow evita la scansione a monte.
+                   Stessa ragione del nofollow alla riga ~2270. #}
                 <a href="/?prefill={{ detail.title | urlencode }}&type={{ detail.content_type }}"
-                   class="detail-btn detail-btn-primary">
+                   class="detail-btn detail-btn-primary"
+                   rel="nofollow">
                     <i data-lucide="search" style="width:15px;height:15px;stroke:currentColor;stroke-width:2;pointer-events:none;"></i>
                     Trova simili
                 </a>
