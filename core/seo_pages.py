@@ -46,6 +46,36 @@ EVERGREEN_PER_TYPE = 350   # 350 movies + 350 tv = 700 evergreen
 NEW_RELEASES_CAP   = 300   # uscite recenti IT (movies+tv mescolati, ranked per release_date desc)
 MAX_TOTAL_TARGET   = EVERGREEN_PER_TYPE * 2 + NEW_RELEASES_CAP  # 1000
 
+# ─── ISTERESI SULLA CANCELLAZIONE EVERGREEN (16/11/2026) ──────────────────
+# Prima di questa data un titolo evergreen veniva cancellato al PRIMO run in
+# cui non compariva fra i top. Ma `popularity` su TMDb oscilla ogni giorno:
+# un titolo a ridosso del taglio usciva e rientrava di continuo, e a ogni
+# uscita le sue pagine /dove-vedere/{slug} e /come/{slug} rispondevano 404.
+#
+# ⚠️ Il costo misurato in Search Console al 16/11: 517 URL /dove-vedere e
+# /come nel secchio "Non trovata (404)", 40-130 al mese da maggio. Prison
+# Break e You erano fra questi: oggi rispondono 200 e sono in sitemap, ma
+# Google li ha visti morti e la loro indicizzazione riparte da zero.
+#
+# Ora servono EVERGREEN_MISS_TOLLERATI run consecutivi di assenza.
+EVERGREEN_MISS_TOLLERATI = 4      # ~4 settimane (il job gira settimanale)
+
+# ⚠️ Si conta in RUN, non in giorni: fra il 14/09 e il 19/10 il refresh e'
+# fallito sei volte di fila. Con una soglia a tempo, al primo run riuscito
+# tutti i titoli sarebbero risultati "vecchi" e cancellati in blocco. Con un
+# contatore di run, uno stop del job non incrementa niente.
+
+# Tetto alle cancellazioni per singola corsa. Una corsa sana ne produce ~700:
+# se TMDb risponde a meta', senza tetto si cancellerebbero centinaia di pagine
+# in un colpo. Oltre il tetto si cancellano solo le piu' chiaramente assenti.
+EVERGREEN_MAX_CANCELLAZIONI_PER_RUN = 60
+
+# Soglia minima di titoli raccolti perche' la corsa sia considerata sana e
+# possa cancellare. Prima era 100, troppo bassa: una corsa normale ne porta
+# ~700, quindi 100 significava "TMDb ha risposto per un settimo" e si
+# cancellava lo stesso.
+EVERGREEN_MIN_RUN_SANO = 400
+
 # Backwards-compat: alias per chi importa le costanti vecchie
 MAX_TITLES_TARGET = EVERGREEN_PER_TYPE * 2  # 700
 TITLES_PER_TYPE   = EVERGREEN_PER_TYPE      # 350
@@ -119,11 +149,27 @@ def _ensure_db():
             "ALTER TABLE seo_titles ADD COLUMN seasons_count INTEGER",
             "ALTER TABLE seo_titles ADD COLUMN seasons_bumped_at INTEGER",
             "ALTER TABLE seo_titles ADD COLUMN release_date TEXT",
+            # Isteresi: quante corse evergreen di fila il titolo non compare.
+            "ALTER TABLE seo_titles ADD COLUMN missing_runs INTEGER DEFAULT 0",
+            "ALTER TABLE seo_titles ADD COLUMN last_seen_at INTEGER",
         ]:
             try:
                 conn.execute(ddl)
             except sqlite3.OperationalError:
                 pass  # colonna già esistente
+
+        # ⚠️ Backfill delle due colonne nuove. Le righe che esistevano prima
+        # della migration hanno missing_runs NULL: senza questo UPDATE il
+        # confronto `missing_runs >= soglia` non scatterebbe mai (in SQL
+        # NULL >= 4 e' NULL, non falso, ma nemmeno vero) e il contatore non
+        # partirebbe. Azzerarlo fa partire il conteggio dal deploy, che e'
+        # la scelta prudente: nessun titolo viene cancellato nelle prime
+        # EVERGREEN_MISS_TOLLERATI corse dopo l'aggiornamento.
+        conn.execute("UPDATE seo_titles SET missing_runs = 0 WHERE missing_runs IS NULL")
+        conn.execute(
+            "UPDATE seo_titles SET last_seen_at = ? WHERE last_seen_at IS NULL",
+            (int(time.time()),),
+        )
 
         conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_seo_titles_pop
@@ -459,29 +505,37 @@ def populate_seo_titles_db(_log_ctx: Optional[dict] = None) -> dict:
                         UPDATE seo_titles
                         SET title=?, year=?, popularity=?, vote_average=?,
                             poster_path=?, overview=?, source='evergreen',
-                            release_date=?, updated_at=?
+                            release_date=?, updated_at=?,
+                            missing_runs=0, last_seen_at=?
                         WHERE slug=?
                     """, (title, year, new_popularity, new_vote_average,
-                          new_poster_path, new_overview, date_field, new_updated_at, slug))
+                          new_poster_path, new_overview, date_field, new_updated_at,
+                          now, slug))
                 else:
                     # Aggiorna popularity/vote silenziosamente (per ranking interno) ma NON
                     # tocchiamo updated_at. source='evergreen' (rinforzo, magari era new_release prima).
+                    # ⚠️ missing_runs e last_seen_at SI' invece: il titolo l'abbiamo
+                    # visto, anche se i suoi dati non sono cambiati. Sono contatori
+                    # di presenza, non di freschezza, e non finiscono nel lastmod.
                     cur.execute("""
                         UPDATE seo_titles
                         SET popularity=?, vote_average=?, source='evergreen',
-                            release_date=COALESCE(release_date, ?)
+                            release_date=COALESCE(release_date, ?),
+                            missing_runs=0, last_seen_at=?
                         WHERE slug=?
-                    """, (new_popularity, new_vote_average, date_field, slug))
+                    """, (new_popularity, new_vote_average, date_field, now, slug))
                 counters["updated"] += 1
             else:
                 # Nuovo titolo evergreen
                 cur.execute("""
                     INSERT INTO seo_titles
                     (slug, tmdb_id, content_type, title, year, popularity, vote_average,
-                     poster_path, overview, source, release_date, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'evergreen', ?, ?)
+                     poster_path, overview, source, release_date, updated_at,
+                     missing_runs, last_seen_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'evergreen', ?, ?, 0, ?)
                 """, (slug, item["id"], content_type, title, year, new_popularity,
-                      new_vote_average, new_poster_path, new_overview, date_field, now))
+                      new_vote_average, new_poster_path, new_overview, date_field,
+                      now, now))
                 counters["added"] += 1
 
             if content_type == "movie":
@@ -494,26 +548,78 @@ def populate_seo_titles_db(_log_ctx: Optional[dict] = None) -> dict:
         for t in tv_sorted:
             _insert_or_update(t, "tv")
 
-        # Pulizia stale evergreen: titoli che NON sono più nella top e
-        # NON sono di source='new_release' (i new_release li gestisce populate_new_releases).
-        # Safety: cancella solo se l'aggiornamento ha avuto successo significativo (>= 100).
+        # ── Pulizia stale evergreen, CON ISTERESI (16/11/2026) ─────────────
+        # Titoli evergreen non visti in questa corsa. I new_release non si
+        # toccano qui: li gestisce populate_new_releases.
+        #
+        # ⚠️ Non si cancella al primo buco. Un titolo assente incrementa
+        # missing_runs; sparisce solo dopo EVERGREEN_MISS_TOLLERATI corse di
+        # fila. Vedi il commento sulle costanti in testa al file: senza
+        # isteresi un titolo che oscilla intorno al taglio di popularity
+        # moriva e rinasceva ogni settimana, e ogni morte era un 404 su due
+        # pagine gia' indicizzate.
         removed = 0
-        if counters["movies"] + counters["tv"] >= 100:
-            # Trova evergreen non visti in questo run
+        raccolti = counters["movies"] + counters["tv"]
+
+        if raccolti < EVERGREEN_MIN_RUN_SANO:
+            # Corsa parziale: TMDb ha risposto male. Non si cancella NIENTE e
+            # non si incrementa nemmeno il contatore, altrimenti una serie di
+            # corse parziali porterebbe comunque alla cancellazione.
+            log.warning(
+                "seo evergreen: corsa parziale (%d titoli < %d), "
+                "nessuna cancellazione e nessun incremento di missing_runs",
+                raccolti, EVERGREEN_MIN_RUN_SANO,
+            )
+        else:
             cur.execute("""
-                SELECT slug, tmdb_id, content_type FROM seo_titles
+                SELECT slug, tmdb_id, content_type, COALESCE(missing_runs, 0)
+                FROM seo_titles
                 WHERE source = 'evergreen' OR source IS NULL
             """)
-            stale_slugs = []
-            for r in cur.fetchall():
-                if (r[1], r[2]) not in seen_evergreen_keys:
-                    stale_slugs.append(r[0])
-            if stale_slugs:
+            assenti = [(r[0], r[3]) for r in cur.fetchall()
+                       if (r[1], r[2]) not in seen_evergreen_keys]
+
+            if assenti:
+                # 1. incrementa il contatore di tutti gli assenti
                 cur.executemany(
-                    "DELETE FROM seo_titles WHERE slug = ?",
-                    [(s,) for s in stale_slugs]
+                    "UPDATE seo_titles SET missing_runs = COALESCE(missing_runs, 0) + 1 "
+                    "WHERE slug = ?",
+                    [(s,) for s, _ in assenti],
                 )
-                removed = len(stale_slugs)
+
+                # 2. candidati alla cancellazione: quelli che con questo
+                #    incremento raggiungono la soglia
+                candidati = sorted(
+                    [(s, n + 1) for s, n in assenti if n + 1 >= EVERGREEN_MISS_TOLLERATI],
+                    key=lambda x: x[1], reverse=True,   # i piu' assenti prima
+                )
+
+                if len(candidati) > EVERGREEN_MAX_CANCELLAZIONI_PER_RUN:
+                    log.warning(
+                        "seo evergreen: %d candidati alla cancellazione, "
+                        "ne cancello %d (tetto per corsa). Gli altri restano in "
+                        "attesa: se il numero non scende, e' il caso di guardarci.",
+                        len(candidati), EVERGREEN_MAX_CANCELLAZIONI_PER_RUN,
+                    )
+                    candidati = candidati[:EVERGREEN_MAX_CANCELLAZIONI_PER_RUN]
+
+                if candidati:
+                    cur.executemany(
+                        "DELETE FROM seo_titles WHERE slug = ?",
+                        [(s,) for s, _ in candidati],
+                    )
+                    removed = len(candidati)
+                    log.info(
+                        "seo evergreen: %d assenti in questa corsa, %d cancellati "
+                        "dopo %d corse di assenza",
+                        len(assenti), removed, EVERGREEN_MISS_TOLLERATI,
+                    )
+                else:
+                    log.info(
+                        "seo evergreen: %d assenti in questa corsa, nessuno ancora "
+                        "alla soglia di %d corse",
+                        len(assenti), EVERGREEN_MISS_TOLLERATI,
+                    )
 
         conn.commit()
     finally:
