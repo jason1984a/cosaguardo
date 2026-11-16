@@ -6849,7 +6849,7 @@ def film_detail(request: Request, tmdb_id: int):
             "is_seen":    title_state.get("seen", 0) == 1,
             "seo_slug":   seo_slug,
             # Link prova gratuita Prime (bounty 3 €) per la CTA nelle schede
-            "amazon_bounty_link": get_amazon_bounty_link(),
+            "amazon_bounty_link": get_amazon_bounty_link("film"),
             "meta_robots":  meta_robots,
             "canonical_url": canonical_url,
             # Per chip generi cliccabili → /scopri (vedi GENRE_TO_SCOPRI_SLUG)
@@ -6936,7 +6936,7 @@ def serie_detail(request: Request, tmdb_id: int):
             "is_seen":    title_state.get("seen", 0) == 1,
             "seo_slug":   seo_slug,
             # Link prova gratuita Prime (bounty 3 €) per la CTA nelle schede
-            "amazon_bounty_link": get_amazon_bounty_link(),
+            "amazon_bounty_link": get_amazon_bounty_link("serie"),
             "meta_robots":   meta_robots,
             "canonical_url": canonical_url,
             "series_tracking": series_tracking,
@@ -7580,7 +7580,7 @@ def dove_vedere_detail(request: Request, slug: str):
             "similar_titles": similar_titles,
             "season_bump": season_bump,
             # Link prova gratuita Prime (bounty 3 €) per la CTA
-            "amazon_bounty_link": get_amazon_bounty_link(),
+            "amazon_bounty_link": get_amazon_bounty_link("dove-vedere"),
         },
     )
 

@@ -3294,6 +3294,36 @@ def _con_clickref(url: str, ref: str) -> str:
     return f"{url}{sep}clickref={ref}"
 
 
+# ── ascsubtag: lo stesso mestiere del clickref, ma per Amazon ─────────────
+# Amazon Associates riporta questo valore accanto a ogni ordine, esattamente
+# come Awin fa col clickref. Senza, di Amazon sappiamo quanto incassiamo ma non
+# da QUALE pagina: e' il dato che serve per capire su cosa vale la pena
+# lavorare, e per Awin ce l'abbiamo gia' da un pezzo.
+#
+# ⚠️ Vale la stessa identica regola del clickref: NIENTE DATI PERSONALI.
+# Viaggia nell'URL e finisce nei report di Amazon, cioe' fuori da casa nostra.
+# Un id TMDb identifica un titolo, non una persona. Un id utente, una email o
+# un identificativo di sessione non ci entrano, in nessun caso.
+#
+# `posto` dice da DOVE si e' partiti (scheda di un titolo, pagina piattaforma,
+# invito alla prova Prime): due clic sullo stesso film da due punti diversi
+# vanno distinti, altrimenti il report dice solo "Amazon" e siamo al punto di
+# prima.
+def _amazon_ascsubtag(posto: str, tmdb_id=None, title: str = "") -> str:
+    etichetta = _awin_clickref(tmdb_id, title)
+    if posto and etichetta:
+        return f"{posto}-{etichetta}"
+    return posto or etichetta or ""
+
+
+def _con_ascsubtag(url: str, valore: str) -> str:
+    """Aggiunge ascsubtag a un URL Amazon. Non lo duplica se c'e' gia'."""
+    if not url or not valore or "ascsubtag=" in url:
+        return url
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}ascsubtag={valore}"
+
+
 def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = None) -> str:
     """
     Costruisce link affiliato per la piattaforma.
@@ -3317,7 +3347,10 @@ def _build_affiliate_link(provider_name: str, title: str = "", tmdb_id: int = No
         is_amazon = ("amazon" in pn_lower) or ("prime video" in pn_lower)
         if is_amazon:
             # Link di ricerca Amazon con tag affiliato
-            return f"https://www.amazon.it/s?k={title_enc}&i=instant-video&tag={amazon_tag}"
+            return _con_ascsubtag(
+                f"https://www.amazon.it/s?k={title_enc}&i=instant-video&tag={amazon_tag}",
+                _amazon_ascsubtag("scheda", tmdb_id, title),
+            )
 
     # ── Apple TV+ — Apple Performance Partners (Partnerize) ────────────────
     # Formato ufficiale: https://geo.tv.apple.com/<region>/<path>?at=<token>&ct=<campaign>
@@ -3792,7 +3825,13 @@ def get_platform_subscribe_link(slug: str) -> str:
     if _amz:
         _n = (name or "").lower()
         if ("amazon" in _n) or ("prime video" in _n):
-            return f"https://www.amazon.it/provaprime?tag={_amz}"
+            # ⚠️ `slug` e non il nome: nel report di Amazon si deve poter
+            # distinguere /piattaforma/prime-video da /piattaforma/netflix,
+            # anche se il link e' lo stesso.
+            return _con_ascsubtag(
+                f"https://www.amazon.it/provaprime?tag={_amz}",
+                _amazon_ascsubtag("provaprime", title=slug),
+            )
 
     # Prova affiliate (vuota se non configurato)
     aff = _build_affiliate_link(name, title="", tmdb_id=None)
@@ -3804,13 +3843,22 @@ def get_platform_subscribe_link(slug: str) -> str:
 
 
 
-def get_amazon_bounty_link() -> str:
+def get_amazon_bounty_link(posto: str = "bounty") -> str:
     """
     Link alla prova gratuita Prime (bounty 3 €).
     Stringa vuota se il tag affiliato non è configurato.
+
+    `posto` finisce nell'ascsubtag e dice da quale punto del sito e' partito
+    il clic. Ha un valore di ripiego, cosi' i chiamanti esistenti non cambiano:
+    chi vuole distinguere il proprio punto lo passa.
     """
     tag = os.environ.get("AFFILIATE_AMAZON", "")
-    return f"https://www.amazon.it/provaprime?tag={tag}" if tag else ""
+    if not tag:
+        return ""
+    return _con_ascsubtag(
+        f"https://www.amazon.it/provaprime?tag={tag}",
+        _amazon_ascsubtag(posto or "bounty"),
+    )
 
 
 def get_platform_content(slug: str, content_type: str = "movie", limit: int = 60) -> tuple:
