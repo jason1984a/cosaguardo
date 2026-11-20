@@ -398,9 +398,13 @@
             } catch (_) {}
         }
 
+        /** Le UTM con cui e' iniziata questa visita, '' se organica. */
+        function utmArrivo() {
+            try { return sessionStorage.getItem(K_UTM_ARRIVO) || ''; } catch (_) { return ''; }
+        }
+
         function playStoreUrl() {
-            var ref = '';
-            try { ref = sessionStorage.getItem(K_UTM_ARRIVO) || ''; } catch (_) {}
+            var ref = utmArrivo();
             // Visita senza campagna: resta utile sapere che l'installazione
             // nasce da questo banner e non da una ricerca su Play.
             if (!ref) ref = 'utm_source=sito&utm_medium=banner&utm_campaign=install';
@@ -421,6 +425,24 @@
         var ANDROID_MIN_DELAY_SEC = 15;    // invece di 30
         var ANDROID_MIN_TIME_SEC  = 60;    // invece di 120
         var ANDROID_MIN_PAGEVIEWS = 2;     // invece di 3
+
+        // ─── T4: chi arriva da una campagna (20/11) ─────────────────────
+        // Le soglie sopra chiedono all'utente di dimostrare interesse prima
+        // di proporgli l'app. Per chi arriva da un annuncio quella prova e'
+        // gia' stata data: ha cliccato un annuncio che diceva di installare
+        // l'app.
+        //
+        // ⚠️ E i 15 secondi, per quel pubblico, sono fuori portata: GA4
+        // misura un coinvolgimento medio di ~12 secondi sulle sessioni
+        // `meta / cpc`. Con la soglia a 15 la meta' abbondante di chi arriva
+        // da un annuncio non vede mai la fascia — il che spiega il 4% di
+        // impressioni della scheda Play su 12.900 visite a pagamento molto
+        // meglio di quanto lo spieghi un banner che converte male.
+        //
+        // ⚠️ Quei 12 secondi vengono da un campione piccolo (47 sessioni,
+        // vedi handover 46.14): e' un segnale sul COMPORTAMENTO, non sul
+        // volume, quindi regge meglio del conteggio — ma resta indicativo.
+        var CAMPAGNA_MIN_DELAY_SEC = 8;
 
         // Flag utente loggato (da Jinja, valutato server-side a render time)
         var IS_LOGGED_IN = (window.__CG_LOGGED_IN === true);
@@ -483,9 +505,28 @@
         }
 
         function usePlayStore() {
-            // Android fuori dall'app e fuori dai browser interni delle app
-            // social (da li' il Play Store si apre male o per niente).
-            return isAndroid() && !isTwa() && !isInAppBrowser();
+            // Android fuori dall'app. Basta questo.
+            //
+            // ⚠️ QUI c'era anche `&& !isInAppBrowser()`, con la motivazione
+            // "da li' il Play Store si apre male o per niente". Tolto il
+            // 20/11, e la ragione e' aritmetica: nel browser interno di
+            // Instagram e Facebook atterrano ~440 visite a pagamento al
+            // giorno, cioe' quasi tutto il traffico della campagna che si
+            // chiama *app_install*. Escluderli significa non offrire l'app
+            // proprio a chi ha appena cliccato un annuncio per averla.
+            //
+            // ⚠️ Il rischio di sbagliare e' nullo e vale la pena capirlo:
+            // se davvero il Play Store non si apre da li', quegli utenti
+            // restano dove sono adesso — senza nessuna offerta. Se si apre,
+            // si guadagna il canale principale. La risposta la da' Play
+            // Console: le impressioni della scheda erano 565 su 12.900
+            // visite a pagamento (4%). Se salgono, l'esclusione era sbagliata.
+            //
+            // La PWA resta esclusa altrove: `isInAppBrowser()` e' ancora usata
+            // nel ramo iOS, dove l'"Aggiungi a Home" li' dentro e' davvero
+            // impossibile e si rimanda a Safari. Quello era un limite reale,
+            // questo era una supposizione.
+            return isAndroid() && !isTwa();
         }
         function isInAppBrowser() {
             // Webview interni delle app social (dove atterra il traffico da
@@ -595,18 +636,32 @@
             if (s.dismissed) return false;           // dismiss permanente
 
             // Tempo minimo SU QUESTA pagina — sempre richiesto, piu' basso
-            // su Android dove l'offerta e' l'app dello Store.
+            // su Android dove l'offerta e' l'app dello Store, piu' basso
+            // ancora per chi arriva da una campagna.
             var play = usePlayStore();
-            var minDelay = play ? ANDROID_MIN_DELAY_SEC : MIN_DELAY_SEC;
+            var daCampagna = play && !!utmArrivo();
+            var minDelay = daCampagna ? CAMPAGNA_MIN_DELAY_SEC
+                                      : (play ? ANDROID_MIN_DELAY_SEC : MIN_DELAY_SEC);
             var minTime  = play ? ANDROID_MIN_TIME_SEC  : MIN_TIME_SEC;
             var minViews = play ? ANDROID_MIN_PAGEVIEWS : MIN_PAGEVIEWS;
 
             var eng = getEngagement();
             if (eng.timeSec < minDelay) return false;
 
-            // ── Trigger: basta UNO dei 3 ─────────────────────────────────
+            // ── Trigger: basta UNO dei 4 ─────────────────────────────────
             // T3: loggato
             if (IS_LOGGED_IN) return true;
+
+            // T4: arrivato da una campagna, su Android. L'interesse l'ha gia'
+            // dichiarato cliccando l'annuncio; chiedergli di tornare domani
+            // (T1) o di leggere tre pagine (T2) prima di offrirgli l'app vuol
+            // dire non offrirgliela mai.
+            //
+            // ⚠️ Limitato ad Android di proposito: su iOS la fascia propone la
+            // registrazione, che e' un'altra offerta e un'altra decisione. Si
+            // cambia una cosa alla volta, cosi' Play Console dice se questa ha
+            // funzionato senza che un secondo cambiamento confonda la lettura.
+            if (daCampagna) return true;
 
             // T1: ≥2 giorni distinti
             if (getDistinctVisitDays() >= MIN_VISIT_DAYS) return true;
@@ -701,7 +756,13 @@
             // Quale trigger ha attivato la mostra?
             var trigger = 'unknown';
             var eng = getEngagement();
-            if (IS_LOGGED_IN) trigger = 'logged_in';
+            // ⚠️ `campagna` va letto per PRIMO, prima di logged_in: e' il
+            // gruppo nuovo del 20/11 ed e' quello di cui serve sapere il peso.
+            // Se restasse in fondo, un utente loggato arrivato da un annuncio
+            // verrebbe contato fra i vecchi e la misura del cambiamento
+            // risulterebbe piu' piccola del vero.
+            if (usePlayStore() && utmArrivo()) trigger = 'campagna';
+            else if (IS_LOGGED_IN) trigger = 'logged_in';
             else if (getDistinctVisitDays() >= MIN_VISIT_DAYS) trigger = 'multi_day_visit';
             else if (eng.pageviews >= MIN_PAGEVIEWS && eng.timeSec >= MIN_TIME_SEC) trigger = 'long_session';
 
@@ -857,7 +918,17 @@
                         // sapere da qui se l'installazione e' avvenuta: il
                         // dato sta in Play Console.
                         dismissBanner('store_click');
-                        window.open(playStoreUrl(), '_blank', 'noopener');
+                        // ⚠️ window.open con _blank viene spesso ignorato nei
+                        // webview interni delle app social — cioe' proprio
+                        // dove ora la fascia compare. Se non apre niente
+                        // restituisce null: si ripiega sulla navigazione
+                        // diretta, che Android consegna al Play Store tramite
+                        // intent. Senza questo ripiego, togliere l'esclusione
+                        // dei browser in-app non servirebbe a nulla: la fascia
+                        // comparirebbe e il tocco non farebbe niente.
+                        var _url = playStoreUrl();
+                        var _w = window.open(_url, '_blank', 'noopener');
+                        if (!_w) window.location.href = _url;
                         return;
                     }
 
