@@ -28,6 +28,28 @@
    Non si mostra mai: dentro l'app (il contesto e' android_app),
    nella PWA installata, su iOS, su desktop. Nessun rischio di
    scontro con #cg-rate, che vive solo in contesto android_app.
+
+   ------------------------------------------------------------
+   ⚠️ QUANTE VOLTE COMPARE (corretto il 20/11)
+
+   Prima: a ogni caricamento di pagina, e si fermava SOLO se
+   l'utente premeva la ✕ o "Installa". Chi lo ignorava e
+   navigava se lo ritrovava all'infinito — visto in una
+   registrazione Clarity, ed e' il modo piu' rapido per far
+   chiudere il sito a qualcuno.
+
+   Ora, tre regole in cascata:
+
+     1. una volta per VISITA          (sessionStorage)
+     2. tre visite ignorate e basta   (localStorage)
+     3. ✕ o "Installa" → silenzio per 30 giorni
+
+   ⚠️ Le regole 2 e 3 vivono in localStorage, che nel browser
+   interno di Instagram e Facebook puo' non sopravvivere alla
+   chiusura — ed e' proprio da li' che arriva quasi tutto il
+   traffico a pagamento. Per quegli utenti regge solo la regola
+   1, cioe' un banner per visita. E' il minimo ottenibile senza
+   una memoria che duri, ed e' comunque un decimo di prima.
    ============================================================ #}
 <div id="cg-inst" role="dialog" aria-label="Installa l'app CosaGuardo" hidden>
     <div class="cg-inst-testo">
@@ -105,11 +127,22 @@
 <script>
 (function () {
     var K_CHIUSO = 'cg_inst_chiuso';          // quando e' stato chiuso
+    var K_IGNORI = 'cg_inst_ignori';          // visite in cui e' comparso senza risposta
+    var K_VISTO  = 'cg_inst_visto';           // gia' comparso in QUESTA visita
     var RINVIO_MS = 30 * 24 * 60 * 60 * 1000; // ricompare dopo un mese
+    var MAX_IGNORI = 3;                       // tre visite ignorate e basta
     var PACCHETTO = 'com.cosaguardo.app';
 
     function leggi(k)   { try { return localStorage.getItem(k); } catch (_) { return null; } }
     function scrivi(k,v){ try { localStorage.setItem(k, v); } catch (_) {} }
+    // ⚠️ sessionStorage SEPARATO da localStorage, e non e' pignoleria: nel
+    // browser interno di Instagram e Facebook — da dove arriva quasi tutto il
+    // traffico a pagamento — localStorage puo' non persistere fra una visita e
+    // l'altra, e `scrivi` fallisce in silenzio. sessionStorage dura quanto la
+    // scheda, che e' esattamente la durata che serve alla regola qui sotto, ed
+    // e' gia' usato da cgAppContext(), quindi sappiamo che li' funziona.
+    function leggiS(k)   { try { return sessionStorage.getItem(k); } catch (_) { return null; } }
+    function scriviS(k,v){ try { sessionStorage.setItem(k, v); } catch (_) {} }
 
     function vaMostrato() {
         var ua = navigator.userAgent || '';
@@ -118,12 +151,30 @@
         // dalla PWA dal browser. Rifarlo qui a mano vorrebbe dire due logiche
         // diverse per la stessa domanda, destinate a divergere.
         if (typeof cgAppContext !== 'function' || cgAppContext() !== 'web') return false;
+
+        // ⚠️ LA REGOLA CHE MANCAVA: una volta per visita, non una per pagina.
+        // Prima il banner si fermava SOLO se l'utente lo chiudeva a mano; chi
+        // lo ignorava e continuava a navigare se lo ritrovava a ogni
+        // caricamento, all'infinito. Visto in una registrazione Clarity il
+        // 20/11, ed e' il modo piu' rapido per far chiudere il sito a qualcuno.
+        if (leggiS(K_VISTO)) return false;
+
         var chiuso = leggi(K_CHIUSO);
         if (chiuso) {
             var quando = parseInt(chiuso, 10);
             if (!isNaN(quando) && (Date.now() - quando) < RINVIO_MS) return false;
         }
+        // Tre visite in cui e' comparso senza che nessuno lo toccasse: la
+        // risposta e' no, anche se non e' stata detta premendo la ✕.
+        var n = parseInt(leggi(K_IGNORI) || '0', 10);
+        if (!isNaN(n) && n >= MAX_IGNORI) return false;
         return true;
+    }
+
+    /** Chiude la partita: niente piu' banner per un mese. */
+    function archivia() {
+        scrivi(K_CHIUSO, String(Date.now()));
+        scrivi(K_IGNORI, '0');
     }
 
     // Link al Play Store con il referrer: porta la campagna dentro Play.
@@ -149,6 +200,22 @@
 
         document.getElementById('cg-inst-si').setAttribute('href', urlPlay());
 
+        // Segnato PRIMA di mostrarlo, non dopo: se qualcosa qui sotto
+        // fallisce, il peggio che succede e' un banner in meno. Segnandolo
+        // dopo, il peggio sarebbe il banner a ogni pagina — cioe' il difetto
+        // che stiamo togliendo.
+        scriviS(K_VISTO, '1');
+        var ignorati = parseInt(leggi(K_IGNORI) || '0', 10);
+        if (isNaN(ignorati)) ignorati = 0;
+        ignorati += 1;
+        if (ignorati >= MAX_IGNORI) {
+            // Raggiunto il tetto: si passa alla regola dei 30 giorni, cosi'
+            // il silenzio ha una scadenza invece di essere definitivo.
+            archivia();
+        } else {
+            scrivi(K_IGNORI, String(ignorati));
+        }
+
         el.hidden = false;
         // Due fotogrammi prima di animare: con hidden appena tolto il browser
         // non ha ancora calcolato lo stato di partenza e la transizione
@@ -159,7 +226,7 @@
         if (window.cgTrack) cgTrack('install_banner_shown');
 
         document.getElementById('cg-inst-no').addEventListener('click', function () {
-            scrivi(K_CHIUSO, String(Date.now()));
+            archivia();
             el.classList.remove('is-on');
             setTimeout(function () { el.hidden = true; }, 300);
             if (window.cgTrack) cgTrack('install_banner_dismissed');
@@ -167,7 +234,7 @@
 
         document.getElementById('cg-inst-si').addEventListener('click', function () {
             // Chi ha toccato "Installa" non deve ritrovarselo al ritorno.
-            scrivi(K_CHIUSO, String(Date.now()));
+            archivia();
             if (window.cgTrack) cgTrack('install_banner_clicked');
         });
     }
