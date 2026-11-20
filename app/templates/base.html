@@ -528,7 +528,7 @@
     })();
     </script>
     <script>window.__CG_LOGGED_IN = {% if is_logged_in %}true{% else %}false{% endif %};</script>
-    <script src="{{ url_for('static', path='js/base.js') }}?v=4" defer></script>
+    <script src="{{ url_for('static', path='js/base.js') }}?v=5" defer></script>
     {# ─── /NAVIGATION PROGRESS BAR ──────────────────────────────────────── #}
 
     <div class="site-wrapper">
@@ -878,11 +878,23 @@
         #cg-rate .cg-rate-si  { background: linear-gradient(90deg, #6ea8fe, #a78bfa); color: #0b1020; }
         #cg-rate button:active { transform: scale(0.97); }
     </style>
-    {# Invito a installare l'app Android. Sta accanto al dialogo di
-       valutazione perche' sono le due facce della stessa cosa: questo parla a
-       chi NON ha l'app (contesto 'web'), quello a chi ce l'ha gia' (contesto
-       'android_app'). Non possono comparire insieme. #}
-    {% include "_banner_android.html" %}
+    {# ⚠️ QUI c'era un secondo banner di installazione, `_banner_android.html`,
+       aggiunto il 16/11 e tolto il 20/11. Era un doppione: `#install-banner`
+       in static/js/base.js fa la stessa cosa dal 26/08, e la fa meglio — si
+       guadagna il diritto di comparire (15s sulla pagina + almeno un segnale
+       di interesse), ha la chiusura permanente, esclude le pagine dove
+       darebbe fastidio e gestisce iOS, desktop, PWA e TWA.
+
+       L'effetto del doppione, visto in una registrazione Clarity: un banner
+       finiva e ne compariva un altro poco dopo, con testi diversi.
+
+       L'unica cosa che il mio aveva in piu' — il referrer verso il Play Store
+       costruito dalle UTM della campagna invece che fisso — e' stata portata
+       dentro base.js (playStoreUrl). Era quella la ragione per cui esisteva.
+
+       La lezione, scritta anche nel handover: PRIMA di aggiungere un
+       componente, cercare se c'e' gia'. Un `grep "play.google"` costava dieci
+       secondi e avrebbe evitato tutto questo. #}
     <div id="cg-rate" role="dialog" aria-label="Valuta CosaGuardo">
         <p>Stai usando CosaGuardo da qualche giorno. Ti va di lasciare una valutazione sul Play Store? Serve a farlo trovare a più persone.</p>
         <div class="cg-rate-actions">

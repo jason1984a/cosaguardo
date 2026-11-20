@@ -365,11 +365,54 @@
         // Play Console e non riceverebbe le notifiche push native.
         // iOS e desktop restano sulla PWA, dove un'app nativa non c'e'.
         var PLAY_PACKAGE  = 'com.cosaguardo.app';
-        // referrer= viene letto dal Play Install Referrer: serve a distinguere
-        // le installazioni che arrivano dal sito da quelle organiche o dagli
-        // annunci. Utile soprattutto dopo l'integrazione dell'SDK Meta.
-        var PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=' + PLAY_PACKAGE +
-                             '&referrer=' + encodeURIComponent('utm_source=sito&utm_medium=banner&utm_campaign=install');
+        var K_UTM_ARRIVO  = 'cg_utm_arrivo';   // UTM dell'atterraggio, per tutta la visita
+
+        // ─── referrer DINAMICO verso il Play Store (20/11) ──────────────
+        // referrer= viene letto dal Play Install Referrer: Google Play lo
+        // conserva attraverso l'installazione e lo mostra nei rapporti di
+        // acquisizione di Play Console.
+        //
+        // ⚠️ Prima era una stringa fissa, 'utm_source=sito&utm_medium=banner'.
+        // Diceva "arriva dal banner del sito" e si fermava li': QUALE annuncio
+        // avesse portato quella persona si perdeva, ed e' esattamente il buco
+        // che impediva di dire se la campagna app_install funziona. Misurato il
+        // 18/11: ~440 arrivi al giorno da annunci, e nessun modo di collegarne
+        // uno a un'installazione.
+        //
+        // ⚠️ Le UTM si leggono UNA VOLTA all'atterraggio e si tengono in
+        // sessionStorage per tutta la visita. Non si possono leggere al momento
+        // del clic: il banner compare dopo almeno 15 secondi e spesso qualche
+        // pagina piu' avanti, quando la query string e' gia' pulita. Leggerle
+        // li' vuol dire perderle quasi sempre — ed e' il motivo per cui il
+        // referrer dinamico, fatto in modo ingenuo, non avrebbe funzionato.
+        function ricordaUtmArrivo() {
+            try {
+                if (sessionStorage.getItem(K_UTM_ARRIVO)) return;  // gia' preso
+                var p = new URLSearchParams(window.location.search);
+                var campi = [];
+                ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'].forEach(function (k) {
+                    var v = p.get(k);
+                    if (v) campi.push(k + '=' + v);
+                });
+                if (campi.length) sessionStorage.setItem(K_UTM_ARRIVO, campi.join('&'));
+            } catch (_) {}
+        }
+
+        function playStoreUrl() {
+            var ref = '';
+            try { ref = sessionStorage.getItem(K_UTM_ARRIVO) || ''; } catch (_) {}
+            // Visita senza campagna: resta utile sapere che l'installazione
+            // nasce da questo banner e non da una ricerca su Play.
+            if (!ref) ref = 'utm_source=sito&utm_medium=banner&utm_campaign=install';
+            return 'https://play.google.com/store/apps/details?id=' + PLAY_PACKAGE +
+                   '&referrer=' + encodeURIComponent(ref);
+        }
+
+        // Subito, non in DOMContentLoaded: lo script ha defer, quindi il DOM
+        // c'e' gia', e prima si legge la query string meno rischi di corse con
+        // qualunque cosa possa riscrivere la URL (history.replaceState piu'
+        // sotto ne e' un esempio: ripulisce ?registered=1).
+        ricordaUtmArrivo();
 
         // Soglie piu' basse su Android: l'offerta ora e' un'app vera sullo
         // Store, non un "aggiungi a schermata Home", quindi vale prima. Non
@@ -814,7 +857,7 @@
                         // sapere da qui se l'installazione e' avvenuta: il
                         // dato sta in Play Console.
                         dismissBanner('store_click');
-                        window.open(PLAY_STORE_URL, '_blank', 'noopener');
+                        window.open(playStoreUrl(), '_blank', 'noopener');
                         return;
                     }
 
@@ -930,7 +973,7 @@
             // Stessa regola della fascia: su Android si va allo Store.
             if (usePlayStore()) {
                 track('play_store_redirect', { source: 'installa_page' });
-                window.open(PLAY_STORE_URL, '_blank', 'noopener');
+                window.open(playStoreUrl(), '_blank', 'noopener');
                 return;
             }
             if (isStandalone()) {
