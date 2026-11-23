@@ -70,7 +70,13 @@
         <div class="admin-stat">
             <div class="admin-stat-val">{{ stats.total }}</div>
             <div class="admin-stat-label">Pagine SEO totali</div>
-            <div style="font-size:0.65rem;color:var(--muted);margin-top:3px;">cap {{ stats.cap_total }}</div>
+            {# ⚠️ Il tetto era scritto in grigio come una nota a margine, e il
+               23/11 il totale lo superava (1.016 contro 1.000) senza che
+               niente lo segnalasse. Un limite che non si vede quando viene
+               oltrepassato non e' un limite, e' un commento. #}
+            <div style="font-size:0.65rem;margin-top:3px;color:{{ '#fbbf24' if stats.total > stats.cap_total else 'var(--muted)' }};">
+                {% if stats.total > stats.cap_total %}⚠️ {{ stats.total - stats.cap_total }} oltre il cap {{ stats.cap_total }}{% else %}cap {{ stats.cap_total }}{% endif %}
+            </div>
         </div>
         <div class="admin-stat">
             <div class="admin-stat-val" style="color:#a78bfa;">{{ stats.by_type.movie or 0 }}</div>
@@ -137,8 +143,22 @@
                 <div style="font-weight:600;color:#a78bfa;">{{ last.seasons_detected or 0 }}</div>
             </div>
             <div>
-                <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin-bottom:4px;">Stale rimossi</div>
-                <div style="font-weight:600;color:#f87171;">−{{ (last.evergreen_removed or 0) + (last.new_removed or 0) }}</div>
+                <div style="font-size:0.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;margin-bottom:4px;">Rimossi</div>
+                {# ⚠️ SEPARATI, non sommati. Erano un numero solo, e il 23/11
+                   quel «−5» e' rimasto illeggibile: poteva essere la pulizia
+                   ordinaria delle new release scadute (succede ogni settimana,
+                   e va bene) oppure una cancellazione evergreen, che con
+                   l'isteresi non puo' avvenire prima del 7/12. Sono due cose
+                   diverse: una e' manutenzione, l'altra e' il meccanismo che
+                   nell'autunno 2026 ha prodotto 517 pagine in errore 404.
+                   Sommarle nascondeva esattamente il segnale da sorvegliare. #}
+                <div style="font-weight:600;">
+                    <span style="color:{{ '#f87171' if (last.evergreen_removed or 0) else 'var(--muted)' }};">−{{ last.evergreen_removed or 0 }}</span>
+                    <span style="color:var(--muted);font-weight:500;font-size:0.78rem;">evergreen</span>
+                    <span style="color:var(--muted);opacity:0.5;">·</span>
+                    <span style="color:#fbbf24;">−{{ last.new_removed or 0 }}</span>
+                    <span style="color:var(--muted);font-weight:500;font-size:0.78rem;">new release</span>
+                </div>
             </div>
         </div>
         {% if last.error %}
@@ -164,6 +184,13 @@
                     <th>Evergreen diff</th>
                     <th>New +</th>
                     <th>Stagioni</th>
+                    {# La colonna che mancava. I valori delle corse passate sono
+                       gia' in `seo_refresh_log`: appena questa riga esiste si
+                       legge retroattivamente cosa e' stato cancellato, corsa
+                       per corsa — comprese le cinque in errore di settembre e
+                       ottobre, che finora erano una ricostruzione e non una
+                       misura. #}
+                    <th>Rimossi<br><span style="font-weight:600;text-transform:none;letter-spacing:0;opacity:0.7;">ever · new</span></th>
                     <th>Esito</th>
                 </tr>
             </thead>
@@ -180,6 +207,14 @@
                     <td style="font-size:0.82rem;color:#fbbf24;">{{ r.evergreen_diff or 0 }}</td>
                     <td style="font-size:0.82rem;color:#4ade80;">+{{ r.new_added or 0 }}</td>
                     <td style="font-size:0.82rem;color:#a78bfa;">{{ r.seasons_detected or 0 }}</td>
+                    <td style="font-size:0.82rem;white-space:nowrap;">
+                        {# Rosso solo quando c'e' davvero una cancellazione
+                           evergreen: una colonna rossa a ogni riga smette di
+                           voler dire qualcosa dopo due settimane. #}
+                        <span style="color:{{ '#f87171' if (r.evergreen_removed or 0) else 'var(--muted)' }};font-weight:{{ '700' if (r.evergreen_removed or 0) else '400' }};">−{{ r.evergreen_removed or 0 }}</span>
+                        <span style="color:var(--muted);opacity:0.5;"> · </span>
+                        <span style="color:var(--muted);">−{{ r.new_removed or 0 }}</span>
+                    </td>
                     <td>
                         {% if r.error %}
                         <span class="admin-badge" style="background:rgba(248,113,113,0.15);color:#fca5a5;">⚠️ errore</span>
