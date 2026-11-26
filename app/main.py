@@ -7435,42 +7435,74 @@ def _sport_per_slug(slug: str):
 # spesso Googlebot torna, e l'autorita' si accumula invece di disperdersi su
 # 380 pagine usa-e-getta. Vedi indicizzazione-storia-e-diagnosi.md.
 
-# ⚠️ Due percorsi, in ordine di precedenza.
-#
-# Su Render il filesystem del repo e' effimero: quello che ci scrive il
-# worker settimanale sparirebbe al primo riavvio, tornando alla copia del
-# commit. PARTITE_PATH punta al disco persistente (accanto al database), ed
-# e' li' che il worker scrive.
-#
-# Il file del repo resta come ripiego: alla prima accensione, o se il disco
-# e' vuoto, la pagina mostra comunque il calendario committato invece di
-# essere vuota.
+# ⚠️ Due STRATI, non due file alternativi. Vedi _partite_righe_unite():
+# il disco persistente porta il calendario che scrive il worker dall'API,
+# il file del repo porta quello che solo una persona puo' sapere (le
+# co-esclusive Sky, le coppe, le dirette in chiaro) e passa da git.
 _PARTITE_REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                              "sport", "partite.yaml")
 _PARTITE_DISCO = os.environ.get("PARTITE_PATH") or ""
 _partite_cache = None
 
 
-def _partite_file():
-    """Il file da leggere: il disco persistente se c'e', altrimenti il repo."""
-    if _PARTITE_DISCO and os.path.exists(_PARTITE_DISCO):
-        return _PARTITE_DISCO
-    return _PARTITE_REPO
-
-
-def _fuso_italia():
-    """Il fuso di Roma, con ripiego sul fuso del processo.
-
-    ⚠️ Il server gira in UTC. Senza questa conversione una pagina che si
-    chiama "partite di oggi" cambierebbe giorno all'una di notte italiana, e
-    per un'ora ogni sera mostrerebbe gia' il programma del giorno dopo.
-    """
+def _partite_leggi(percorso) -> list:
     try:
-        from zoneinfo import ZoneInfo
-        return ZoneInfo("Europe/Rome")
+        with open(percorso, encoding="utf-8") as f:
+            return (_yaml.safe_load(f) or {}).get("partite") or []
+    except FileNotFoundError:
+        return []
     except Exception as e:
-        log.warning("partite: zoneinfo non disponibile, uso il fuso locale: %s", e)
-        return None
+        log.error("partite: %s illeggibile (%s), ignorato", percorso, e)
+        return []
+
+
+def _partite_righe_unite() -> list:
+    """Unisce i due strati: automatico sul disco, manuale nel repo.
+
+    ⚠️ Due strati e non due file alternativi, perche' sanno cose diverse.
+
+    - Il disco (`/data/partite.yaml`) lo scrive il worker del lunedi' dai
+      dati dell'API: sa il CALENDARIO, cioe' quali partite si giocano e a
+      che ora, e lo sa meglio di chiunque.
+    - Il repo (`sport/partite.yaml`) lo scrivi a mano e passa da git: sa
+      DOVE SI VEDONO — le co-esclusive Sky, le coppe europee che l'API
+      gratuita non copre, le dirette in chiaro. Nessuna API ce lo dice.
+
+    Quindi quando la stessa partita c'e' in tutti e due:
+      · l'orario lo prende dal disco  (lo sa l'API)
+      · `dove` e `chiaro` dal repo    (lo sai tu)
+
+    ⚠️ Senza questa unione, modificare il file del repo e fare push non
+    cambierebbe niente sul sito, perche' la pagina leggeva solo il disco.
+    E' il buco che si era aperto spostando la scrittura sul disco
+    persistente: la pagina funzionava, ma il modo di correggerla a mano era
+    sparito senza che niente lo segnalasse.
+    """
+    if _yaml is None:
+        return []
+
+    auto = _partite_leggi(_PARTITE_DISCO) if _PARTITE_DISCO else []
+    mano = _partite_leggi(_PARTITE_REPO)
+    if not auto and not mano:
+        log.warning("partite: nessuna delle due fonti leggibile, pagina vuota")
+        return []
+
+    def chiave(r):
+        return (r.get("competizione"), r.get("casa"), r.get("ospite"))
+
+    unite = {chiave(r): dict(r) for r in auto}
+    for r in mano:
+        k = chiave(r)
+        if k in unite:
+            fuso = dict(r)                       # il manuale fa da base
+            fuso["inizio"] = unite[k].get("inizio") or r.get("inizio")
+            unite[k] = fuso
+        else:
+            unite[k] = dict(r)
+
+    log.info("partite: %d dal disco + %d dal repo = %d righe",
+             len(auto), len(mano), len(unite))
+    return list(unite.values())
 
 
 def _partite_calendario() -> list:
@@ -7493,20 +7525,12 @@ def _partite_calendario() -> list:
 
     comp_per_slug = {c.get("slug"): c for c in _sport_competizioni()}
     fuori = []
-    try:
-        percorso = _partite_file()
-        with open(percorso, encoding="utf-8") as f:
-            dati = _yaml.safe_load(f) or {}
-    except FileNotFoundError:
-        log.warning("partite: %s assente, pagina vuota", _partite_file())
-        _partite_cache = []
-        return _partite_cache
-    except Exception as e:
-        log.error("partite: YAML illeggibile (%s), pagina vuota", e)
+    righe = _partite_righe_unite()
+    if not righe:
         _partite_cache = []
         return _partite_cache
 
-    for riga in (dati.get("partite") or []):
+    for riga in righe:
         slug = riga.get("competizione") or ""
         comp = comp_per_slug.get(slug)
         if not comp:
@@ -7558,11 +7582,26 @@ def _partite_calendario() -> list:
 
 
 def _partite_meta() -> dict:
-    try:
-        with open(_partite_file(), encoding="utf-8") as f:
-            return (_yaml.safe_load(f) or {}).get("meta") or {}
-    except Exception:
-        return {}
+    """La `meta` piu' recente fra i due strati.
+
+    ⚠️ `aggiornato` finisce in pagina: deve dire quando il dato e' stato
+    toccato l'ultima volta, da chiunque. Prendere quella di un solo file
+    direbbe al lettore che il calendario e' piu' vecchio di quanto sia —
+    o, peggio, piu' fresco.
+    """
+    migliore, quando = {}, ""
+    for p in (_PARTITE_DISCO, _PARTITE_REPO):
+        if not p:
+            continue
+        try:
+            with open(p, encoding="utf-8") as f:
+                m = (_yaml.safe_load(f) or {}).get("meta") or {}
+        except Exception:
+            continue
+        d = str(m.get("aggiornato") or "")
+        if d >= quando:          # ISO: l'ordine alfabetico e' quello giusto
+            migliore, quando = m, d
+    return migliore
 
 
 _GIORNI_IT = ("lunedì", "martedì", "mercoledì", "giovedì",
@@ -9770,7 +9809,7 @@ def admin_partite_aggiorna(request: Request):
     e["da_controllare"] = [f"{p['inizio']} {p['casa']}–{p['ospite']}"
                            for p in e.get("da_controllare", [])]
     e["durata_s"] = round(_time.time() - inizio, 1)
-    e["file_letto_dalla_pagina"] = _partite_file()
+    e["righe_in_pagina"] = len(_partite_righe_unite())
     e["disco_persistente"] = _PARTITE_DISCO or "(PARTITE_PATH non impostata)"
     return JSONResponse(e)
 
