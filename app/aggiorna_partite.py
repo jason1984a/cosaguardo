@@ -371,20 +371,32 @@ def main():
         for g in guai:
             print(f"   · {g}")
 
-    # Le righe che un umano deve ancora guardare. Serie A: ogni giornata ha
-    # tre co-esclusive Sky che l'API non conosce.
-    da_completare = [p for p in partite
-                     if p.get("competizione") == "serie-a" and len(p.get("dove") or []) == 1]
+    # Le righe che un umano deve ancora guardare: SOLO quelle appena aggiunte.
+    #
+    # ⚠️ Prima qui contavo tutte le righe di Serie A con la sola DAZN, e ne
+    # usciva "11 da completare" quando quelle davvero da controllare erano 4:
+    # le altre sette erano gia' state verificate ed erano DAZN e basta, che e'
+    # la risposta giusta. Un avviso che segnala anche il lavoro gia' fatto
+    # diventa rumore, e un avviso che e' rumore smette di essere letto — e'
+    # lo stesso difetto del cap sul pannello SEO.
+    da_completare = [p for p in aggiunte if p.get("competizione") == "serie-a"]
     if da_completare:
-        print(f"\nDa completare a mano ({len(da_completare)} righe di Serie A, "
-              f"solo DAZN): le tre co-esclusive Sky della giornata.")
+        print(f"\nDa controllare a mano, {len(da_completare)} partite nuove di Serie A:")
+        for p in da_completare:
+            print(f"   · {p['inizio']}  {p['casa']}–{p['ospite']}")
+        print("  Tre per giornata sono in co-esclusiva su Sky Go e NOW, e l'API "
+              "non lo sa.")
         print(f"  Fonte: {FONTE_COESCLUSIVE}")
+        print("  Finche' non le aggiungi la pagina resta corretta, solo incompleta.")
 
     if a.prova:
         print("\n--prova: non ho scritto niente. Ecco come verrebbe:\n")
         for p in partite[:40]:
             ch = f"  [chiaro: {p['chiaro'].get('canale')}]" if p.get("chiaro") else ""
-            print(f"  {p['inizio']}  {p['casa']}–{p['ospite']:<22} "
+            # La colonna si allinea sulla COPPIA, non sul solo ospite: con
+            # "Borac Banja Luka" la tabella si sfalsava.
+            sfida = f"{p['casa']}–{p['ospite']}"
+            print(f"  {p['inizio']}  {sfida:<32} "
                   f"{p['competizione']:<18} {', '.join(p.get('dove') or [])}{ch}")
         return 0
 
