@@ -9716,6 +9716,38 @@ def admin_sport(request: Request):
     )
 
 
+@app.get("/admin/partite/aggiorna", response_class=JSONResponse)
+def admin_partite_aggiorna(request: Request):
+    """Fa partire a comando l'aggiornamento del calendario, e racconta com'e' andato.
+
+    ⚠️ Esiste per un motivo preciso: senza, il percorso automatico si
+    proverebbe per la prima volta lunedi' alle 05:00, cioe' nell'unico
+    momento in cui nessuno guarda. Se qualcosa non va — permessi di
+    scrittura su /data, token non letto dall'ambiente del server, Telegram —
+    lo si scoprirebbe dal fatto che la pagina non si e' aggiornata. Stesso
+    motivo per cui esiste /telegram/prova.
+
+    Chiama esattamente la funzione dello scheduler: provare qualcosa di
+    simile non proverebbe niente.
+    """
+    if not _check_admin(request):
+        return JSONResponse({"errore": "non autorizzato"}, status_code=403)
+
+    inizio = _time.time()
+    e = _partite_aggiorna("manuale")
+    # Le partite complete non servono nella risposta e la renderebbero
+    # illeggibile: qui interessa cosa e' cambiato e dove ha scritto.
+    e = {k: v for k, v in e.items() if k != "partite"}
+    e["aggiunte"] = [f"{p['inizio']} {p['casa']}–{p['ospite']}"
+                     for p in e.get("aggiunte", [])]
+    e["da_controllare"] = [f"{p['inizio']} {p['casa']}–{p['ospite']}"
+                           for p in e.get("da_controllare", [])]
+    e["durata_s"] = round(_time.time() - inizio, 1)
+    e["file_letto_dalla_pagina"] = _partite_file()
+    e["disco_persistente"] = _PARTITE_DISCO or "(PARTITE_PATH non impostata)"
+    return JSONResponse(e)
+
+
 @app.get("/admin/feedback-stats", response_class=HTMLResponse)
 def admin_feedback_stats(request: Request):
     """
