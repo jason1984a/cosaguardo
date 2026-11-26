@@ -7435,9 +7435,27 @@ def _sport_per_slug(slug: str):
 # spesso Googlebot torna, e l'autorita' si accumula invece di disperdersi su
 # 380 pagine usa-e-getta. Vedi indicizzazione-storia-e-diagnosi.md.
 
-_PARTITE_PERCORSO = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                                 "sport", "partite.yaml")
+# ⚠️ Due percorsi, in ordine di precedenza.
+#
+# Su Render il filesystem del repo e' effimero: quello che ci scrive il
+# worker settimanale sparirebbe al primo riavvio, tornando alla copia del
+# commit. PARTITE_PATH punta al disco persistente (accanto al database), ed
+# e' li' che il worker scrive.
+#
+# Il file del repo resta come ripiego: alla prima accensione, o se il disco
+# e' vuoto, la pagina mostra comunque il calendario committato invece di
+# essere vuota.
+_PARTITE_REPO = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             "sport", "partite.yaml")
+_PARTITE_DISCO = os.environ.get("PARTITE_PATH") or ""
 _partite_cache = None
+
+
+def _partite_file():
+    """Il file da leggere: il disco persistente se c'e', altrimenti il repo."""
+    if _PARTITE_DISCO and os.path.exists(_PARTITE_DISCO):
+        return _PARTITE_DISCO
+    return _PARTITE_REPO
 
 
 def _fuso_italia():
@@ -7476,10 +7494,11 @@ def _partite_calendario() -> list:
     comp_per_slug = {c.get("slug"): c for c in _sport_competizioni()}
     fuori = []
     try:
-        with open(_PARTITE_PERCORSO, encoding="utf-8") as f:
+        percorso = _partite_file()
+        with open(percorso, encoding="utf-8") as f:
             dati = _yaml.safe_load(f) or {}
     except FileNotFoundError:
-        log.warning("partite: %s assente, pagina vuota", _PARTITE_PERCORSO)
+        log.warning("partite: %s assente, pagina vuota", _partite_file())
         _partite_cache = []
         return _partite_cache
     except Exception as e:
@@ -7540,7 +7559,7 @@ def _partite_calendario() -> list:
 
 def _partite_meta() -> dict:
     try:
-        with open(_PARTITE_PERCORSO, encoding="utf-8") as f:
+        with open(_partite_file(), encoding="utf-8") as f:
             return (_yaml.safe_load(f) or {}).get("meta") or {}
     except Exception:
         return {}
@@ -7603,6 +7622,120 @@ def partite_oggi_in_tv(request: Request):
 # ⚠️ Uno slug che non esiste piu' viene semplicemente saltato, la home non si
 # rompe. Se ne aggiungi uno al YAML e vuoi vederlo qui, va aggiunto anche a
 # questa lista.
+# ─── Aggiornamento automatico del calendario (lunedì 05:00) ──────────────
+#
+# ⚠️ Perche' sul server e non sul PC: con l'orologio sul PC, a PC spento non
+# succede niente. E' la stessa ragione per cui la coda social sta qui e non
+# su `tierlist`, imparata a ottobre. Marco puo' essere via il lunedi'.
+#
+# Le 05:00 e non le 03:00 per non accavallarsi al refresh SEO, che gira
+# lunedi' alle 03:00 e tocca lo stesso database.
+
+def _partite_aggiorna(trigger: str = "scheduler") -> dict:
+    """Una corsa dell'aggiornamento. Ritorna il resoconto, non solleva mai.
+
+    ⚠️ Chiama la STESSA funzione dello script da riga di comando
+    (`aggiorna_partite.esegui`). Se qui ci fosse una seconda copia della
+    logica, il comportamento a PC spento divergerebbe da quello provato a
+    mano, e ce ne accorgeremmo solo il giorno in cui sbaglia.
+    """
+    token = os.environ.get("FOOTBALL_DATA_TOKEN", "")
+    if not token:
+        return {"saltato": "manca FOOTBALL_DATA_TOKEN"}
+    destinazione = _PARTITE_DISCO or _PARTITE_REPO
+    try:
+        import aggiorna_partite as _ap
+        # Se i controlli non passano, esegui() scrive una proposta invece del
+        # file vero: la mettiamo accanto alla destinazione, sul disco
+        # persistente, non nella cartella del repo che il riavvio azzera.
+        e = _ap.esegui(token, giorni=9, partite_path=destinazione, pubblica=True,
+                       proposta_path=destinazione + ".proposta")
+    except SystemExit as ex:
+        # esegui() puo' terminare il processo tramite sys.exit sugli errori di
+        # rete: qui dentro sarebbe un suicidio del web server.
+        return {"errore": f"uscita dallo script: {ex}"}
+    except Exception as ex:
+        log.exception("partite: aggiornamento fallito (%s)", trigger)
+        return {"errore": str(ex)[:300]}
+
+    global _partite_cache
+    _partite_cache = None          # senza questo la pagina resta a ieri
+    log.info("partite: aggiornamento %s — %d → %d, nuove %d, scritto %s",
+             trigger, e["prima"], e["dopo"], len(e["aggiunte"]), e["scritto"])
+
+    righe = [f"<b>Calendario partite aggiornato</b> ({trigger})",
+             f"{e['prima']} → {e['dopo']} partite, {len(e['aggiunte'])} nuove"]
+    for c in e["corretti"]:
+        righe.append("orario cambiato — " + _tg_scappa(c))
+    if e["guai"]:
+        righe.append("\n⚠️ <b>NON pubblicato</b>, controlli non superati:")
+        righe += ["• " + _tg_scappa(g) for g in e["guai"][:8]]
+    if e["da_controllare"]:
+        righe.append("\n<b>Da completare a mano</b> (co-esclusive Sky):")
+        righe += [f"• {_tg_scappa(p['inizio'])} {_tg_scappa(p['casa'])}–"
+                  f"{_tg_scappa(p['ospite'])}" for p in e["da_controllare"]]
+    # ⚠️ Niente messaggio quando non e' cambiato niente: una notifica
+    # settimanale che dice sempre "tutto uguale" si impara a ignorare, e
+    # il giorno che dice qualcosa non la legge nessuno.
+    if e["aggiunte"] or e["corretti"] or e["guai"]:
+        try:
+            _notifica_dettaglio("\n".join(righe))
+        except Exception as ex:
+            log.warning("partite: notifica Telegram fallita: %s", ex)
+    return e
+
+
+def _partite_worker():
+    import time as _t
+    while True:
+        attesa = _seconds_until_next_monday_3am_rome() + 2 * 3600
+        log.info("partite: prossimo aggiornamento fra %.1fh", attesa / 3600)
+        _t.sleep(attesa)
+        _partite_aggiorna("scheduler")
+
+
+@app.on_event("startup")
+def _avvia_partite_scheduler():
+    if os.environ.get("DISABLE_PARTITE_REFRESH"):
+        log.info("partite: scheduler disattivato da variabile d'ambiente")
+        return
+    if not os.environ.get("FOOTBALL_DATA_TOKEN"):
+        # Un thread che ogni settimana scopre di non avere il token e' solo
+        # rumore nei log: meglio dirlo una volta all'avvio.
+        log.info("partite: scheduler non avviato (manca FOOTBALL_DATA_TOKEN)")
+        return
+
+    import threading as _th
+
+    def _recupero():
+        """Se il file e' piu' vecchio di sei giorni, aggiorna subito.
+
+        ⚠️ Serve perche' Render riavvia il container quando vuole: senza
+        recupero, un riavvio la domenica sera farebbe saltare il lunedi' e
+        la pagina resterebbe ferma una settimana intera.
+        """
+        try:
+            meta = _partite_meta()
+            quando = str(meta.get("aggiornato") or "")
+            vecchio = True
+            if quando:
+                try:
+                    eta = (datetime.now().date()
+                           - datetime.strptime(quando, "%Y-%m-%d").date()).days
+                    vecchio = eta >= 6
+                    log.info("partite: calendario aggiornato %d giorni fa", eta)
+                except ValueError:
+                    pass
+            if vecchio:
+                _partite_aggiorna("recupero_avvio")
+        except Exception as e:
+            log.warning("partite: recupero all'avvio fallito: %s", e)
+
+    _th.Thread(target=_recupero, daemon=True, name="partite_recupero").start()
+    _th.Thread(target=_partite_worker, daemon=True, name="partite_scheduler").start()
+    log.info("partite: scheduler avviato (lunedì 05:00 Europe/Rome)")
+
+
 _SPORT_HOME_ORDINE = [
     "serie-a", "champions-league", "formula-1", "motogp", "nba",
     "premier-league", "europa-league", "wimbledon", "giro-d-italia",

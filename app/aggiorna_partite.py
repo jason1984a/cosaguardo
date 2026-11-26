@@ -44,20 +44,28 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
+# ⚠️ Niente sys.exit qui: questo modulo lo importa anche main.py per far
+# girare l'aggiornamento dal server. Un sys.exit durante l'import
+# spegnerebbe il sito invece di stampare un errore. Le dipendenze mancanti
+# le controlla main(), che e' l'unico contesto in cui uscire ha senso.
 try:
     import yaml
 except ImportError:
-    sys.exit("Manca PyYAML:  pip install pyyaml")
+    yaml = None
 
 try:
     from zoneinfo import ZoneInfo
     ROMA = ZoneInfo("Europe/Rome")
 except Exception:
-    sys.exit("Manca zoneinfo (serve Python 3.9+)")
+    ROMA = None
 
 QUI = os.path.dirname(os.path.abspath(__file__))
 DIRITTI = os.path.join(QUI, "sport", "diritti-italia.yaml")
-PARTITE = os.path.join(QUI, "sport", "partite.yaml")
+# Su Render il filesystem del repo e' effimero: a ogni riavvio tornerebbe la
+# copia del commit, cancellando l'aggiornamento automatico. PARTITE_PATH
+# punta al disco persistente, accanto al database.
+PARTITE = os.environ.get("PARTITE_PATH") or os.path.join(QUI, "sport", "partite.yaml")
+PARTITE_REPO = os.path.join(QUI, "sport", "partite.yaml")
 PROPOSTA = os.path.join(QUI, "sport", "partite.proposta.yaml")
 
 API = "https://api.football-data.org/v4/competitions/{codice}/matches"
@@ -243,18 +251,26 @@ def unisci(esistenti, nuove, certe):
 
 # ─── scrittura ────────────────────────────────────────────────────────────
 
-def blocco_testa(percorso):
-    """L'intestazione del file, verbatim.
+def blocco_testa(*percorsi):
+    """L'intestazione del file, verbatim, dal primo percorso che esiste.
 
     ⚠️ Non si usa yaml.dump sull'intero file: cancellerebbe i commenti, che
     qui sono le istruzioni per compilarlo a mano. Si riscrive solo l'elenco.
+
+    ⚠️ Si prova anche la copia del repo: sul server, alla prima corsa, il
+    file sul disco persistente non esiste ancora e senza questo ripiego le
+    istruzioni andrebbero perse per sempre al primo giro automatico.
     """
-    try:
-        testo = open(percorso, encoding="utf-8").read()
-    except FileNotFoundError:
-        return "meta:\n  aggiornato: ''\n\n"
-    i = testo.find("\npartite:")
-    return testo[:i + 1] if i > 0 else testo
+    for p in percorsi:
+        if not p:
+            continue
+        try:
+            testo = open(p, encoding="utf-8").read()
+        except OSError:
+            continue
+        i = testo.find("\npartite:")
+        return testo[:i + 1] if i > 0 else testo
+    return "meta:\n  aggiornato: ''\n\n"
 
 
 def riga_yaml(p):
@@ -272,8 +288,8 @@ def riga_yaml(p):
     return "\n".join(fuori)
 
 
-def scrivi(percorso, partite):
-    testa = blocco_testa(PARTITE)
+def scrivi(percorso, partite, testa_da=None):
+    testa = blocco_testa(*(testa_da or (percorso, PARTITE, PARTITE_REPO)))
     oggi = datetime.now(ROMA).date().isoformat()
     # `meta.aggiornato` compare in pagina: se lo lasciassimo vecchio diremmo al
     # lettore che il dato e' piu' stantio di quanto sia.
@@ -325,6 +341,48 @@ def controlli(partite, diritti):
     return guai
 
 
+# ─── esecuzione, condivisa fra riga di comando e server ───────────────────
+
+def esegui(token, giorni=9, partite_path=None, diritti_path=None,
+           pubblica=False, proposta_path=None):
+    """Fa il lavoro e ritorna un resoconto. Non stampa niente.
+
+    La usano sia main() sia il worker di Render: se fossero due percorsi di
+    codice diversi, il comportamento a PC spento divergerebbe da quello che
+    abbiamo provato a mano, e ce ne accorgeremmo solo quando sbaglia.
+    """
+    partite_path = partite_path or PARTITE
+    diritti_path = diritti_path or DIRITTI
+
+    diritti = carica_yaml(diritti_path)
+    certe = piattaforme_certe(diritti)
+    nuove, problemi = scarica(token, giorni)
+
+    attuali = (carica_yaml(partite_path, obbligatorio=False).get("partite")
+               or carica_yaml(PARTITE_REPO, obbligatorio=False).get("partite")
+               or [])
+    partite, aggiunte, corretti = unisci(attuali, nuove, certe)
+    guai = controlli(partite, diritti)
+
+    esito = {
+        "prima": len(attuali), "dopo": len(partite),
+        "aggiunte": aggiunte, "corretti": corretti,
+        "problemi": problemi, "guai": guai,
+        "partite": partite, "scritto": None,
+        "da_controllare": [p for p in aggiunte
+                           if p.get("competizione") == "serie-a"],
+        "senza_regola": [s for s in COMPETIZIONI.values() if not certe.get(s)],
+    }
+
+    if pubblica and not guai:
+        scrivi(partite_path, partite)
+        esito["scritto"] = partite_path
+    elif pubblica:
+        scrivi(proposta_path or PROPOSTA, partite)
+        esito["scritto"] = proposta_path or PROPOSTA
+    return esito
+
+
 # ─── principale ───────────────────────────────────────────────────────────
 
 def main():
@@ -339,51 +397,49 @@ def main():
                          "infrasettimanale successivo)")
     a = ap.parse_args()
 
+    if yaml is None:
+        sys.exit("Manca PyYAML:  pip install pyyaml")
+    if ROMA is None:
+        sys.exit("Manca zoneinfo (serve Python 3.9+)")
+
     token = os.environ.get("FOOTBALL_DATA_TOKEN")
     if not token:
-        sys.exit("Manca FOOTBALL_DATA_TOKEN nell'ambiente.\n"
+        sys.exit("Manca FOOTBALL_DATA_TOKEN nell\'ambiente.\n"
                  "Registrazione gratuita: https://www.football-data.org/client/register")
 
-    diritti = carica_yaml(DIRITTI)
-    certe = piattaforme_certe(diritti)
-    senza_regola = [s for s in COMPETIZIONI.values() if not certe.get(s)]
-    if senza_regola:
-        print("⚠️  Nessuna piattaforma con `tutte_le_partite: true` per: "
-              + ", ".join(senza_regola))
-        print("    Le partite di queste competizioni verranno saltate.\n")
+    print(f"Scarico il calendario (prossimi {a.giorni} giorni)\u2026")
+    e = esegui(token, giorni=a.giorni,
+               pubblica=(a.pubblica and not a.prova))
 
-    print(f"Scarico il calendario (prossimi {a.giorni} giorni)…")
-    nuove, problemi = scarica(token, a.giorni)
-    for p in problemi:
-        print(f"  ⚠️  {p}")
+    if e["senza_regola"]:
+        print("\u26a0\ufe0f  Nessuna piattaforma con `tutte_le_partite: true` per: "
+              + ", ".join(e["senza_regola"]))
+        print("    Le partite di queste competizioni sono state saltate.")
+    for p in e["problemi"]:
+        print(f"  \u26a0\ufe0f  {p}")
 
-    attuali = (carica_yaml(PARTITE, obbligatorio=False).get("partite") or [])
-    partite, aggiunte, corretti = unisci(attuali, nuove, certe)
+    print(f"\nIn file: {e['prima']}  \u2192  dopo l'unione: {e['dopo']}  "
+          f"(nuove: {len(e['aggiunte'])})")
+    for c in e["corretti"]:
+        print(f"  orario cambiato \u2014 {c}")
 
-    print(f"\nIn file: {len(attuali)}  →  dopo l'unione: {len(partite)}  "
-          f"(nuove: {len(aggiunte)})")
-    for c in corretti:
-        print(f"  orario cambiato — {c}")
-
-    guai = controlli(partite, diritti)
-    if guai:
-        print("\n⚠️  Controlli non superati:")
-        for g in guai:
-            print(f"   · {g}")
+    if e["guai"]:
+        print("\n\u26a0\ufe0f  Controlli non superati:")
+        for g in e["guai"]:
+            print(f"   \u00b7 {g}")
 
     # Le righe che un umano deve ancora guardare: SOLO quelle appena aggiunte.
     #
-    # ⚠️ Prima qui contavo tutte le righe di Serie A con la sola DAZN, e ne
+    # \u26a0\ufe0f Prima contavo tutte le righe di Serie A con la sola DAZN, e ne
     # usciva "11 da completare" quando quelle davvero da controllare erano 4:
     # le altre sette erano gia' state verificate ed erano DAZN e basta, che e'
     # la risposta giusta. Un avviso che segnala anche il lavoro gia' fatto
-    # diventa rumore, e un avviso che e' rumore smette di essere letto — e'
+    # diventa rumore, e un avviso che e' rumore smette di essere letto \u2014 e'
     # lo stesso difetto del cap sul pannello SEO.
-    da_completare = [p for p in aggiunte if p.get("competizione") == "serie-a"]
-    if da_completare:
-        print(f"\nDa controllare a mano, {len(da_completare)} partite nuove di Serie A:")
-        for p in da_completare:
-            print(f"   · {p['inizio']}  {p['casa']}–{p['ospite']}")
+    if e["da_controllare"]:
+        print(f"\nDa controllare a mano, {len(e['da_controllare'])} partite nuove di Serie A:")
+        for p in e["da_controllare"]:
+            print(f"   \u00b7 {p['inizio']}  {p['casa']}\u2013{p['ospite']}")
         print("  Tre per giornata sono in co-esclusiva su Sky Go e NOW, e l'API "
               "non lo sa.")
         print(f"  Fonte: {FONTE_COESCLUSIVE}")
@@ -391,30 +447,27 @@ def main():
 
     if a.prova:
         print("\n--prova: non ho scritto niente. Ecco come verrebbe:\n")
-        for p in partite[:40]:
+        for p in e["partite"][:40]:
             ch = f"  [chiaro: {p['chiaro'].get('canale')}]" if p.get("chiaro") else ""
             # La colonna si allinea sulla COPPIA, non sul solo ospite: con
             # "Borac Banja Luka" la tabella si sfalsava.
-            sfida = f"{p['casa']}–{p['ospite']}"
+            sfida = f"{p['casa']}\u2013{p['ospite']}"
             print(f"  {p['inizio']}  {sfida:<32} "
                   f"{p['competizione']:<18} {', '.join(p.get('dove') or [])}{ch}")
         return 0
 
     if a.pubblica:
-        if guai:
-            print("\n✗ NON pubblico: prima vanno sistemati i punti qui sopra.")
-            print("  Scrivo comunque la proposta, cosi' la puoi correggere a mano.")
-            scrivi(PROPOSTA, partite)
-            print(f"  → {PROPOSTA}")
+        if e["guai"]:
+            print("\n\u2717 NON pubblico: prima vanno sistemati i punti qui sopra.")
+            print(f"  Proposta scritta comunque \u2192 {e['scritto']}")
             return 1
-        scrivi(PARTITE, partite)
-        print(f"\n✓ Scritto {PARTITE}")
-        print("  Ricorda: commit, push, e reinvio della sitemap non serve "
-              "(la URL esiste gia').")
+        print(f"\n\u2713 Scritto {e['scritto']}")
+        print("  Ricorda commit e push. Reinvio della sitemap non serve: "
+              "la URL esiste gia'.")
         return 0
 
-    scrivi(PROPOSTA, partite)
-    print(f"\n✓ Scritto {PROPOSTA}")
+    scrivi(PROPOSTA, e["partite"])
+    print(f"\n\u2713 Scritto {PROPOSTA}")
     print("  Controlla, completa le co-esclusive, poi rinominalo in partite.yaml.")
     return 0
 
