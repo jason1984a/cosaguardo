@@ -134,7 +134,8 @@
 
         <div class="cg-sph-row" id="cg-sph-row">
             {% for c in sport_home %}
-            <a class="cg-sph-card cg-sph-card--{{ c.sport }}" href="/sport/{{ c.slug }}">
+            <a class="cg-sph-card cg-sph-card--{{ c.sport }}{% if c.immagine %} cg-sph-card--foto{% endif %}"
+               href="/sport/{{ c.slug }}">
                 {# ⚠️ Foto se c'e', altrimenti il disegno. Il ripiego non e'
                    una gentilezza: permette di aggiungere le immagini una
                    alla volta invece di aspettare che siano pronte tutte e
@@ -268,12 +269,26 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* ⚠️ Scurita e desaturata, e non e' un vezzo: le foto di campi al sole
+       (erba, cemento blu, terra rossa) arrivano molto piu' chiare e sature
+       dei gradienti che sostituiscono, e accanto alle locandine sparavano.
+       Provato sulle sette foto vere: senza questo filtro il testo in basso
+       su Wimbledon e Roland Garros si legge male anche col velo rinforzato. */
+    filter: brightness(.78) saturate(.88);
     /* ⚠️ Manopola della tinta, oggi spenta. Alzando --cg-sph-tinta la foto
        viene virata verso il colore della disciplina: serve a far sembrare
        venti fotografie diverse una serie sola. A 0 restano come sono, a .75
        diventano quasi monocrome e si perde il dettaglio. Se un giorno la si
        accende, la via di mezzo utile sta intorno a .20-.25. */
-    opacity: 1;
+}
+
+/* ⚠️ Velo piu' alto e piu' carico SOLO sulle card con foto. Quello della
+   regola base e' tarato sui gradienti di disciplina, che sono gia' scuri in
+   basso; una fotografia no, e sotto il nome puo' esserci qualunque cosa. */
+.cg-sph-card--foto::after {
+    height: 72%;
+    background: linear-gradient(to top,
+                rgba(0,0,0,.95) 8%, rgba(0,0,0,.62) 40%, rgba(0,0,0,0));
 }
 .cg-sph-card::before {
     content: "";
@@ -369,7 +384,23 @@
 .cg-sph-card--tutti .cg-sph-nome { color: var(--primary, #6ea8fe); }
 
 /* Le frecce ripetono la posizione delle altre strisce. Su mobile si
-   nascondono: li' si scorre col dito. */
+   nascondono: li' si scorre col dito.
+
+   ⚠️ LE DUE RIGHE SOTTO SERVONO DAVVERO, non sono ridondanti.
+   `.trend-nav` di base e' `opacity: 0` E `pointer-events: none`: le frecce
+   esistono ma sono invisibili e non cliccabili finche' qualcosa non le
+   accende. Nel resto del sito lo fanno due regole, `.hero-trending-wrap:hover
+   .trend-nav` e `.personal-strip-wrap--nav .trend-nav`, e il nostro
+   contenitore non corrisponde a nessuna delle due. Risultato fino al 26/11:
+   sulla home desktop il carosello sport non si poteva scorrere.
+
+   ⚠️ `pointer-events` va rimesso insieme all'opacita': con la sola opacita'
+   le frecce si vedrebbero e non funzionerebbero, che e' peggio di non
+   vederle. */
+.cg-sph-wrap .trend-nav {
+    opacity: 1;
+    pointer-events: auto;
+}
 .cg-sph-nav-left  { left: -6px; }
 .cg-sph-nav-right { right: -6px; }
 @media (max-width: 760px) {
