@@ -7340,10 +7340,80 @@ def _sport_competizioni() -> list:
                         pf["logo"] = "/" + _rel
                         break
         _sport_cache = voci
+        # Un avviso nei log all'avvio: costa niente e intercetta il caso in
+        # cui nessuno apra l'admin per mesi.
+        _scadute = [c["slug"] for c in _sport_eta_dati(voci) if c["scaduta"]]
+        if _scadute:
+            log.warning(
+                "sport: %d competizioni da riverificare (oltre %d giorni): %s",
+                len(_scadute), SPORT_GIORNI_SOGLIA, ", ".join(_scadute),
+            )
     except Exception as e:
         log.exception("sport: mappa diritti non caricata: %s", e)
         _sport_cache = []
     return _sport_cache
+
+
+# ─── ETA' DEI DATI SPORTIVI ───────────────────────────────────────────────
+# Il campo `verificato` nel YAML esiste da quando la sezione e' nata e fa gia'
+# due mestieri: la pagina scrive "Diritti verificati il …" con le fonti, e la
+# sitemap lo usa come `lastmod`. Mancava il terzo, cioe' quello che era scritto
+# nelle regole che ci eravamo dati: *oltre i 90 giorni la pagina si segnala da
+# sola*. Finora nessuno leggeva quella data per avvisare.
+#
+# ⚠️ L'avviso e' per CHI MANTIENE, non per chi legge. Una data vecchia non vuol
+# dire che il dato sia sbagliato — i diritti TV durano anni — e mettere un
+# "attenzione, informazione non aggiornata" sulla pagina pubblica spaventerebbe
+# l'utente allontanandolo da una risposta quasi sempre ancora giusta. Sulla
+# pagina resta la data nuda, che e' trasparenza; l'allarme sta in /admin/sport.
+SPORT_GIORNI_SOGLIA = 90
+
+
+def _sport_eta_dati(voci=None, soglia: int = None) -> list:
+    """Le competizioni con l'eta' del loro dato, la piu' vecchia per prima.
+
+    `voci` serve a chiamarla DURANTE il caricamento della cache, quando
+    _sport_competizioni() non puo' ancora essere invocata senza ricorsione.
+    """
+    import datetime as _dt
+    soglia = SPORT_GIORNI_SOGLIA if soglia is None else soglia
+    if voci is None:
+        voci = _sport_competizioni()
+    oggi = _dt.date.today()
+
+    fuori = []
+    for c in voci:
+        grezzo = c.get("verificato")
+        data = None
+        # ⚠️ PyYAML converte da solo le date ISO in datetime.date, ma una voce
+        # scritta a mano fra virgolette resta stringa. Vanno accettate
+        # entrambe: assumere un tipo solo vuol dire che il giorno in cui
+        # qualcuno mette le virgolette il controllo smette di funzionare in
+        # silenzio, che e' il modo peggiore di rompersi.
+        if isinstance(grezzo, _dt.date):
+            data = grezzo
+        elif grezzo:
+            try:
+                data = _dt.date.fromisoformat(str(grezzo)[:10])
+            except ValueError:
+                data = None
+
+        giorni = (oggi - data).days if data else None
+        fuori.append({
+            "slug":        c.get("slug") or "",
+            "nome":        c.get("nome") or "",
+            "sport":       c.get("sport") or "",
+            "verificato":  data.isoformat() if data else "",
+            "giorni":      giorni,
+            "affidabilita": c.get("affidabilita") or "",
+            # Una data assente o illeggibile conta come scaduta: non sapere da
+            # quanto non si controlla e' peggio che saperlo vecchio.
+            "scaduta":     (giorni is None) or (giorni > soglia),
+        })
+
+    # Prima le piu' urgenti. Le date mancanti in cima a tutte.
+    fuori.sort(key=lambda x: (x["giorni"] is not None, -(x["giorni"] or 0)))
+    return fuori
 
 
 def _sport_per_slug(slug: str):
@@ -7383,10 +7453,22 @@ def _sport_home_card() -> list:
         fuori.append({
             "slug": slug,
             "nome": c.get("nome") or "",
+            # ⚠️ Nome corto SOLO per la card, con ripiego su quello intero.
+            # Non si accorcia `nome` nel YAML: quello finisce nel <title> e
+            # nell'H1 della pagina competizione, dove "UEFA Champions League"
+            # vale piu' di "Champions League" per chi cerca. Qui invece la
+            # card e' larga 132px e il nome lungo manda a capo due volte,
+            # schiacciando la riga delle piattaforme.
+            "nome_breve": c.get("nome_breve") or c.get("nome") or "",
             "sport": c.get("sport") or "",
             "chiaro_completo": bool(c.get("chiaro_completo")),
-            # Al massimo due nomi: la card e' alta 210px e la riga in fondo
-            # deve restare su una riga sola anche con "Mediaset Infinity".
+            # Nome del file dentro static/sport/, quando esiste. Vuoto =>
+            # la card ripiega sul disegno della disciplina. E' voluto che
+            # sia facoltativo: cosi' le foto si aggiungono una alla volta
+            # invece di dover essere tutte e venti pronte insieme.
+            "immagine": c.get("immagine") or "",
+            # Al massimo due nomi: la riga in fondo deve restare corta
+            # anche con "Mediaset Infinity".
             "piattaforme": [p.get("nome", "")
                             for p in (c.get("piattaforme") or [])][:2],
         })
@@ -9084,12 +9166,22 @@ def admin_home(request: Request):
         log.warning("admin_home: streaming_alerts_stats failed: %s", e)
         alerts_pending = 0
 
+    # Stesso schema di alerts_pending: solo il numero, la lista sta in
+    # /admin/sport. In un try perche' una pagina di navigazione non deve
+    # cadere se il YAML dello sport ha un problema.
+    try:
+        sport_scadute = len([c for c in _sport_eta_dati() if c["scaduta"]])
+    except Exception as e:
+        log.warning("admin_home: eta dati sport non calcolata: %s", e)
+        sport_scadute = 0
+
     return templates.TemplateResponse(
         request=request, name="admin_home.html",
         context={
             "request": request,
             "stats": stats,
             "alerts_pending": alerts_pending,
+            "sport_scadute": sport_scadute,
         },
     )
 
@@ -9274,6 +9366,41 @@ def admin_streaming_alerts(request: Request):
             "alerts":  alerts,
             "stats":   stats,
             "top":     top,
+        }
+    )
+
+
+@app.get("/admin/sport", response_class=HTMLResponse)
+def admin_sport(request: Request):
+    """Stato di freschezza dei dati sportivi.
+
+    Risponde a una domanda sola: quali competizioni vanno ricontrollate. Il
+    campo `verificato` del YAML c'era da sempre ma nessuno lo leggeva, quindi
+    la regola dei 90 giorni esisteva solo sulla carta.
+
+    ⚠️ Niente scrittura da qui. La fonte di verita' resta il file YAML nel
+    repo: si ricontrollano i diritti, si aggiorna la data a mano, si fa un
+    commit. Un pulsante "segna come verificato" sarebbe comodo e sbagliato —
+    marcherebbe come controllato cio' che nessuno ha controllato, e il
+    commit e' anche lo storico di chi ha guardato cosa e quando.
+    """
+    if not _check_admin(request):
+        return RedirectResponse(url="/admin", status_code=302)
+
+    voci = _sport_eta_dati()
+    scadute = [c for c in voci if c["scaduta"]]
+    # In scadenza = negli ultimi 30 giorni prima della soglia: serve a non
+    # scoprire 20 pagine scadute tutte insieme.
+    in_scadenza = [c for c in voci
+                   if not c["scaduta"] and (c["giorni"] or 0) > SPORT_GIORNI_SOGLIA - 30]
+    return templates.TemplateResponse(
+        request=request, name="admin_sport.html",
+        context={
+            "request":     request,
+            "voci":        voci,
+            "scadute":     scadute,
+            "in_scadenza": in_scadenza,
+            "soglia":      SPORT_GIORNI_SOGLIA,
         }
     )
 

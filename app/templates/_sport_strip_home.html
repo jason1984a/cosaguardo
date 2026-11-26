@@ -135,14 +135,28 @@
         <div class="cg-sph-row" id="cg-sph-row">
             {% for c in sport_home %}
             <a class="cg-sph-card cg-sph-card--{{ c.sport }}" href="/sport/{{ c.slug }}">
-                {% if c.sport in ('calcio', 'tennis', 'basket', 'motori', 'ciclismo') %}
+                {# ⚠️ Foto se c'e', altrimenti il disegno. Il ripiego non e'
+                   una gentilezza: permette di aggiungere le immagini una
+                   alla volta invece di aspettare che siano pronte tutte e
+                   venti, e se una foto si rivela sbagliata basta togliere il
+                   campo dal YAML e la card torna al disegno.
+
+                   width/height servono anche se la misura la decide il CSS:
+                   senza, il browser non sa quanto spazio riservare e la riga
+                   salta mentre le immagini arrivano. Sono 132x188 per due. #}
+                {% if c.immagine %}
+                <img class="cg-sph-foto"
+                     src="{{ url_for('static', path='sport/' ~ c.immagine) }}"
+                     alt="" width="264" height="376"
+                     loading="lazy" decoding="async">
+                {% elif c.sport in ('calcio', 'tennis', 'basket', 'motori', 'ciclismo') %}
                 <svg class="cg-sph-arte" viewBox="0 0 150 168" aria-hidden="true"
                      focusable="false"><use href="#cg-sph-{{ c.sport }}"></use></svg>
                 {% endif %}
                 {% if c.chiaro_completo %}
                 <span class="cg-sph-badge">GRATIS</span>
                 {% endif %}
-                <span class="cg-sph-nome">{{ c.nome }}</span>
+                <span class="cg-sph-nome">{{ c.nome_breve }}</span>
                 <span class="cg-sph-dove">
                     {%- if c.chiaro_completo -%}
                         In chiaro
@@ -198,13 +212,18 @@
 .cg-sph-card {
     position: relative;
     flex: 0 0 auto;
-    width: 150px;
-    height: 210px;
+    /* ⚠️ 132x188 NON e' una misura scelta a gusto: e' esattamente quella di
+       .trend-mini-card, la card delle strisce film. Prima erano 150x210,
+       cioe' il 14% piu' grandi, e nello scorrimento della home lo stacco fra
+       una striscia e l'altra si vedeva. Se un domani cambia la misura delle
+       card film, questa va cambiata con lei. */
+    width: 132px;
+    height: 188px;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    gap: 6px;
-    padding: 14px;
+    gap: 5px;
+    padding: 11px;
     border-radius: 14px;
     border: 1px solid rgba(255,255,255,0.10);
     text-decoration: none;
@@ -224,53 +243,97 @@
 }
 
 /* Velo scuro in basso: tiene il testo leggibile su qualunque gradiente,
-   senza dover tarare il contrasto disciplina per disciplina. */
+   senza dover tarare il contrasto disciplina per disciplina.
+
+   ⚠️ Piu' alto e piu' carico di prima (era 62% e .72 piatto). Con il disegno
+   portato dal 26% al 60% di opacita' il velo vecchio non bastava piu': il
+   nome finiva sopra le linee bianche del campo. Le tre tappe invece di due
+   evitano lo stacco netto a meta' card. */
 .cg-sph-card::after {
     content: "";
     position: absolute;
     left: 0; right: 0; bottom: 0;
-    height: 62%;
-    background: linear-gradient(to top, rgba(0,0,0,.72), rgba(0,0,0,0));
+    height: 60%;
+    z-index: 2;
+    background: linear-gradient(to top,
+                rgba(0,0,0,.90) 10%, rgba(0,0,0,.50) 45%, rgba(0,0,0,0));
+    pointer-events: none;
+}
+
+/* La foto, quando c'e'. Sta sotto al velo e sotto al testo. */
+.cg-sph-foto {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* ⚠️ Manopola della tinta, oggi spenta. Alzando --cg-sph-tinta la foto
+       viene virata verso il colore della disciplina: serve a far sembrare
+       venti fotografie diverse una serie sola. A 0 restano come sono, a .75
+       diventano quasi monocrome e si perde il dettaglio. Se un giorno la si
+       accende, la via di mezzo utile sta intorno a .20-.25. */
+    opacity: 1;
+}
+.cg-sph-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    mix-blend-mode: multiply;
+    opacity: var(--cg-sph-tinta, 0);
+    /* ⚠️ NON currentColor: sulla card `color` e' #fff, e la tinta virerebbe
+       al bianco invece che al colore della disciplina. Ogni regola
+       --disciplina qui sotto definisce il proprio --cg-sph-colore. */
+    background: var(--cg-sph-colore, #000);
     pointer-events: none;
 }
 
 /* Il disegno riempie la parte alta della card; il testo gli sta sopra.
    Le linee sono ereditate da currentColor, quindi basta cambiare `color`
    per schiarirle o scurirle tutte insieme. */
+/* ⚠️ Al 26% di opacita' questo non era un'illustrazione, era una filigrana:
+   accanto a una locandina la card leggeva come uno spazio colorato vuoto.
+   Al 60%, con tratto piu' spesso, il campo si vede e la card regge il
+   confronto con le strisce film. Il disegno resta INTERO dentro la card:
+   ingrandirlo fino a farlo uscire dai bordi era piu' simile al linguaggio
+   di una locandina, ma rendeva il campo irriconoscibile. */
 .cg-sph-arte {
     position: absolute;
-    left: 0; top: 0;
+    left: 0; top: 2%;
+    z-index: 0;
     width: 100%;
-    height: 80%;
-    color: rgba(255,255,255,0.26);
+    height: 74%;
+    color: rgba(255,255,255,0.60);
     fill: none;
     stroke: currentColor;
-    stroke-width: 2.2;
+    stroke-width: 2.6;
     stroke-linecap: round;
     stroke-linejoin: round;
     pointer-events: none;
 }
 
+/* z-index 3: sopra la foto (0), la tinta (1) e il velo (2). */
 .cg-sph-nome,
-.cg-sph-dove { position: relative; z-index: 1; }
+.cg-sph-dove { position: relative; z-index: 3; }
 
 .cg-sph-nome {
-    font-size: 1.02rem;
+    font-size: .93rem;
     font-weight: 800;
     line-height: 1.2;
     letter-spacing: .1px;
 }
 .cg-sph-dove {
-    font-size: .76rem;
+    font-size: .70rem;
     font-weight: 600;
-    color: rgba(255,255,255,0.78);
+    color: rgba(255,255,255,0.80);
     line-height: 1.3;
 }
 
 .cg-sph-badge {
     position: absolute;
-    top: 10px; left: 10px;
-    z-index: 1;
+    top: 8px; left: 8px;
+    z-index: 3;
     padding: 3px 8px;
     border-radius: 999px;
     background: rgba(16,185,129,0.92);
@@ -285,10 +348,15 @@
    marchio: nessuno di questi e' il colore ufficiale di un campionato,
    e non deve diventarlo. */
 .cg-sph-card--calcio    { background: linear-gradient(150deg, #11643f, #0b3b2a 70%); }
+.cg-sph-card--calcio { --cg-sph-colore: #11643f; }
 .cg-sph-card--tennis    { background: linear-gradient(150deg, #8a6a12, #3f3410 70%); }
+.cg-sph-card--tennis { --cg-sph-colore: #8a6a12; }
 .cg-sph-card--motori    { background: linear-gradient(150deg, #8c1d1d, #3d1216 70%); }
+.cg-sph-card--motori { --cg-sph-colore: #8c1d1d; }
 .cg-sph-card--basket    { background: linear-gradient(150deg, #9a4a12, #40200d 70%); }
+.cg-sph-card--basket { --cg-sph-colore: #9a4a12; }
 .cg-sph-card--ciclismo  { background: linear-gradient(150deg, #8d2060, #3c1333 70%); }
+.cg-sph-card--ciclismo { --cg-sph-colore: #8d2060; }
 
 .cg-sph-card--tutti {
     background: transparent;
@@ -296,7 +364,8 @@
     border-color: rgba(110,168,254,0.45);
     justify-content: center;
 }
-.cg-sph-card--tutti::after { display: none; }
+.cg-sph-card--tutti::after,
+.cg-sph-card--tutti::before { display: none; }
 .cg-sph-card--tutti .cg-sph-nome { color: var(--primary, #6ea8fe); }
 
 /* Le frecce ripetono la posizione delle altre strisce. Su mobile si
@@ -307,8 +376,8 @@
     .cg-sph-nav-left, .cg-sph-nav-right { display: none; }
 }
 @media (max-width: 520px) {
-    .cg-sph-card { width: 136px; height: 194px; }
-    .cg-sph-nome { font-size: .95rem; }
+    .cg-sph-card { width: 124px; height: 177px; }
+    .cg-sph-nome { font-size: .88rem; }
 }
 </style>
 

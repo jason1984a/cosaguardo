@@ -36,6 +36,8 @@ competizioni:
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: champions-league
   nome: UEFA Champions League
+
+  nome_breve: Champions League
   articolo: la
   sport: calcio
   verificato: '2026-11-13'
@@ -79,6 +81,8 @@ competizioni:
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: europa-league
   nome: UEFA Europa League
+
+  nome_breve: Europa League
   articolo: la
   sport: calcio
   verificato: '2026-11-13'
@@ -112,6 +116,8 @@ competizioni:
   - https://www.calcioefinanza.it/?p=231224
 - slug: conference-league
   nome: UEFA Conference League
+
+  nome_breve: Conference League
   articolo: la
   sport: calcio
   verificato: '2026-11-13'
@@ -493,6 +499,8 @@ competizioni:
   chiaro_completo: true
 - slug: atp-tour
   nome: Tornei ATP e ATP Finals
+
+  nome_breve: Tornei ATP
   articolo: i
   sport: tennis
   verificato: '2026-11-12'
@@ -551,8 +559,8 @@ competizioni:
   sport: basket
   verificato: '2026-11-13'
   affidabilita: alta
-  quando: 'Da ottobre a giugno. Gli Stati Uniti sono sei ore indietro: quasi tutte le partite si giocano
-    di notte in Italia.'
+  quando: 'Da ottobre a giugno. Gli Stati Uniti sono almeno sei ore indietro, fino a nove sulla costa
+    ovest: quasi tutte le partite si giocano di notte in Italia.'
   piattaforme:
   - nome: Prime Video
     chiaro: false
@@ -594,6 +602,8 @@ competizioni:
   - https://sport.sky.it/nba/2025/10/02/nba-sky-italia
 - slug: basket-serie-a
   nome: Basket Serie A (LBA)
+
+  nome_breve: Basket Serie A
   articolo: il
   sport: basket
   verificato: '2026-11-13'
