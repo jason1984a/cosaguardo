@@ -17,6 +17,14 @@ competizioni:
     cosa: tutte le 380 partite del campionato
     chiaro: false
     accesso: diretta
+    # ⚠️ `tutte_le_partite` lo legge aggiorna_partite.py: e' il permesso di
+    # attribuire questa piattaforma a una partita senza averla verificata una
+    # per una. Si mette SOLO dove vale per il 100% delle partite.
+    # Qui si': DAZN ha tutte e 380. Sky Go e NOW no, sono tre a giornata e
+    # quali tre non e' ricavabile da un calendario.
+    # Stesso motivo per cui la Champions non ce l'ha su nessuna piattaforma:
+    # Sky ne ha 185 su 203, non tutte.
+    tutte_le_partite: true
   - nome: Sky Go
     cosa: tre partite a giornata, se sei già cliente Sky
     chiaro: false
