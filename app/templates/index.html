@@ -755,7 +755,12 @@
         <div class="personal-strip-header">
             <span class="personal-strip-label">🎬 In sala adesso</span>
         </div>
-        <div class="personal-strip-wrap">
+        {# ⚠️ Il modificatore --nav NON e' decorativo: `.trend-nav` di base e'
+       opacity:0 E pointer-events:none, e solo `.personal-strip-wrap--nav
+       .trend-nav` le accende. Senza, le frecce esistono nel DOM ma sono
+       invisibili e non cliccabili, e su desktop la striscia non si puo'
+       scorrere. Mancava su entrambi i caroselli cinema. #}
+        <div class="personal-strip-wrap personal-strip-wrap--nav">
             <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-np" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="personal-strip-row cinema-strip-row" id="cinema-now-row">
                 {# Cap a 8 card per non saturare la banda 4G durante l'LCP window. #}
@@ -798,7 +803,12 @@
         <div class="personal-strip-header">
             <span class="personal-strip-label">🔜 Prossimamente</span>
         </div>
-        <div class="personal-strip-wrap">
+        {# ⚠️ Il modificatore --nav NON e' decorativo: `.trend-nav` di base e'
+       opacity:0 E pointer-events:none, e solo `.personal-strip-wrap--nav
+       .trend-nav` le accende. Senza, le frecce esistono nel DOM ma sono
+       invisibili e non cliccabili, e su desktop la striscia non si puo'
+       scorrere. Mancava su entrambi i caroselli cinema. #}
+        <div class="personal-strip-wrap personal-strip-wrap--nav">
             <button class="trend-nav trend-nav-left cinema-nav-left cinema-nav-left-up" type="button" aria-label="Scorri a sinistra">‹</button>
             <div class="personal-strip-row cinema-strip-row" id="cinema-upcoming-row">
                 {# Cap a 8 card per non saturare la banda 4G durante l'LCP window. #}

@@ -86,6 +86,8 @@ competizioni:
 - slug: europa-league
   nome: UEFA Europa League
 
+  immagine: europa-league.webp
+
   nome_breve: Europa League
   articolo: la
   sport: calcio
