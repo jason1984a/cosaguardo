@@ -7423,6 +7423,179 @@ def _sport_per_slug(slug: str):
     return None
 
 
+# ─── /partite-oggi-in-tv ──────────────────────────────────────────────────
+#
+# ⚠️ UNA sola URL aggiornata ogni giorno, non una pagina per partita.
+#
+# La differenza non e' editoriale, e' di indicizzazione. Misurato in Search
+# Console il 26/11/2026: Googlebot passa sulle pagine profonde di questo
+# dominio ogni 2-4 MESI. Una pagina "Napoli-Roma dove vederla" verrebbe letta
+# settimane dopo la partita — e resterebbe poi in giro come URL morta. Un
+# indirizzo solo che cambia tutti i giorni fa il contrario: piu' cambia, piu'
+# spesso Googlebot torna, e l'autorita' si accumula invece di disperdersi su
+# 380 pagine usa-e-getta. Vedi indicizzazione-storia-e-diagnosi.md.
+
+_PARTITE_PERCORSO = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                 "sport", "partite.yaml")
+_partite_cache = None
+
+
+def _fuso_italia():
+    """Il fuso di Roma, con ripiego sul fuso del processo.
+
+    ⚠️ Il server gira in UTC. Senza questa conversione una pagina che si
+    chiama "partite di oggi" cambierebbe giorno all'una di notte italiana, e
+    per un'ora ogni sera mostrerebbe gia' il programma del giorno dopo.
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("Europe/Rome")
+    except Exception as e:
+        log.warning("partite: zoneinfo non disponibile, uso il fuso locale: %s", e)
+        return None
+
+
+def _partite_calendario() -> list:
+    """Le partite dal YAML, arricchite con piattaforme e link affiliati.
+
+    Restituisce una lista ordinata per orario. Ogni voce ha gia' dentro tutto
+    quello che serve al template: niente lookup dentro i cicli Jinja.
+
+    ⚠️ Una riga con una competizione che non esiste in diritti-italia.yaml
+    viene SALTATA e segnalata nel log. Mostrarla senza il nome della
+    competizione e senza i link significherebbe pubblicare una riga a meta',
+    che e' peggio di non pubblicarla.
+    """
+    global _partite_cache
+    if _partite_cache is not None:
+        return _partite_cache
+    if _yaml is None:
+        _partite_cache = []
+        return _partite_cache
+
+    comp_per_slug = {c.get("slug"): c for c in _sport_competizioni()}
+    fuori = []
+    try:
+        with open(_PARTITE_PERCORSO, encoding="utf-8") as f:
+            dati = _yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        log.warning("partite: %s assente, pagina vuota", _PARTITE_PERCORSO)
+        _partite_cache = []
+        return _partite_cache
+    except Exception as e:
+        log.error("partite: YAML illeggibile (%s), pagina vuota", e)
+        _partite_cache = []
+        return _partite_cache
+
+    for riga in (dati.get("partite") or []):
+        slug = riga.get("competizione") or ""
+        comp = comp_per_slug.get(slug)
+        if not comp:
+            log.warning("partite: competizione '%s' non in diritti-italia.yaml, riga saltata", slug)
+            continue
+        try:
+            quando = datetime.strptime(str(riga.get("inizio", "")).strip(),
+                                       "%Y-%m-%d %H:%M")
+        except ValueError:
+            log.warning("partite: orario non valido '%s' su %s-%s, riga saltata",
+                        riga.get("inizio"), riga.get("casa"), riga.get("ospite"))
+            continue
+
+        # Le piattaforme si prendono da quelle gia' risolte della competizione,
+        # cosi' link affiliato e logo restano una cosa sola in tutto il sito.
+        per_nome = {p.get("nome"): p for p in (comp.get("piattaforme") or [])}
+        dove = []
+        for nome in (riga.get("dove") or []):
+            p = per_nome.get(nome)
+            if not p:
+                log.warning("partite: '%s' non e' fra le piattaforme di %s", nome, slug)
+                dove.append({"nome": nome, "link": "", "logo": "", "accesso": ""})
+                continue
+            dove.append({"nome": nome, "link": p.get("link") or "",
+                         "logo": p.get("logo") or "", "accesso": p.get("accesso") or ""})
+
+        chiaro = riga.get("chiaro") or None
+        if chiaro and not isinstance(chiaro, dict):
+            # Tollerato ma normalizzato: in passato `chiaro` era un booleano.
+            chiaro = {"canale": str(chiaro)}
+
+        fuori.append({
+            "slug_comp": slug,
+            "competizione": comp.get("nome_breve") or comp.get("nome") or slug,
+            "sport": comp.get("sport") or "",
+            "casa": riga.get("casa") or "",
+            "ospite": riga.get("ospite") or "",
+            "quando": quando,
+            "giorno": quando.date(),
+            "ora": quando.strftime("%H:%M"),
+            "dove": dove,
+            "chiaro": chiaro,
+        })
+
+    fuori.sort(key=lambda v: v["quando"])
+    _partite_cache = fuori
+    log.info("partite: %d voci caricate", len(fuori))
+    return _partite_cache
+
+
+def _partite_meta() -> dict:
+    try:
+        with open(_PARTITE_PERCORSO, encoding="utf-8") as f:
+            return (_yaml.safe_load(f) or {}).get("meta") or {}
+    except Exception:
+        return {}
+
+
+_GIORNI_IT = ("lunedì", "martedì", "mercoledì", "giovedì",
+              "venerdì", "sabato", "domenica")
+_MESI_IT = ("gennaio", "febbraio", "marzo", "aprile", "maggio", "giugno",
+            "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre")
+
+
+def _data_lunga(d) -> str:
+    """'sabato 28 novembre'. Scritto a mano: locale.setlocale dipende da quali
+    locale sono installate nell'immagine, e su Render non c'e' l'italiana."""
+    return f"{_GIORNI_IT[d.weekday()]} {d.day} {_MESI_IT[d.month - 1]}"
+
+
+@app.get("/partite-oggi-in-tv", response_class=HTMLResponse)
+def partite_oggi_in_tv(request: Request):
+    """Le partite di oggi e dei prossimi giorni, con dove vederle.
+
+    ⚠️ La pagina non e' mai vuota per costruzione: se oggi non si gioca lo
+    dice e mostra subito i prossimi giorni. Una pagina che certi giorni non ha
+    contenuto e' una pagina che Google impara a non riscansionare.
+    """
+    tz = _fuso_italia()
+    adesso = datetime.now(tz) if tz else datetime.now()
+    oggi_d = adesso.date()
+
+    tutte = _partite_calendario()
+    oggi = [v for v in tutte if v["giorno"] == oggi_d]
+    # Solo il futuro: una lista di partite di tre settimane fa non serve a
+    # nessuno e fa sembrare la pagina abbandonata.
+    prossime = [v for v in tutte if v["giorno"] > oggi_d]
+
+    giorni = []
+    for v in prossime:
+        if not giorni or giorni[-1]["data"] != v["giorno"]:
+            giorni.append({"data": v["giorno"],
+                           "etichetta": _data_lunga(v["giorno"]),
+                           "partite": []})
+        giorni[-1]["partite"].append(v)
+
+    return templates.TemplateResponse(
+        request=request, name="partite_oggi.html",
+        context={
+            "request": request,
+            "oggi": oggi,
+            "oggi_etichetta": _data_lunga(oggi_d),
+            "giorni": giorni,
+            "meta": _partite_meta(),
+        },
+    )
+
+
 # Ordine delle card nel carosello della home. Scritto a mano e non ricavato
 # dal YAML perche' e' una scelta editoriale (quanto si cerca in Italia), non
 # un dato: l'ordine alfabetico metterebbe l'ATP Tour davanti alla Serie A.
@@ -8311,6 +8484,11 @@ def sitemap():
     # Pagine /migliori-* — 60 pagine SEO programmatiche
     static_urls.append(("/migliori", "weekly", "0.7"))
     static_urls.append(("/sport", "weekly", "0.8"))
+    # ⚠️ L'unica pagina del sito che cambia davvero ogni giorno: `daily` qui
+    # e' un'informazione vera, non un'ottimizzazione. Google usa
+    # l'affidabilita' di questi campi per decidere se fidarsi, e finora li
+    # abbiamo sempre dichiarati onesti.
+    static_urls.append(("/partite-oggi-in-tv", "daily", "0.9"))
     try:
         from core.recommendation_api import iter_all_best_combos
         for slug, _, _, _ in iter_all_best_combos():

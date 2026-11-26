@@ -75,6 +75,9 @@
 .cg-sp-meta{margin:1.8rem 0 0;padding-top:1rem;border-top:1px solid var(--sp-bor);
   font-size:.83rem;color:var(--sp-dim);line-height:1.6}
 .cg-sp-meta a{color:var(--sp-dim)}
+.cg-sp-oggi{margin:1.9rem 0 0}
+.cg-sp-oggi a{color:var(--sp-acc);font-weight:600;text-decoration:none}
+.cg-sp-oggi a:hover{text-decoration:underline}
 .cg-sp-altre{display:flex;flex-wrap:wrap;gap:.5rem;margin:.7rem 0 0;padding:0;list-style:none}
 .cg-sp-altre a{display:inline-block;background:var(--sp-bg);border:1px solid var(--sp-bor);
   border-radius:999px;padding:.35rem .8rem;color:var(--sp-txt);text-decoration:none;font-size:.87rem}
@@ -183,6 +186,14 @@
 {%- for f in c.faq %}{"@type":"Question","name":{{ f.d|tojson }},"acceptedAnswer":{"@type":"Answer","text":{{ f.r|tojson }}}}{% if not loop.last %},{% endif %}{%- endfor %}]}
   </script>
   {% endif %}
+
+  {# ⚠️ Questa pagina risponde a "quale abbonamento mi serve per la stagione".
+     La domanda gemella — "e stasera, dove la vedo?" — ha una pagina sua, e
+     senza questo link la raggiunge solo chi passa dalla home. Una riga, con
+     l'ancora vera, su ~20 pagine: non e' boilerplate. #}
+  <p class="cg-sp-oggi">
+    <a href="/partite-oggi-in-tv">Partite di oggi in TV: orari, canali e dove vederle →</a>
+  </p>
 
   {% if altre %}
   <h2>Altre competizioni di {{ c.sport }}</h2>

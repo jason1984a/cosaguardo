@@ -1,0 +1,121 @@
+# Calendario partite per /partite-oggi-in-tv
+#
+# ⚠️ INSERIMENTO MANUALE. Una riga sbagliata qui e' una pagina sbagliata: il
+# valore di questa pagina sta tutto nel dato, non nel testo. Prima di
+# aggiungere una partita si controlla su DUE fonti indipendenti, di cui una
+# deve essere il broadcaster stesso (programmi.sky.it, dazn.com): i siti di
+# news copiano l'uno dall'altro e sbagliano insieme.
+#
+# COME SI COMPILA
+#   competizione : slug presente in diritti-italia.yaml. Se non c'e' la riga
+#                  viene saltata e lo dice il log: non si inventa un slug.
+#   casa/ospite  : nomi come li scrive la gente, non come li scrive la lega
+#                  ("Inter", non "FC Internazionale Milano").
+#   inizio       : 'AAAA-MM-GG HH:MM', SEMPRE ora italiana. Niente fuso nel
+#                  file: la conversione la fa il codice, una volta sola.
+#   dove         : nomi di piattaforma ESATTI come in diritti-italia.yaml
+#                  (DAZN, Sky Go, NOW, TV8, Prime Video...). Da li' arrivano
+#                  il link affiliato e il logo: un nome che non combacia
+#                  diventa una voce senza link.
+#   chiaro       : solo se si vede senza abbonamento. `canale` obbligatorio,
+#                  `nota` quando non e' una diretta.
+#                  ⚠️ "In chiaro" e "in diretta" sono due cose diverse: una
+#                  partita in differita su TV8 alle 21 non risponde a "dove la
+#                  vedo adesso". Se non e' live, scriverlo nella nota.
+#
+# L'ultima riga di `meta.aggiornato` compare in pagina: e' la data che dice al
+# lettore quanto e' fresco il dato. Si aggiorna quando si tocca il file.
+
+meta:
+  aggiornato: '2026-11-26'
+  fonti:
+  - https://programmi.sky.it/sport/calcio/serie-a
+  - https://sport.sky.it/calcio/europa-league/2026/11/25/europa-league-calendario-orari-partite-giornata-5
+  - https://www.dazn.com/it-IT/news/calcio/prossimo-turno-serie-a-partite-orari-dove-vederle-e-calendario/1x1e1ktvfzys91la5bxz4an5s4
+
+partite:
+
+# ─── Giovedì 26 novembre — coppe europee ──────────────────────────────────
+- competizione: europa-league
+  casa: Olympiacos
+  ospite: Milan
+  inizio: '2026-11-26 18:45'
+  dove: [Sky Go, NOW]
+  chiaro:
+    canale: TV8
+    nota: in differita dalle 21:00, non in diretta
+
+- competizione: europa-league
+  casa: Juventus
+  ospite: Omonia Nicosia
+  inizio: '2026-11-26 21:00'
+  dove: [Sky Go, NOW]
+
+- competizione: conference-league
+  casa: Borac Banja Luka
+  ospite: Atalanta
+  inizio: '2026-11-26 21:00'
+  dove: [Sky Go, NOW]
+
+# ─── Serie A, 13ª giornata ────────────────────────────────────────────────
+# Tutte e dieci su DAZN. Le tre in co-esclusiva Sky sono Venezia-Bologna,
+# Inter-Genoa e Roma-Monza: confermate dal calendario pubblicato da Sky.
+- competizione: serie-a
+  casa: Venezia
+  ospite: Bologna
+  inizio: '2026-11-27 20:45'
+  dove: [DAZN, Sky Go, NOW]
+
+- competizione: serie-a
+  casa: Frosinone
+  ospite: Parma
+  inizio: '2026-11-28 15:00'
+  dove: [DAZN]
+
+- competizione: serie-a
+  casa: Torino
+  ospite: Lazio
+  inizio: '2026-11-28 18:00'
+  dove: [DAZN]
+
+- competizione: serie-a
+  casa: Inter
+  ospite: Genoa
+  inizio: '2026-11-28 20:45'
+  dove: [DAZN, Sky Go, NOW]
+
+- competizione: serie-a
+  casa: Udinese
+  ospite: Fiorentina
+  inizio: '2026-11-29 12:30'
+  dove: [DAZN]
+
+- competizione: serie-a
+  casa: Sassuolo
+  ospite: Napoli
+  inizio: '2026-11-29 15:00'
+  dove: [DAZN]
+
+- competizione: serie-a
+  casa: Roma
+  ospite: Monza
+  inizio: '2026-11-29 18:00'
+  dove: [DAZN, Sky Go, NOW]
+
+- competizione: serie-a
+  casa: Como
+  ospite: Juventus
+  inizio: '2026-11-29 20:45'
+  dove: [DAZN]
+
+- competizione: serie-a
+  casa: Lecce
+  ospite: Atalanta
+  inizio: '2026-11-30 18:30'
+  dove: [DAZN]
+
+- competizione: serie-a
+  casa: Cagliari
+  ospite: Milan
+  inizio: '2026-11-30 20:45'
+  dove: [DAZN]

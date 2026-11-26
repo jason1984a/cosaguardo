@@ -126,6 +126,13 @@
     <p class="cg-sph-intro">
         Quale abbonamento serve per seguire un campionato, e che cosa
         si vede senza pagare nulla.
+        {# ⚠️ Ancora vera ("partite di oggi in TV"), non "clicca qui": e'
+           l'unico link alla pagina dalla home, e il testo del link e' una
+           delle poche cose che possiamo dire a Google su cosa ci trova.
+           Sta qui dentro e non come bottone a parte perche' una riga di
+           testo con un link dentro non e' boilerplate, venti link uguali
+           ripetuti ovunque si'. #}
+        <a class="cg-sph-oggi" href="/partite-oggi-in-tv">Partite di oggi in TV →</a>
     </p>
 
     <div class="cg-sph-wrap">
@@ -193,6 +200,15 @@
     line-height: 1.5;
     max-width: 62ch;
 }
+/* Il link resta dentro la frase: deve leggersi come la continuazione della
+   riga, non come un bottone che compete con le card. */
+.cg-sph-oggi {
+    color: #7aa2ff;
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.cg-sph-oggi:hover { text-decoration: underline; }
 
 .cg-sph-wrap { position: relative; }
 

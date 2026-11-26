@@ -12,7 +12,10 @@
 .cg-sh{--sh-bg:#121829;--sh-bor:#243049;--sh-txt:#e7ecf7;--sh-dim:#94a3bd;
   --sh-si:#34d399;--sh-acc:#7aa2ff;color:var(--sh-txt);max-width:56rem;margin:0 auto}
 .cg-sh h1{font-size:clamp(1.5rem,4vw,2.1rem);line-height:1.15;margin:0 0 .6rem}
-.cg-sh-intro{color:var(--sh-dim);font-size:1.02rem;line-height:1.6;margin:0 0 2rem;max-width:44rem}
+.cg-sh-intro{color:var(--sh-dim);font-size:1.02rem;line-height:1.6;margin:0 0 1.1rem;max-width:44rem}
+.cg-sh-oggi{margin:0 0 2rem}
+.cg-sh-oggi a{color:#7aa2ff;font-weight:600;text-decoration:none;font-size:1.02rem}
+.cg-sh-oggi a:hover{text-decoration:underline}
 .cg-sh h2{font-size:1.1rem;margin:2rem 0 .8rem;text-transform:capitalize}
 .cg-sh-griglia{display:grid;gap:.7rem;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));
   padding:0;margin:0;list-style:none}
@@ -38,6 +41,14 @@
     si vede in Italia — e, quando c'è, cosa puoi vedere <strong>gratis in
     chiaro</strong>. I diritti cambiano spesso: ogni pagina porta la data in
     cui è stata verificata.
+  </p>
+
+  {# ⚠️ Prima dell'elenco, non dopo: chi arriva sull'hub spesso cerca una
+     partita precisa di stasera, non "quale abbonamento mi serve per la
+     stagione". Mandarlo subito dove c'e' la risposta vale piu' di tenerlo
+     qui. L'ancora e' la frase intera, non "qui". #}
+  <p class="cg-sh-oggi">
+    <a href="/partite-oggi-in-tv">Le partite di oggi in TV, con orario e canale →</a>
   </p>
 
   {% for sport, lista in per_sport.items() %}

@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{# ── /partite-oggi-in-tv ──────────────────────────────────────────────────
+   UNA pagina sola, aggiornata ogni giorno. Il perche' sta nel commento sopra
+   _partite_calendario() in main.py: su questo dominio Googlebot passa sulle
+   pagine profonde ogni 2-4 mesi, quindi una pagina per partita verrebbe letta
+   quando la partita e' gia' finita.
+
+   ⚠️ La risposta sta nella prima riga, prima di qualunque elenco. Chi cerca
+   "partite oggi in tv" vuole sapere se stasera si gioca e su cosa, non
+   leggere un'introduzione.
+
+   ⚠️ "In chiaro" non vuol dire "in diretta". Olympiacos-Milan del 26/11 e'
+   su TV8 ma in differita: scriverlo e' tutto il vantaggio che abbiamo su chi
+   copia gli orari e basta. Il campo `nota` dentro `chiaro` serve a questo e
+   va sempre reso.
+
+   Stili inline con prefisso .cg-po-, come le altre micro-componenti: non
+   toccano style.css e non obbligano a bumpare ?v=N. #}
+
+{% set n_oggi = oggi | length %}
+
+{% block title %}Partite di oggi in TV e streaming — dove vederle | CosaGuardo{% endblock %}
+{% block meta_description %}Le partite di oggi {{ oggi_etichetta }}: orario, canale e
+{%- if n_oggi %} dove vederle, con quali si vedono in chiaro.{% else %} il programma dei prossimi giorni.{% endif %}
+Aggiornato al {{ meta.aggiornato }}.{% endblock %}
+{% block og_title %}Partite di oggi in TV: dove vederle{% endblock %}
+{% block og_description %}Orari, canali e piattaforme delle partite di oggi e dei prossimi giorni.{% endblock %}
+
+{% block content %}
+<style>
+.cg-po{--po-bg:#121829;--po-bor:#243049;--po-txt:#e7ecf7;--po-dim:#94a3bd;
+  --po-si:#34d399;--po-acc:#7aa2ff;
+  color:var(--po-txt);max-width:56rem;margin:0 auto}
+.cg-po h1{font-size:clamp(1.5rem,4vw,2.1rem);line-height:1.2;margin:0 0 .6rem}
+.cg-po-occhiello{color:var(--po-acc);font-size:.8rem;letter-spacing:.08em;
+  text-transform:uppercase;font-weight:600;margin:0 0 .4rem}
+.cg-po-secca{font-size:1.08rem;line-height:1.6;margin:0 0 1.4rem}
+.cg-po-secca b{color:#fff}
+
+.cg-po h2{font-size:1.12rem;margin:1.9rem 0 .7rem}
+.cg-po-lista{display:grid;gap:.65rem;padding:0;margin:0;list-style:none}
+
+.cg-po-m{background:var(--po-bg);border:1px solid var(--po-bor);border-radius:12px;
+  padding:.8rem 1rem;display:grid;grid-template-columns:3.4rem 1fr auto;
+  gap:.5rem .9rem;align-items:center}
+.cg-po-m.gratis{border-color:rgba(52,211,153,.45)}
+.cg-po-ora{font-weight:700;font-size:1.02rem;font-variant-numeric:tabular-nums}
+.cg-po-chi{font-weight:700;line-height:1.3}
+.cg-po-comp{display:block;color:var(--po-dim);font-size:.82rem;font-weight:400;
+  margin-top:.12rem}
+.cg-po-comp a{color:var(--po-dim)}
+.cg-po-dove{display:flex;gap:.4rem;flex-wrap:wrap;justify-content:flex-end}
+.cg-po-vai{background:var(--po-acc);color:#0b1020;text-decoration:none;font-weight:700;
+  font-size:.85rem;padding:.42rem .8rem;border-radius:9px;white-space:nowrap;
+  display:inline-flex;align-items:center;gap:.4rem}
+.cg-po-vai:hover{filter:brightness(1.08)}
+.cg-po-logo{height:16px;width:auto;max-width:64px;display:block}
+.cg-po-piatt{font-size:.85rem;color:var(--po-dim);padding:.42rem .2rem}
+/* La riga "in chiaro" sta sotto, a tutta larghezza: e' la risposta alla
+   domanda piu' frequente e non deve finire schiacciata in fondo a destra. */
+.cg-po-ch{grid-column:1/-1;margin:.15rem 0 0;font-size:.88rem;line-height:1.45;
+  color:var(--po-si)}
+.cg-po-ch b{color:var(--po-si)}
+.cg-po-ch-nota{color:#fbbf24}
+
+.cg-po-vuoto{background:var(--po-bg);border:1px solid var(--po-bor);border-radius:12px;
+  padding:1rem 1.1rem;margin:0 0 1.2rem;color:var(--po-dim);line-height:1.55}
+.cg-po-piede{margin-top:2.2rem;padding-top:1rem;border-top:1px solid var(--po-bor);
+  color:var(--po-dim);font-size:.85rem;line-height:1.6}
+.cg-po-piede a{color:var(--po-acc)}
+
+@media (max-width:560px){
+  .cg-po-m{grid-template-columns:3.2rem 1fr;gap:.35rem .7rem}
+  .cg-po-dove{grid-column:1/-1;justify-content:flex-start;margin-top:.2rem}
+}
+</style>
+
+<div class="cg-po">
+
+  <p class="cg-po-occhiello">Guida TV</p>
+  <h1>Partite di oggi in TV, {{ oggi_etichetta }}</h1>
+
+  {# ⚠️ La prima riga risponde. Numero, dove, e se c'e' qualcosa gratis. #}
+  {% set gratis_oggi = oggi | selectattr('chiaro') | list %}
+  {% if n_oggi %}
+  <p class="cg-po-secca">
+    Oggi si gioc{{ 'a' if n_oggi == 1 else 'ano' }} <b>{{ n_oggi }}
+    partit{{ 'a' if n_oggi == 1 else 'e' }}</b>.
+    {% if gratis_oggi %}{{ 'Una si vede' if gratis_oggi|length == 1 else 'Alcune si vedono' }}
+    <b>in chiaro</b>, le altre servono un abbonamento.{% else %}
+    Servono tutte un abbonamento: nessuna in chiaro.{% endif %}
+  </p>
+  {% else %}
+  <p class="cg-po-secca">
+    <b>Oggi non ci sono partite</b> fra quelle che seguiamo.
+    {% if giorni %}La prossima è {{ giorni[0].etichetta }}.{% endif %}
+  </p>
+  {% endif %}
+
+  {# Macro unica per la riga partita: la stessa forma per oggi e per i
+     prossimi giorni, cosi' non si possono scostare col tempo. #}
+  {% macro riga(p, con_data=false) %}
+  <li class="cg-po-m{% if p.chiaro %} gratis{% endif %}">
+    <span class="cg-po-ora">{{ p.ora }}</span>
+    <span class="cg-po-chi">{{ p.casa }} – {{ p.ospite }}
+      <span class="cg-po-comp"><a href="/sport/{{ p.slug_comp }}">{{ p.competizione }}</a></span>
+    </span>
+    <span class="cg-po-dove">
+      {% for d in p.dove %}
+        {% if d.link %}
+        <a class="cg-po-vai" href="{{ d.link }}" rel="sponsored nofollow" target="_blank">
+          {% if d.logo %}<img class="cg-po-logo" src="{{ d.logo }}" alt="" loading="lazy">{% endif %}{{ d.nome }}</a>
+        {% else %}
+        <span class="cg-po-piatt">{{ d.nome }}</span>
+        {% endif %}
+      {% endfor %}
+    </span>
+    {% if p.chiaro %}
+    <p class="cg-po-ch">✓ In chiaro su <b>{{ p.chiaro.canale }}</b>{% if p.chiaro.nota %}
+      — <span class="cg-po-ch-nota">{{ p.chiaro.nota }}</span>{% endif %}</p>
+    {% endif %}
+  </li>
+  {% endmacro %}
+
+  {% if n_oggi %}
+  <ul class="cg-po-lista">
+    {% for p in oggi %}{{ riga(p) }}{% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if giorni %}
+  <h2>Nei prossimi giorni</h2>
+  {% for g in giorni %}
+  <h3 style="font-size:.95rem;color:#94a3bd;margin:1.1rem 0 .5rem;font-weight:600;">
+    {{ g.etichetta }}</h3>
+  <ul class="cg-po-lista">
+    {% for p in g.partite %}{{ riga(p) }}{% endfor %}
+  </ul>
+  {% endfor %}
+  {% elif not n_oggi %}
+  <div class="cg-po-vuoto">
+    Il calendario è in aggiornamento. Nel frattempo trovi su quali piattaforme
+    sono i campionati nella <a href="/sport">guida allo sport in TV</a>.
+  </div>
+  {% endif %}
+
+  <div class="cg-po-piede">
+    <p>Orari italiani. Dati aggiornati al {{ meta.aggiornato }}
+    {%- if meta.fonti %}, da {{ meta.fonti | length }} font{{ 'e' if meta.fonti|length == 1 else 'i' }} ufficiali{% endif %}.
+    Gli orari e i canali possono cambiare fino a poche ore prima.</p>
+    <p>Per sapere quale abbonamento serve per un intero campionato:
+    <a href="/sport">dove vedere lo sport in TV</a>.</p>
+  </div>
+
+</div>
+{% endblock %}
