@@ -206,6 +206,8 @@ competizioni:
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: premier-league
   nome: Premier League
+
+  immagine: premier-league.webp
   articolo: la
   sport: calcio
   verificato: '2026-11-13'
@@ -573,6 +575,8 @@ competizioni:
   chiaro_completo: true
 - slug: nba
   nome: NBA
+
+  immagine: nba.webp
   articolo: l'
   sport: basket
   verificato: '2026-11-13'
