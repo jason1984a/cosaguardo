@@ -5,6 +5,8 @@ meta:
 competizioni:
 - slug: serie-a
   nome: Serie A
+
+  immagine: serie-a.webp
   articolo: la
   sport: calcio
   verificato: '2026-11-13'
@@ -36,6 +38,8 @@ competizioni:
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: champions-league
   nome: UEFA Champions League
+
+  immagine: champions-league.webp
 
   nome_breve: Champions League
   articolo: la
@@ -270,6 +274,8 @@ competizioni:
   - https://www.calcioefinanza.it/2026/06/20/partite-in-tv-2026-2027-dove-vederle/
 - slug: formula-1
   nome: Formula 1
+
+  immagine: formula-1.webp
   articolo: la
   sport: motori
   verificato: '2026-11-13'
@@ -303,6 +309,8 @@ competizioni:
   - https://www.motorbox.com/auto/sport/f1/news/f1-motogp-stagione-motori-2026-diretta-su-sky-now-chiaro-tv8
 - slug: motogp
   nome: MotoGP
+
+  immagine: motogp.webp
   articolo: la
   sport: motori
   verificato: '2026-11-13'
@@ -336,6 +344,8 @@ competizioni:
   - https://www.motorbox.com/moto/sport/motogp/news/motogp-resta-su-sky-continuita-e-spettacolo-fino-al-2027
 - slug: australian-open
   nome: Australian Open
+
+  immagine: australian-open.webp
   articolo: gli
   sport: tennis
   verificato: '2026-11-12'
@@ -390,6 +400,8 @@ competizioni:
   - https://www.eurosport.it/
 - slug: roland-garros
   nome: Roland Garros
+
+  immagine: roland-garros.webp
   articolo: il
   sport: tennis
   verificato: '2026-11-12'
@@ -431,6 +443,8 @@ competizioni:
   - https://www.eurosport.it/
 - slug: wimbledon
   nome: Wimbledon
+
+  immagine: wimbledon.webp
   articolo: ''
   sport: tennis
   verificato: '2026-11-12'
@@ -460,6 +474,8 @@ competizioni:
   - https://www.sky.it/sport/tennis
 - slug: us-open
   nome: US Open
+
+  immagine: us-open.webp
   articolo: gli
   sport: tennis
   verificato: '2026-11-12'
