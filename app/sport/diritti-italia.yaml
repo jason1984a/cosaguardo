@@ -625,6 +625,8 @@ competizioni:
 - slug: basket-serie-a
   nome: Basket Serie A (LBA)
 
+  immagine: basket-serie-a.webp
+
   nome_breve: Basket Serie A
   articolo: il
   sport: basket
@@ -654,6 +656,8 @@ competizioni:
   - https://sport.sky.it/basket/2025/07/14/serie-a-basket-sky-diritti-tv-2025-2028
 - slug: giro-d-italia
   nome: Giro d'Italia
+
+  immagine: giro-d-italia.webp
   articolo: il
   sport: ciclismo
   verificato: '2026-11-13'
