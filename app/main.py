@@ -7631,6 +7631,33 @@ def partite_oggi_in_tv(request: Request):
 # Le 05:00 e non le 03:00 per non accavallarsi al refresh SEO, che gira
 # lunedi' alle 03:00 e tocca lo stesso database.
 
+_ap_modulo = None
+
+
+def _carica_aggiorna_partite():
+    """Carica aggiorna_partite.py dal suo percorso, non per nome.
+
+    ⚠️ `import aggiorna_partite` falliva in produzione con "No module named":
+    la cartella dell'app non e' nel sys.path, e dipende da come uvicorn viene
+    avviato — una cosa che in locale funziona e sul server no. Partendo dal
+    percorso di questo file il risultato non dipende piu' da chi ha lanciato
+    il processo ne' da quale sia la cartella corrente.
+    """
+    global _ap_modulo
+    if _ap_modulo is not None:
+        return _ap_modulo
+    import importlib.util
+    percorso = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "aggiorna_partite.py")
+    if not os.path.exists(percorso):
+        raise FileNotFoundError(f"aggiorna_partite.py non trovato in {percorso}")
+    spec = importlib.util.spec_from_file_location("aggiorna_partite", percorso)
+    modulo = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(modulo)
+    _ap_modulo = modulo
+    return modulo
+
+
 def _partite_aggiorna(trigger: str = "scheduler") -> dict:
     """Una corsa dell'aggiornamento. Ritorna il resoconto, non solleva mai.
 
@@ -7644,7 +7671,7 @@ def _partite_aggiorna(trigger: str = "scheduler") -> dict:
         return {"saltato": "manca FOOTBALL_DATA_TOKEN"}
     destinazione = _PARTITE_DISCO or _PARTITE_REPO
     try:
-        import aggiorna_partite as _ap
+        _ap = _carica_aggiorna_partite()
         # Se i controlli non passano, esegui() scrive una proposta invece del
         # file vero: la mettiamo accanto alla destinazione, sul disco
         # persistente, non nella cartella del repo che il riavvio azzera.
