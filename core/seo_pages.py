@@ -4,7 +4,10 @@ Gestione delle pagine SEO `/dove-vedere/{slug}`.
 Architettura:
 - Tabella `seo_titles` in DB: mappa slug → tmdb_id + metadati cached
   Colonne dinamiche aggiunte via _ensure_db migrations:
-    - source         : 'evergreen' | 'new_release'  (default 'evergreen')
+    - source         : 'evergreen' | 'new_release' | 'archivio'  (default 'evergreen')
+                       ⚠️ 'archivio' = ex new_release invecchiato. La pagina resta
+                       online e in sitemap: nessuno dei due rami di cancellazione
+                       tocca questo valore. Vedi populate_new_releases().
     - seasons_count  : INTEGER NULL (solo per TV; per detection nuove stagioni)
     - seasons_bumped_at : INTEGER NULL (timestamp ultimo incremento stagioni)
 - Funzione `populate_seo_titles_db()`: refresh top evergreen (~700) — diff-only
@@ -16,7 +19,9 @@ Architettura:
 
 Strategia anti-spam Google:
 - Pagine generate solo per titoli con dati reali completi (poster, trama, anno)
-- Cap totale 1000 (700 evergreen + 300 new_release) per evitare red flag thin content
+- Cap 1000 sui titoli VIVI (700 evergreen + 300 new_release). ⚠️ L'archivio sta
+  fuori dal cap: una pagina gia' pubblicata non si cancella per rientrare in un
+  numero. Vedi populate_new_releases() e indicizzazione-storia-e-diagnosi.md.
 - Refresh settimanale (job + admin manuale), diff-only su updated_at:
   toccato SOLO se i dati cambiano davvero → segnale lastmod sitemap pulito
 - Schema.org JSON-LD per rich snippets
@@ -677,10 +682,11 @@ def populate_new_releases(_log_ctx: Optional[dict] = None) -> dict:
     - source='new_release' per distinguerli dagli evergreen.
     - Auto-promozione: se la entry diventa molto popular (top EVERGREEN_PER_TYPE)
       verrà ri-assorbita dal prossimo refresh evergreen che la marcherà come 'evergreen'.
-    - Auto-decadimento gestito da _cleanup_old_new_releases() (>180gg dopo release_date,
-      se non promossi).
+    - ⚠️ Dopo 180gg dalla release il titolo NON viene piu' cancellato: passa a
+      source='archivio' e la pagina resta online. Vedi il commento sul codice.
 
-    Ritorna stats {"new_added": N, "new_promoted": P, "new_removed": R}.
+    Ritorna stats {"new_added": N, "new_promoted": P, "new_removed": R,
+    "new_archived": A}. `new_removed` resta a 0: non si cancella piu' niente.
     """
     _ensure_db()
     import requests
@@ -690,7 +696,9 @@ def populate_new_releases(_log_ctx: Optional[dict] = None) -> dict:
             _log_ctx["new_added"] = 0
             _log_ctx["new_promoted"] = 0
             _log_ctx["new_removed"] = 0
-        return {"new_added": 0, "new_promoted": 0, "new_removed": 0, "error": "no_api_key"}
+            _log_ctx["new_archived"] = 0
+        return {"new_added": 0, "new_promoted": 0, "new_removed": 0,
+                "new_archived": 0, "error": "no_api_key"}
 
     # Endpoint da scrapare per new releases (region=IT dove rilevante)
     sources = [
@@ -846,14 +854,46 @@ def populate_new_releases(_log_ctx: Optional[dict] = None) -> dict:
                   rd, now))
             new_added += 1
 
-        # Cleanup: cancella new_release vecchi (>180gg da release_date) E non promossi
+        # ⚠️ ARCHIVIAZIONE, non cancellazione (26/11/2026).
+        #
+        # Prima di questa data i new_release venivano CANCELLATI 180 giorni dopo
+        # l'uscita, e la loro URL cominciava a rispondere 404. E' la stessa
+        # trappola dell'isteresi evergreen qui sopra, lasciata aperta sull'altro
+        # ramo: li' il commento spiega il pericolo, qui il pericolo c'era lo
+        # stesso e nessuno l'aveva collegato.
+        #
+        # Perche' costa cosi' caro, misurato in Search Console il 26/11:
+        #   - Googlebot passa sulle pagine profonde ogni 2-4 MESI (campione:
+        #     ultima scansione 24/07, 25/07, 19/09, 28/09, e una mai scansionata).
+        #   - Una pagina che vive 6 mesi puo' quindi morire prima di essere
+        #     vista, oppure essere vista proprio nella finestra in cui e' morta.
+        #   - Secchio "Non trovata (404)": 949 pagine. `black-mirror` risultava
+        #     404 dal 28/09 ed era viva: test in tempo reale "L'URL e'
+        #     disponibile per Google".
+        #
+        # Inoltre la domanda di "dove vedere X" CRESCE dopo i sei mesi, quando
+        # il film arriva in streaming: la finestra di cancellazione era esattamente
+        # al contrario della curva di ricerca.
+        #
+        # ⚠️ 'archivio' e' un terzo valore apposta, non un passaggio a
+        # 'evergreen': il ramo evergreen cancella (con isteresi) tutto cio' che
+        # non ritrova nella top 350 di TMDb, e un ex new_release non ci sara'
+        # mai. Promuoverlo l'avrebbe fatto morire dopo poche settimane invece
+        # che dopo sei mesi. Qui non lo tocca nessuno dei due rami.
+        # Resta promuovibile: se TMDb lo riporta in top 350, populate_seo_titles_db()
+        # gli rimette source='evergreen'.
         cur.execute("""
-            DELETE FROM seo_titles
-            WHERE source = 'new_release'
-              AND release_date IS NOT NULL
-              AND date(release_date) < date('now', '-180 days')
+            UPDATE seo_titles
+               SET source = 'archivio'
+             WHERE source = 'new_release'
+               AND release_date IS NOT NULL
+               AND date(release_date) < date('now', '-180 days')
         """)
-        new_removed = cur.rowcount or 0
+        new_archived = cur.rowcount or 0
+        new_removed = 0          # non si cancella piu' niente: il campo resta per il log storico
+        if new_archived:
+            log.info("seo new_release: %d titoli passati in archivio (pagine mantenute online)",
+                     new_archived)
 
         conn.commit()
     finally:
@@ -863,11 +903,16 @@ def populate_new_releases(_log_ctx: Optional[dict] = None) -> dict:
         _log_ctx["new_added"]    = new_added
         _log_ctx["new_promoted"] = new_promoted
         _log_ctx["new_removed"]  = new_removed
+        # ⚠️ Non scritto nella tabella di log: aggiungere una colonna avrebbe
+        # richiesto una migrazione per un numero che si legge gia' come totale
+        # in get_seo_stats()["by_source"]["archivio"].
+        _log_ctx["new_archived"] = new_archived
 
     return {
         "new_added": new_added,
         "new_promoted": new_promoted,
         "new_removed": new_removed,
+        "new_archived": new_archived,
     }
 
 
@@ -1136,8 +1181,15 @@ def get_seo_stats() -> dict:
                   AND seasons_bumped_at > strftime('%s', 'now', '-30 days')
             """)
             recent_season_bumps = cur.fetchone()[0]
+            # ⚠️ Il cap vale sui titoli VIVI, non sul totale: l'archivio cresce
+            # per progetto (~300 ogni sei mesi) e confrontarlo col cap farebbe
+            # suonare per sempre un allarme che non si puo' e non si deve
+            # rientrare. Chi legge il pannello deve vedere i due numeri separati.
+            archiviati = by_source.get("archivio", 0)
             return {
                 "total": total,
+                "archiviati": archiviati,
+                "total_vivi": total - archiviati,
                 "by_type": by_type,
                 "by_source": by_source,
                 "recent_season_bumps": recent_season_bumps,
