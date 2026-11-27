@@ -87,9 +87,24 @@ Aggiornato al {{ meta.aggiornato }}.{% endblock %}
   <p class="cg-po-secca">
     Oggi si gioc{{ 'a' if n_oggi == 1 else 'ano' }} <b>{{ n_oggi }}
     partit{{ 'a' if n_oggi == 1 else 'e' }}</b>.
-    {% if gratis_oggi %}{{ 'Una si vede' if gratis_oggi|length == 1 else 'Alcune si vedono' }}
-    <b>in chiaro</b>, le altre servono un abbonamento.{% else %}
-    Servono tutte un abbonamento: nessuna in chiaro.{% endif %}
+    {# ⚠️ Gli accordi vanno tenuti su tutte e sei le combinazioni di
+       (quante oggi) × (quante in chiaro). Una prima versione diceva "per
+       l'altra serve un abbonamento" anche quando di altre non ce n'erano:
+       una frase sbagliata su una pagina che si aggiorna da sola non la
+       corregge nessuno, perche' nessuno la rilegge ogni giorno. #}
+    {%- set n_gratis = gratis_oggi | length %}
+    {%- set resto = n_oggi - n_gratis %}
+    {% if n_gratis == 0 -%}
+      {{ 'Serve un abbonamento: non è in chiaro.' if n_oggi == 1
+         else 'Servono tutte un abbonamento: nessuna in chiaro.' }}
+    {%- elif resto == 0 -%}
+      {{ 'Si vede <b>in chiaro</b>.' if n_oggi == 1
+         else 'Si vedono <b>tutte in chiaro</b>.' }}
+    {%- else -%}
+      {{ 'Una si vede' if n_gratis == 1 else n_gratis ~ ' si vedono' }}
+      <b>in chiaro</b>, {{ "per l'altra serve" if resto == 1 else 'per le altre serve' }}
+      un abbonamento.
+    {%- endif %}
   </p>
   {% else %}
   <p class="cg-po-secca">

@@ -7445,6 +7445,28 @@ _PARTITE_DISCO = os.environ.get("PARTITE_PATH") or ""
 _partite_cache = None
 
 
+def _fuso_italia():
+    """Il fuso di Roma, con ripiego sul fuso del processo.
+
+    ⚠️ Il server gira in UTC. Senza questa conversione una pagina che si
+    chiama "partite di oggi" cambierebbe giorno all'una di notte italiana, e
+    per un'ora ogni sera mostrerebbe gia' il programma del giorno dopo.
+
+    ⚠️ 27/11: questa funzione era stata CANCELLATA per sbaglio riscrivendo il
+    blocco qui sopra, e la pagina ha risposto 500 per una notte intera. La
+    chiamata a riga ~7627 era rimasta. `python -m py_compile` non se ne
+    accorge: un nome mancante e' un errore di esecuzione, non di sintassi.
+    Da qui in poi, dopo ogni modifica a mano su main.py:
+        python -m pyflakes main.py | grep undefined
+    """
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("Europe/Rome")
+    except Exception as e:
+        log.warning("partite: zoneinfo non disponibile, uso il fuso locale: %s", e)
+        return None
+
+
 def _partite_leggi(percorso) -> list:
     try:
         with open(percorso, encoding="utf-8") as f:
